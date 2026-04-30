@@ -15,9 +15,15 @@ namespace EasyVersionBackup
         private readonly System.Windows.Forms.Timer _autoBackupCountdownTimer = new System.Windows.Forms.Timer();
         private DateTime _nextAutoBackupRun;
 
+        // # Title Refresh Interval
+        private const int TitleRefreshIntervalMilliseconds = 1000;
+        private string _baseWindowTitle = string.Empty;
+
         public Form1()
         {
             InitializeComponent();
+
+            _baseWindowTitle = Text;
 
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             notifyIconMain.Icon = Icon;
@@ -52,8 +58,9 @@ namespace EasyVersionBackup
             dataGridViewConfiguredPaths.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(250, 250, 250);
 
             InitializeAutoBackupTimerColumn();
+            InitializeBackupInfoColumn();
 
-            _autoBackupCountdownTimer.Interval = 1000;
+            _autoBackupCountdownTimer.Interval = TitleRefreshIntervalMilliseconds;
             _autoBackupCountdownTimer.Tick += autoBackupCountdownTimer_Tick;
 
             LoadSettings();
@@ -121,11 +128,14 @@ namespace EasyVersionBackup
 
             foreach (BackupPathPair pair in _settings.BackupPathPairs)
             {
-                dataGridViewConfiguredPaths.Rows.Add(
+                int rowIndex = dataGridViewConfiguredPaths.Rows.Add(
                     pair.IsEnabled,
                     string.Empty,
                     pair.SourceDirectory,
-                    pair.TargetDirectory);
+                    pair.TargetDirectory,
+                    GetBackupInfoIcon(pair));
+
+                dataGridViewConfiguredPaths.Rows[rowIndex].Cells["ColumnConfiguredBackupInfo"].ToolTipText = GetBackupInfoToolTipText(pair);
             }
 
             buttonBackup.Enabled = _settings.BackupPathPairs.Any(p => p.IsEnabled);
@@ -171,6 +181,10 @@ namespace EasyVersionBackup
             {
                 if (!Directory.Exists(pair.SourceDirectory))
                 {
+                    SetBackupStatus(pair, "Error", $"Source directory not found: {pair.SourceDirectory}");
+                    SaveSettings();
+                    RefreshBackupInfoColumn();
+
                     MessageBox.Show(
                         $"Source directory not found:{Environment.NewLine}{pair.SourceDirectory}",
                         "Error",
@@ -212,13 +226,30 @@ namespace EasyVersionBackup
                 BackupPathPair pair = validPairs[i];
                 BackupVersionItem versionItem = versionForm.ResultItems[i];
 
-                skippedFiles += ExecuteBackup(pair, versionItem.Version);
+                try
+                {
+                    int skippedForPair = ExecuteBackup(pair, versionItem.Version);
+                    skippedFiles += skippedForPair;
 
-                string key = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
-                _settings.LastUsedVersionsByPair[key] = versionItem.Version;
+                    SetBackupStatus(
+                        pair,
+                        skippedForPair == 0 ? "OK" : "Warning",
+                        skippedForPair == 0 ? string.Empty : $"{skippedForPair} files skipped.");
+
+                    string key = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+                    _settings.LastUsedVersionsByPair[key] = versionItem.Version;
+                }
+                catch (Exception exception)
+                {
+                    SetBackupStatus(pair, "Error", exception.Message);
+                    SaveSettings();
+                    RefreshBackupInfoColumn();
+                    throw;
+                }
             }
 
             SaveSettings();
+            RefreshBackupInfoColumn();
 
             MessageBox.Show($"Backup completed.{Environment.NewLine}{skippedFiles} files skipped.", "Done", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
@@ -370,6 +401,9 @@ namespace EasyVersionBackup
             {
                 if (!Directory.Exists(pair.SourceDirectory))
                 {
+                    SetBackupStatus(pair, "Error", $"Source directory not found: {pair.SourceDirectory}");
+                    SaveSettings();
+                    RefreshBackupInfoColumn();
                     return;
                 }
 
@@ -389,13 +423,27 @@ namespace EasyVersionBackup
                     ? timestamp
                     : suggestedVersion + "_" + timestamp;
 
-                skippedFiles += ExecuteBackup(pair, automaticVersion);
+                try
+                {
+                    int skippedForPair = ExecuteBackup(pair, automaticVersion);
+                    skippedFiles += skippedForPair;
 
-                string key = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
-                _settings.LastUsedVersionsByPair[key] = suggestedVersion;
+                    SetBackupStatus(
+                        pair,
+                        skippedForPair == 0 ? "OK" : "Warning",
+                        skippedForPair == 0 ? string.Empty : $"{skippedForPair} files skipped.");
+
+                    string key = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+                    _settings.LastUsedVersionsByPair[key] = suggestedVersion;
+                }
+                catch (Exception exception)
+                {
+                    SetBackupStatus(pair, "Error", exception.Message);
+                }
             }
 
             SaveSettings();
+            RefreshBackupInfoColumn();
 
             notifyIconMain.Visible = true;
             notifyIconMain.BalloonTipTitle = "EasyVersionBackup";
@@ -405,6 +453,8 @@ namespace EasyVersionBackup
         private void autoBackupCountdownTimer_Tick(object? sender, EventArgs e)
         {
             RefreshAutoBackupTimerColumn();
+            RefreshWindowTitleCountdown();
+            RefreshNotifyIconText();
 
             if (DateTime.Now < _nextAutoBackupRun)
             {
@@ -413,8 +463,10 @@ namespace EasyVersionBackup
 
             ExecuteAutomaticBackup();
 
-            _nextAutoBackupRun = DateTime.Now.AddMinutes(_settings.AutoBackupIntervalMinutes);
+            _nextAutoBackupRun = DateTime.Now.AddSeconds(GetAutoBackupIntervalSeconds());
             RefreshAutoBackupTimerColumn();
+            RefreshWindowTitleCountdown();
+            RefreshNotifyIconText();
         }
         private void RefreshAutoBackupTimerColumn()
         {
@@ -435,22 +487,198 @@ namespace EasyVersionBackup
                     remaining = TimeSpan.Zero;
                 }
 
-                row.Cells["ColumnConfiguredAutoBackupTimer"].Value = Math.Ceiling(remaining.TotalMinutes).ToString();
+                row.Cells["ColumnConfiguredAutoBackupTimer"].Value = FormatAutoBackupInterval(remaining);
             }
+        }
+        private void RefreshWindowTitleCountdown()
+        {
+            if (!_settings.AutoBackupEnabled || !_settings.BackupPathPairs.Any(p => p.IsEnabled))
+            {
+                Text = _baseWindowTitle;
+                return;
+            }
+
+            TimeSpan remaining = _nextAutoBackupRun - DateTime.Now;
+
+            if (remaining < TimeSpan.Zero)
+            {
+                remaining = TimeSpan.Zero;
+            }
+
+            int totalSeconds = Math.Max(0, (int)Math.Ceiling(remaining.TotalSeconds));
+            Text = $"{_baseWindowTitle} (Backup in: {totalSeconds} sek)";
+        }
+        private string FormatAutoBackupInterval(TimeSpan interval)
+        {
+            int totalSeconds = Math.Max(0, (int)Math.Ceiling(interval.TotalSeconds));
+
+            if (totalSeconds < 60)
+            {
+                return totalSeconds + "s";
+            }
+
+            if (totalSeconds % 3600 == 0)
+            {
+                return (totalSeconds / 3600) + "h";
+            }
+
+            if (totalSeconds % 60 == 0)
+            {
+                return (totalSeconds / 60) + "m";
+            }
+
+            return totalSeconds + "s";
+        }
+        private int GetAutoBackupIntervalSeconds()
+        {
+            if (_settings.AutoBackupIntervalSeconds > 0)
+            {
+                return _settings.AutoBackupIntervalSeconds;
+            }
+
+            return Math.Max(1, _settings.AutoBackupIntervalMinutes) * 60;
         }
         private void RestartAutoBackupCountdown()
         {
             _autoBackupCountdownTimer.Stop();
 
-            if (!_settings.AutoBackupEnabled)
+            if (!_settings.AutoBackupEnabled || !_settings.BackupPathPairs.Any(p => p.IsEnabled))
             {
                 RefreshAutoBackupTimerColumn();
+                RefreshWindowTitleCountdown();
+                RefreshNotifyIconText();
                 return;
             }
 
-            _nextAutoBackupRun = DateTime.Now.AddMinutes(_settings.AutoBackupIntervalMinutes);
+            _nextAutoBackupRun = DateTime.Now.AddSeconds(GetAutoBackupIntervalSeconds());
             RefreshAutoBackupTimerColumn();
+            RefreshWindowTitleCountdown();
+            RefreshNotifyIconText();
             _autoBackupCountdownTimer.Start();
+        }
+
+
+
+        private void RefreshBackupInfoColumn()
+        {
+            for (int i = 0; i < dataGridViewConfiguredPaths.Rows.Count && i < _settings.BackupPathPairs.Count; i++)
+            {
+                BackupPathPair pair = _settings.BackupPathPairs[i];
+
+                dataGridViewConfiguredPaths.Rows[i].Cells["ColumnConfiguredBackupInfo"].Value = GetBackupInfoIcon(pair);
+                dataGridViewConfiguredPaths.Rows[i].Cells["ColumnConfiguredBackupInfo"].ToolTipText = GetBackupInfoToolTipText(pair);
+            }
+        }
+        private string GetBackupInfoToolTipText(BackupPathPair pair)
+        {
+            string key = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+
+            if (!_settings.BackupStatusesByPair.TryGetValue(key, out BackupPathStatus? status))
+            {
+                return "Last Backup: -";
+            }
+
+            string text = $"Last Backup: {status.LastBackupDateTime}";
+
+            if (!string.IsNullOrWhiteSpace(status.LastBackupErrorMessage))
+            {
+                if (status.LastBackupStatus == "Error")
+                {
+                    text += $"{Environment.NewLine}Error: {status.LastBackupErrorMessage}";
+                }
+                else if (status.LastBackupStatus == "Warning")
+                {
+                    text += $"{Environment.NewLine}Warning: {status.LastBackupErrorMessage}";
+                }
+            }
+
+            return text;
+        }
+        private Color GetBackupInfoColor(BackupPathPair pair)
+        {
+            string key = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+
+            if (!_settings.BackupStatusesByPair.TryGetValue(key, out BackupPathStatus? status))
+            {
+                return Color.FromArgb(0, 120, 215);
+            }
+
+            if (status.LastBackupStatus == "OK")
+            {
+                return Color.FromArgb(0, 160, 80);
+            }
+
+            if (status.LastBackupStatus == "Warning")
+            {
+                return Color.FromArgb(230, 180, 0);
+            }
+
+            if (status.LastBackupStatus == "Error")
+            {
+                return Color.FromArgb(200, 0, 0);
+            }
+
+            return Color.FromArgb(0, 120, 215);
+        }
+        private Bitmap GetBackupInfoIcon(BackupPathPair pair)
+        {
+            Color color = GetBackupInfoColor(pair);
+            Bitmap bitmap = new Bitmap(16, 16);
+
+            using Graphics graphics = Graphics.FromImage(bitmap);
+            graphics.Clear(Color.Transparent);
+
+            using SolidBrush brush = new SolidBrush(color);
+            graphics.FillEllipse(brush, 1, 1, 14, 14);
+
+            using Font font = new Font("Segoe UI", 8F, FontStyle.Regular);
+            Size textSize = TextRenderer.MeasureText("i", font);
+
+            int x = (16 - textSize.Width) / 2 + 5;
+            int y = (16 - textSize.Height) / 2 - 1;
+
+            TextRenderer.DrawText(
+                graphics,
+                "i",
+                font,
+                new Point(x, y),
+                Color.Black,
+                TextFormatFlags.NoPadding);
+
+            return bitmap;
+        }
+        private void SetBackupStatus(BackupPathPair pair, string status, string errorMessage)
+        {
+            string key = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+
+            _settings.BackupStatusesByPair[key] = new BackupPathStatus
+            {
+                LastBackupDateTime = DateTime.Now.ToString("dd.MM.yyyy, HH:mm"),
+                LastBackupStatus = status,
+                LastBackupErrorMessage = errorMessage
+            };
+        }
+
+        private void InitializeBackupInfoColumn()
+        {
+            if (dataGridViewConfiguredPaths.Columns.Contains("ColumnConfiguredBackupInfo"))
+            {
+                return;
+            }
+
+            DataGridViewImageColumn columnConfiguredBackupInfo = new DataGridViewImageColumn
+            {
+                HeaderText = "ℹ",
+                Name = "ColumnConfiguredBackupInfo",
+                ReadOnly = true,
+                Width = 35,
+                MinimumWidth = 35,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
+                ImageLayout = DataGridViewImageCellLayout.Normal
+            };
+
+            int targetColumnIndex = dataGridViewConfiguredPaths.Columns["ColumnConfiguredTargetDirectory"].Index;
+            dataGridViewConfiguredPaths.Columns.Insert(targetColumnIndex + 1, columnConfiguredBackupInfo);
         }
         private void InitializeAutoBackupTimerColumn()
         {
@@ -461,11 +689,11 @@ namespace EasyVersionBackup
 
             DataGridViewTextBoxColumn columnConfiguredAutoBackupTimer = new DataGridViewTextBoxColumn
             {
-                HeaderText = "",
+                HeaderText = "Timer",
                 Name = "ColumnConfiguredAutoBackupTimer",
                 ReadOnly = true,
-                Width = 20,
-                MinimumWidth = 20,
+                Width = 60,
+                MinimumWidth = 60,
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.None
             };
 
@@ -525,7 +753,42 @@ namespace EasyVersionBackup
                 SaveWindowSettings();
             }
         }
+        private string FormatNotifyIconRemainingText(TimeSpan remaining)
+        {
+            int totalSeconds = Math.Max(0, (int)Math.Ceiling(remaining.TotalSeconds));
 
+            if (totalSeconds < 60)
+            {
+                return totalSeconds == 1 ? "1 second" : totalSeconds + " seconds";
+            }
+
+            int totalMinutes = Math.Max(1, (int)Math.Ceiling(totalSeconds / 60.0));
+
+            if (totalMinutes < 60)
+            {
+                return totalMinutes == 1 ? "1 minute" : totalMinutes + " minutes";
+            }
+
+            int totalHours = Math.Max(1, (int)Math.Ceiling(totalMinutes / 60.0));
+            return totalHours == 1 ? "1 hour" : totalHours + " hours";
+        }
+        private void RefreshNotifyIconText()
+        {
+            if (!_settings.AutoBackupEnabled || !_settings.BackupPathPairs.Any(p => p.IsEnabled))
+            {
+                notifyIconMain.Text = "No backup scheduled";
+                return;
+            }
+
+            TimeSpan remaining = _nextAutoBackupRun - DateTime.Now;
+
+            if (remaining < TimeSpan.Zero)
+            {
+                remaining = TimeSpan.Zero;
+            }
+
+            notifyIconMain.Text = $"Next backup in {FormatNotifyIconRemainingText(remaining)} ({_nextAutoBackupRun:HH:mm})";
+        }
         private void Form1_Resize(object sender, EventArgs e)
         {
             if (!_settings.MinimizeToSystray)
@@ -537,6 +800,8 @@ namespace EasyVersionBackup
             {
                 return;
             }
+
+            RefreshNotifyIconText();
 
             Hide();
             ShowInTaskbar = false;

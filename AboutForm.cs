@@ -32,7 +32,7 @@ namespace EasyVersionBackup
 
             Label labelVersion = new Label
             {
-                Text = "Version: 0.5",
+                Text = "Version: 0.7",
                 AutoSize = true,
                 Location = new Point(20, 80)
             };

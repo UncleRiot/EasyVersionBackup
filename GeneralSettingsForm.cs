@@ -52,7 +52,7 @@ namespace EasyVersionBackup
         }
         private void InitializeAutoBackupControls()
         {
-            labelDummy1.Text = "Auto-Backup (min)";
+            labelDummy1.Text = "Backup Timer";
             checkBoxDummy1.CheckedChanged += checkBoxDummy1_CheckedChanged;
 
             TextBox textBoxAutoBackupInterval = new TextBox
@@ -62,9 +62,11 @@ namespace EasyVersionBackup
                 TabIndex = 13
             };
 
-            // exakt vertikal mittig zur Checkbox ausrichten
             textBoxAutoBackupInterval.Left = checkBoxDummy1.Right + 5;
             textBoxAutoBackupInterval.Top = checkBoxDummy1.Top + (checkBoxDummy1.Height - textBoxAutoBackupInterval.Height) / 2;
+
+            ToolTip toolTipAutoBackupInterval = new ToolTip();
+            toolTipAutoBackupInterval.SetToolTip(textBoxAutoBackupInterval, "Examples: 30s = 30 seconds, 5m = 5 minutes, 1h = 1 hour, 15 = 15 minutes");
 
             Controls.Add(textBoxAutoBackupInterval);
         }
@@ -160,8 +162,8 @@ namespace EasyVersionBackup
             checkBoxIgnoreCopyErrors.Checked = settings.IgnoreCopyErrors;
             checkBoxDummy1.Checked = settings.AutoBackupEnabled;
 
-            TextBox textBoxAutoBackupInterval = Controls.Find("textBoxAutoBackupInterval", true).OfType<TextBox>().First();
-            textBoxAutoBackupInterval.Text = Math.Clamp(settings.AutoBackupIntervalMinutes, 1, 60).ToString();
+            TextBox textBoxAutoBackupInterval = GetAutoBackupIntervalTextBox();
+            textBoxAutoBackupInterval.Text = FormatAutoBackupIntervalText(GetAutoBackupIntervalSeconds(settings));
 
             UpdateAutoBackupControls();
 
@@ -183,13 +185,15 @@ namespace EasyVersionBackup
             AppSettings settings = CloneSettings(ResultSettings);
 
             TextBox textBoxAutoBackupInterval = GetAutoBackupIntervalTextBox();
+            int autoBackupIntervalSeconds = ParseAutoBackupIntervalSeconds(textBoxAutoBackupInterval.Text.Trim());
 
             settings.ZipDestinationFiles = checkBoxZipDestinationFiles.Checked;
             settings.DefaultVersioning = comboBoxDefaultVersioning.SelectedItem?.ToString() ?? "0.0.1";
             settings.MinimizeToSystray = checkBoxMinimizeToSystray.Checked;
             settings.AutoIncrementVersion = checkBoxAutoIncrementVersion.Checked;
             settings.AutoBackupEnabled = checkBoxDummy1.Checked;
-            settings.AutoBackupIntervalMinutes = int.Parse(textBoxAutoBackupInterval.Text.Trim());
+            settings.AutoBackupIntervalSeconds = autoBackupIntervalSeconds;
+            settings.AutoBackupIntervalMinutes = Math.Max(1, (int)Math.Ceiling(autoBackupIntervalSeconds / 60.0));
             settings.IgnoreCopyErrors = checkBoxDummy1.Checked || checkBoxIgnoreCopyErrors.Checked;
             settings.BackupPathPairs = new List<BackupPathPair>();
 
@@ -246,12 +250,18 @@ namespace EasyVersionBackup
         {
             TextBox textBoxAutoBackupInterval = GetAutoBackupIntervalTextBox();
 
+            int autoBackupIntervalSeconds = 0;
+
             if (checkBoxDummy1.Checked &&
-                (!int.TryParse(textBoxAutoBackupInterval.Text.Trim(), out int autoBackupIntervalMinutes) ||
-                 autoBackupIntervalMinutes < 1 ||
-                 autoBackupIntervalMinutes > 60))
+                !TryParseAutoBackupIntervalSeconds(textBoxAutoBackupInterval.Text.Trim(), out autoBackupIntervalSeconds))
             {
-                MessageBox.Show("Auto-Backup (min) must be between 1 and 60.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Backup Timer must be entered like 30s, 5m, 1h or 15.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (checkBoxDummy1.Checked && autoBackupIntervalSeconds < 1)
+            {
+                MessageBox.Show("Backup Timer must be at least 1 second.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -316,7 +326,85 @@ namespace EasyVersionBackup
                 }
             }
         }
+        private int ParseAutoBackupIntervalSeconds(string value)
+        {
+            if (!TryParseAutoBackupIntervalSeconds(value, out int seconds))
+            {
+                throw new InvalidOperationException("Invalid Backup Timer value.");
+            }
 
+            return seconds;
+        }
+        private int GetAutoBackupIntervalSeconds(AppSettings settings)
+        {
+            if (settings.AutoBackupIntervalSeconds > 0)
+            {
+                return settings.AutoBackupIntervalSeconds;
+            }
+
+            return Math.Max(1, settings.AutoBackupIntervalMinutes) * 60;
+        }
+        private string FormatAutoBackupIntervalText(int seconds)
+        {
+            if (seconds % 3600 == 0)
+            {
+                return (seconds / 3600) + "h";
+            }
+
+            if (seconds % 60 == 0)
+            {
+                return (seconds / 60) + "m";
+            }
+
+            return seconds + "s";
+        }
+        private bool TryParseAutoBackupIntervalSeconds(string value, out int seconds)
+        {
+            seconds = 0;
+
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            string normalizedValue = value.Trim().ToLowerInvariant();
+
+            if (normalizedValue.EndsWith("s"))
+            {
+                return int.TryParse(normalizedValue[..^1], out seconds) && seconds >= 1;
+            }
+
+            if (normalizedValue.EndsWith("m"))
+            {
+                if (!int.TryParse(normalizedValue[..^1], out int minutes) || minutes < 1)
+                {
+                    return false;
+                }
+
+                seconds = minutes * 60;
+                return true;
+            }
+
+            if (normalizedValue.EndsWith("h"))
+            {
+                if (!int.TryParse(normalizedValue[..^1], out int hours) || hours < 1)
+                {
+                    return false;
+                }
+
+                seconds = hours * 3600;
+                return true;
+            }
+
+            if (!int.TryParse(normalizedValue, out int defaultMinutes) || defaultMinutes < 1)
+            {
+                return false;
+            }
+
+            seconds = defaultMinutes * 60;
+            return true;
+        }
+        
         private AppSettings CloneSettings(AppSettings settings)
         {
             AppSettings clone = new AppSettings
@@ -328,8 +416,10 @@ namespace EasyVersionBackup
                 IgnoreCopyErrors = settings.IgnoreCopyErrors,
                 AutoBackupEnabled = settings.AutoBackupEnabled,
                 AutoBackupIntervalMinutes = settings.AutoBackupIntervalMinutes,
+                AutoBackupIntervalSeconds = settings.AutoBackupIntervalSeconds,
                 BackupPathPairs = new List<BackupPathPair>(),
                 LastUsedVersionsByPair = new Dictionary<string, string>(settings.LastUsedVersionsByPair),
+                BackupStatusesByPair = new Dictionary<string, BackupPathStatus>(settings.BackupStatusesByPair),
                 MainWindowWidth = settings.MainWindowWidth,
                 MainWindowHeight = settings.MainWindowHeight,
                 MainWindowLeft = settings.MainWindowLeft,
