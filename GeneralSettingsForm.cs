@@ -13,6 +13,8 @@ namespace EasyVersionBackup
         {
             InitializeComponent();
 
+            InitializeAutoBackupControls();
+
             dataGridViewPaths.ClipboardCopyMode = DataGridViewClipboardCopyMode.Disable;
             dataGridViewPaths.KeyDown += dataGridViewPaths_KeyDown;
 
@@ -20,7 +22,53 @@ namespace EasyVersionBackup
             ApplySettingsToUi(ResultSettings);
         }
 
-        private void dataGridViewPaths_KeyDown(object sender, KeyEventArgs e)
+        private void checkBoxDummy1_CheckedChanged(object? sender, EventArgs e)
+        {
+            UpdateAutoBackupControls();
+        }
+        private void UpdateAutoBackupControls()
+        {
+            TextBox textBoxAutoBackupInterval = GetAutoBackupIntervalTextBox();
+
+            textBoxAutoBackupInterval.Enabled = checkBoxDummy1.Checked;
+            checkBoxIgnoreCopyErrors.Enabled = !checkBoxDummy1.Checked;
+
+            if (checkBoxDummy1.Checked)
+            {
+                checkBoxIgnoreCopyErrors.Checked = true;
+            }
+        }
+        private TextBox GetAutoBackupIntervalTextBox()
+        {
+            foreach (Control control in Controls)
+            {
+                if (control.Name == "textBoxAutoBackupInterval" && control is TextBox textBox)
+                {
+                    return textBox;
+                }
+            }
+
+            throw new InvalidOperationException("textBoxAutoBackupInterval not found.");
+        }
+        private void InitializeAutoBackupControls()
+        {
+            labelDummy1.Text = "Auto-Backup (min)";
+            checkBoxDummy1.CheckedChanged += checkBoxDummy1_CheckedChanged;
+
+            TextBox textBoxAutoBackupInterval = new TextBox
+            {
+                Name = "textBoxAutoBackupInterval",
+                Size = new System.Drawing.Size(45, 23),
+                TabIndex = 13
+            };
+
+            // exakt vertikal mittig zur Checkbox ausrichten
+            textBoxAutoBackupInterval.Left = checkBoxDummy1.Right + 5;
+            textBoxAutoBackupInterval.Top = checkBoxDummy1.Top + (checkBoxDummy1.Height - textBoxAutoBackupInterval.Height) / 2;
+
+            Controls.Add(textBoxAutoBackupInterval);
+        }
+        private void dataGridViewPaths_KeyDown(object? sender, KeyEventArgs e)
         {
             if (!e.Control || e.KeyCode != Keys.C)
             {
@@ -110,6 +158,12 @@ namespace EasyVersionBackup
             checkBoxAutoIncrementVersion.Checked = settings.AutoIncrementVersion;
             checkBoxMinimizeToSystray.Checked = settings.MinimizeToSystray;
             checkBoxIgnoreCopyErrors.Checked = settings.IgnoreCopyErrors;
+            checkBoxDummy1.Checked = settings.AutoBackupEnabled;
+
+            TextBox textBoxAutoBackupInterval = Controls.Find("textBoxAutoBackupInterval", true).OfType<TextBox>().First();
+            textBoxAutoBackupInterval.Text = Math.Clamp(settings.AutoBackupIntervalMinutes, 1, 60).ToString();
+
+            UpdateAutoBackupControls();
 
             dataGridViewPaths.Rows.Clear();
 
@@ -128,11 +182,15 @@ namespace EasyVersionBackup
         {
             AppSettings settings = CloneSettings(ResultSettings);
 
+            TextBox textBoxAutoBackupInterval = GetAutoBackupIntervalTextBox();
+
             settings.ZipDestinationFiles = checkBoxZipDestinationFiles.Checked;
             settings.DefaultVersioning = comboBoxDefaultVersioning.SelectedItem?.ToString() ?? "0.0.1";
             settings.MinimizeToSystray = checkBoxMinimizeToSystray.Checked;
             settings.AutoIncrementVersion = checkBoxAutoIncrementVersion.Checked;
-            settings.IgnoreCopyErrors = checkBoxIgnoreCopyErrors.Checked;
+            settings.AutoBackupEnabled = checkBoxDummy1.Checked;
+            settings.AutoBackupIntervalMinutes = int.Parse(textBoxAutoBackupInterval.Text.Trim());
+            settings.IgnoreCopyErrors = checkBoxDummy1.Checked || checkBoxIgnoreCopyErrors.Checked;
             settings.BackupPathPairs = new List<BackupPathPair>();
 
             foreach (DataGridViewRow row in dataGridViewPaths.Rows)
@@ -186,6 +244,17 @@ namespace EasyVersionBackup
 
         private void buttonOk_Click(object sender, EventArgs e)
         {
+            TextBox textBoxAutoBackupInterval = GetAutoBackupIntervalTextBox();
+
+            if (checkBoxDummy1.Checked &&
+                (!int.TryParse(textBoxAutoBackupInterval.Text.Trim(), out int autoBackupIntervalMinutes) ||
+                 autoBackupIntervalMinutes < 1 ||
+                 autoBackupIntervalMinutes > 60))
+            {
+                MessageBox.Show("Auto-Backup (min) must be between 1 and 60.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             AppSettings newSettings = ReadSettingsFromUi();
 
             foreach (BackupPathPair pair in newSettings.BackupPathPairs)
@@ -257,6 +326,8 @@ namespace EasyVersionBackup
                 AutoIncrementVersion = settings.AutoIncrementVersion,
                 MinimizeToSystray = settings.MinimizeToSystray,
                 IgnoreCopyErrors = settings.IgnoreCopyErrors,
+                AutoBackupEnabled = settings.AutoBackupEnabled,
+                AutoBackupIntervalMinutes = settings.AutoBackupIntervalMinutes,
                 BackupPathPairs = new List<BackupPathPair>(),
                 LastUsedVersionsByPair = new Dictionary<string, string>(settings.LastUsedVersionsByPair),
                 MainWindowWidth = settings.MainWindowWidth,

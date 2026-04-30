@@ -9,6 +9,8 @@ namespace EasyVersionBackup
         public bool AutoIncrementVersion { get; set; } = true;
         public bool MinimizeToSystray { get; set; } = false;
         public bool IgnoreCopyErrors { get; set; } = false;
+        public bool AutoBackupEnabled { get; set; } = false;
+        public int AutoBackupIntervalMinutes { get; set; } = 15;
 
         public List<BackupPathPair> BackupPathPairs { get; set; } = new List<BackupPathPair>();
         public Dictionary<string, string> LastUsedVersionsByPair { get; set; } = new Dictionary<string, string>();

@@ -12,6 +12,8 @@ namespace EasyVersionBackup
     {
         private AppSettings _settings = new AppSettings();
         private bool _ignoreAllFileErrors;
+        private readonly System.Windows.Forms.Timer _autoBackupCountdownTimer = new System.Windows.Forms.Timer();
+        private DateTime _nextAutoBackupRun;
 
         public Form1()
         {
@@ -39,21 +41,25 @@ namespace EasyVersionBackup
             dataGridViewConfiguredPaths.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(240, 240, 240);
             dataGridViewConfiguredPaths.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
 
-            // FIX: Header selection color (no blue highlight)
             dataGridViewConfiguredPaths.ColumnHeadersDefaultCellStyle.SelectionBackColor =
                 dataGridViewConfiguredPaths.ColumnHeadersDefaultCellStyle.BackColor;
             dataGridViewConfiguredPaths.ColumnHeadersDefaultCellStyle.SelectionForeColor =
                 dataGridViewConfiguredPaths.ColumnHeadersDefaultCellStyle.ForeColor;
 
-            // FIX: softer row selection color
             dataGridViewConfiguredPaths.DefaultCellStyle.SelectionBackColor = Color.FromArgb(220, 235, 252);
             dataGridViewConfiguredPaths.DefaultCellStyle.SelectionForeColor = Color.Black;
 
             dataGridViewConfiguredPaths.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(250, 250, 250);
 
+            InitializeAutoBackupTimerColumn();
+
+            _autoBackupCountdownTimer.Interval = 1000;
+            _autoBackupCountdownTimer.Tick += autoBackupCountdownTimer_Tick;
+
             LoadSettings();
             ApplyWindowSettings();
             RefreshConfiguredPaths();
+            RestartAutoBackupCountdown();
         }
 
         private void LoadSettings()
@@ -117,11 +123,13 @@ namespace EasyVersionBackup
             {
                 dataGridViewConfiguredPaths.Rows.Add(
                     pair.IsEnabled,
+                    string.Empty,
                     pair.SourceDirectory,
                     pair.TargetDirectory);
             }
 
             buttonBackup.Enabled = _settings.BackupPathPairs.Any(p => p.IsEnabled);
+            RefreshAutoBackupTimerColumn();
         }
 
         private void exitToolStripMenuItem_Click(object sender, EventArgs e)
@@ -139,6 +147,7 @@ namespace EasyVersionBackup
                 _settings = form.ResultSettings;
                 SaveSettings();
                 RefreshConfiguredPaths();
+                RestartAutoBackupCountdown();
             }
         }
 
@@ -344,6 +353,124 @@ namespace EasyVersionBackup
             return FileErrorAction.Abort;
         }
 
+        private void ExecuteAutomaticBackup()
+        {
+            _ignoreAllFileErrors = true;
+
+            List<BackupPathPair> validPairs = _settings.BackupPathPairs
+                .Where(p => p.IsEnabled && !string.IsNullOrWhiteSpace(p.SourceDirectory) && !string.IsNullOrWhiteSpace(p.TargetDirectory))
+                .ToList();
+
+            if (validPairs.Count == 0)
+            {
+                return;
+            }
+
+            foreach (BackupPathPair pair in validPairs)
+            {
+                if (!Directory.Exists(pair.SourceDirectory))
+                {
+                    return;
+                }
+
+                if (!Directory.Exists(pair.TargetDirectory))
+                {
+                    Directory.CreateDirectory(pair.TargetDirectory);
+                }
+            }
+
+            int skippedFiles = 0;
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmm");
+
+            foreach (BackupPathPair pair in validPairs)
+            {
+                string suggestedVersion = VersionHelper.GetSuggestedVersion(_settings, pair);
+                string automaticVersion = string.IsNullOrWhiteSpace(suggestedVersion)
+                    ? timestamp
+                    : suggestedVersion + "_" + timestamp;
+
+                skippedFiles += ExecuteBackup(pair, automaticVersion);
+
+                string key = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+                _settings.LastUsedVersionsByPair[key] = suggestedVersion;
+            }
+
+            SaveSettings();
+
+            notifyIconMain.Visible = true;
+            notifyIconMain.BalloonTipTitle = "EasyVersionBackup";
+            notifyIconMain.BalloonTipText = $"Auto-Backup completed. {skippedFiles} files skipped.";
+            notifyIconMain.ShowBalloonTip(5000);
+        }
+        private void autoBackupCountdownTimer_Tick(object? sender, EventArgs e)
+        {
+            RefreshAutoBackupTimerColumn();
+
+            if (DateTime.Now < _nextAutoBackupRun)
+            {
+                return;
+            }
+
+            ExecuteAutomaticBackup();
+
+            _nextAutoBackupRun = DateTime.Now.AddMinutes(_settings.AutoBackupIntervalMinutes);
+            RefreshAutoBackupTimerColumn();
+        }
+        private void RefreshAutoBackupTimerColumn()
+        {
+            for (int i = 0; i < dataGridViewConfiguredPaths.Rows.Count && i < _settings.BackupPathPairs.Count; i++)
+            {
+                DataGridViewRow row = dataGridViewConfiguredPaths.Rows[i];
+
+                if (!_settings.AutoBackupEnabled || !_settings.BackupPathPairs[i].IsEnabled)
+                {
+                    row.Cells["ColumnConfiguredAutoBackupTimer"].Value = string.Empty;
+                    continue;
+                }
+
+                TimeSpan remaining = _nextAutoBackupRun - DateTime.Now;
+
+                if (remaining < TimeSpan.Zero)
+                {
+                    remaining = TimeSpan.Zero;
+                }
+
+                row.Cells["ColumnConfiguredAutoBackupTimer"].Value = Math.Ceiling(remaining.TotalMinutes).ToString();
+            }
+        }
+        private void RestartAutoBackupCountdown()
+        {
+            _autoBackupCountdownTimer.Stop();
+
+            if (!_settings.AutoBackupEnabled)
+            {
+                RefreshAutoBackupTimerColumn();
+                return;
+            }
+
+            _nextAutoBackupRun = DateTime.Now.AddMinutes(_settings.AutoBackupIntervalMinutes);
+            RefreshAutoBackupTimerColumn();
+            _autoBackupCountdownTimer.Start();
+        }
+        private void InitializeAutoBackupTimerColumn()
+        {
+            if (dataGridViewConfiguredPaths.Columns.Contains("ColumnConfiguredAutoBackupTimer"))
+            {
+                return;
+            }
+
+            DataGridViewTextBoxColumn columnConfiguredAutoBackupTimer = new DataGridViewTextBoxColumn
+            {
+                HeaderText = "",
+                Name = "ColumnConfiguredAutoBackupTimer",
+                ReadOnly = true,
+                Width = 20,
+                MinimumWidth = 20,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+            };
+
+            dataGridViewConfiguredPaths.Columns.Insert(1, columnConfiguredAutoBackupTimer);
+        }
         private void SyncEnabledPairsFromGrid()
         {
             for (int i = 0; i < _settings.BackupPathPairs.Count && i < dataGridViewConfiguredPaths.Rows.Count; i++)
@@ -360,6 +487,7 @@ namespace EasyVersionBackup
             }
 
             buttonBackup.Enabled = _settings.BackupPathPairs.Any(p => p.IsEnabled);
+            RefreshAutoBackupTimerColumn();
             SaveSettings();
         }
 
