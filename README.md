@@ -1,7 +1,7 @@
 # EasyVersionBackup
 
 EasyVersionBackup is a lightweight Windows application for creating **versioned backups** of your directories — fast, reliable, and focused on real-world usage without unnecessary complexity.
-
+Use it for your save-games, projects, everything!
 ---
 
 ## 🚀 Features
