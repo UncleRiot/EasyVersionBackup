@@ -71,7 +71,7 @@ namespace EasyVersionBackup
 
                 if (!string.IsNullOrWhiteSpace(version) && !VersionHelper.IsValidVersion(version))
                 {
-                    MessageBox.Show($"Invalid version for '{sourceName}'. Example: 0.0.1", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show($"Invalid version for '{sourceName}'. The value must be usable as part of a file name.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 

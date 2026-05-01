@@ -7,6 +7,8 @@ namespace EasyVersionBackup
 {
     public partial class GeneralSettingsForm : Form
     {
+        private readonly ToolTip _settingsHintToolTip = new ToolTip();
+        private PictureBox? _activeHintOwner;
         public AppSettings ResultSettings { get; private set; }
 
         public GeneralSettingsForm(AppSettings settings)
@@ -14,6 +16,9 @@ namespace EasyVersionBackup
             InitializeComponent();
 
             InitializeAutoBackupControls();
+            InitializeSettingsHintIcons();
+
+            this.MouseDown += GeneralSettingsForm_MouseDown;
 
             dataGridViewPaths.ClipboardCopyMode = DataGridViewClipboardCopyMode.Disable;
             dataGridViewPaths.KeyDown += dataGridViewPaths_KeyDown;
@@ -65,10 +70,93 @@ namespace EasyVersionBackup
             textBoxAutoBackupInterval.Left = checkBoxDummy1.Right + 5;
             textBoxAutoBackupInterval.Top = checkBoxDummy1.Top + (checkBoxDummy1.Height - textBoxAutoBackupInterval.Height) / 2;
 
-            ToolTip toolTipAutoBackupInterval = new ToolTip();
-            toolTipAutoBackupInterval.SetToolTip(textBoxAutoBackupInterval, "Examples: 30s = 30 seconds, 5m = 5 minutes, 1h = 1 hour, 15 = 15 minutes");
-
             Controls.Add(textBoxAutoBackupInterval);
+        }
+        private void InitializeSettingsHintIcons()
+        {
+            PictureBox pictureBoxDefaultVersioningHint = CreateSettingsHintIcon(
+                "pictureBoxDefaultVersioningHint",
+                "Default Versioning examples:" + Environment.NewLine +
+                "none = no version suffix" + Environment.NewLine +
+                "v1.0 = prefix + version number" + Environment.NewLine +
+                "version1.0 = custom prefix + version number" + Environment.NewLine +
+                "1.0 = version number without prefix" + Environment.NewLine +
+                "yyyy-MM-dd = date, e.g. 2026-05-01" + Environment.NewLine +
+                "yyyyMMdd = date, e.g. 20260501" + Environment.NewLine +
+                "yyyy-MM-dd-HH-mm = date and time" + Environment.NewLine +
+                "yyyyMMddHHmm = compact date and time" + Environment.NewLine +
+                "... and much more, just experiment ;)");
+
+            pictureBoxDefaultVersioningHint.Left = comboBoxDefaultVersioning.Right + 5;
+            pictureBoxDefaultVersioningHint.Top = comboBoxDefaultVersioning.Top + (comboBoxDefaultVersioning.Height - pictureBoxDefaultVersioningHint.Height) / 2;
+
+            TextBox textBoxAutoBackupInterval = GetAutoBackupIntervalTextBox();
+
+            PictureBox pictureBoxAutoBackupTimerHint = CreateSettingsHintIcon(
+                "pictureBoxAutoBackupTimerHint",
+                "Backup Timer examples:" + Environment.NewLine +
+                "30s = 30 seconds" + Environment.NewLine +
+                "5m = 5 minutes" + Environment.NewLine +
+                "1h = 1 hour" + Environment.NewLine +
+                "15 = 15 minutes");
+
+            pictureBoxAutoBackupTimerHint.Left = textBoxAutoBackupInterval.Right + 5;
+            pictureBoxAutoBackupTimerHint.Top = textBoxAutoBackupInterval.Top + (textBoxAutoBackupInterval.Height - pictureBoxAutoBackupTimerHint.Height) / 2;
+
+            Controls.Add(pictureBoxDefaultVersioningHint);
+            Controls.Add(pictureBoxAutoBackupTimerHint);
+        }
+        private void GeneralSettingsForm_MouseDown(object? sender, MouseEventArgs e)
+        {
+            if (_activeHintOwner != null)
+            {
+                _settingsHintToolTip.Hide(_activeHintOwner);
+                _activeHintOwner = null;
+            }
+        }
+        private PictureBox CreateSettingsHintIcon(string name, string hintText)
+        {
+            PictureBox pictureBox = new PictureBox
+            {
+                Name = name,
+                Size = new System.Drawing.Size(18, 18),
+                Image = CreateSettingsHintIconBitmap(),
+                SizeMode = PictureBoxSizeMode.CenterImage,
+                Cursor = Cursors.Help
+            };
+
+            _settingsHintToolTip.SetToolTip(pictureBox, hintText);
+
+            pictureBox.Click += (sender, e) =>
+            {
+                _settingsHintToolTip.Hide(pictureBox);
+
+                _activeHintOwner = pictureBox;
+                _settingsHintToolTip.Show(hintText, pictureBox, pictureBox.Width + 5, 0, 8000);
+            };
+
+            return pictureBox;
+        }
+        private Bitmap CreateSettingsHintIconBitmap()
+        {
+            Bitmap bitmap = new Bitmap(18, 18);
+
+            using Graphics graphics = Graphics.FromImage(bitmap);
+            graphics.Clear(Color.Transparent);
+
+            using SolidBrush brush = new SolidBrush(Color.FromArgb(0, 120, 215));
+            graphics.FillEllipse(brush, 1, 1, 16, 16);
+
+            using Font font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            TextRenderer.DrawText(
+                graphics,
+                "?",
+                font,
+                new Rectangle(0, 0, 18, 18),
+                Color.White,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+
+            return bitmap;
         }
         private void dataGridViewPaths_KeyDown(object? sender, KeyEventArgs e)
         {
@@ -144,26 +232,27 @@ namespace EasyVersionBackup
         {
             checkBoxZipDestinationFiles.Checked = settings.ZipDestinationFiles;
 
+            comboBoxDefaultVersioning.DropDownStyle = ComboBoxStyle.DropDown;
             comboBoxDefaultVersioning.Items.Clear();
             comboBoxDefaultVersioning.Items.Add("none");
-            comboBoxDefaultVersioning.Items.Add("0.0.1");
+            comboBoxDefaultVersioning.Items.Add("v1.0");
+            comboBoxDefaultVersioning.Items.Add("1.0");
+            comboBoxDefaultVersioning.Items.Add("yyyy-MM-dd");
+            comboBoxDefaultVersioning.Items.Add("yyyyMMdd");
+            comboBoxDefaultVersioning.Items.Add("yyyy-MM-dd-HH-mm");
+            comboBoxDefaultVersioning.Items.Add("yyyyMMddHHmm");
 
-            if (comboBoxDefaultVersioning.Items.Contains(settings.DefaultVersioning))
-            {
-                comboBoxDefaultVersioning.SelectedItem = settings.DefaultVersioning;
-            }
-            else
-            {
-                comboBoxDefaultVersioning.SelectedItem = "0.0.1";
-            }
+            comboBoxDefaultVersioning.Text = string.IsNullOrWhiteSpace(settings.DefaultVersioning)
+                ? "v1.0"
+                : settings.DefaultVersioning;
 
             checkBoxAutoIncrementVersion.Checked = settings.AutoIncrementVersion;
             checkBoxMinimizeToSystray.Checked = settings.MinimizeToSystray;
             checkBoxIgnoreCopyErrors.Checked = settings.IgnoreCopyErrors;
             checkBoxDummy1.Checked = settings.AutoBackupEnabled;
 
-            TextBox textBoxAutoBackupInterval = GetAutoBackupIntervalTextBox();
-            textBoxAutoBackupInterval.Text = FormatAutoBackupIntervalText(GetAutoBackupIntervalSeconds(settings));
+            TextBox textBoxAutoBackupInterval = Controls.Find("textBoxAutoBackupInterval", true).OfType<TextBox>().First();
+            textBoxAutoBackupInterval.Text = Math.Clamp(settings.AutoBackupIntervalMinutes, 1, 60).ToString();
 
             UpdateAutoBackupControls();
 
@@ -185,15 +274,13 @@ namespace EasyVersionBackup
             AppSettings settings = CloneSettings(ResultSettings);
 
             TextBox textBoxAutoBackupInterval = GetAutoBackupIntervalTextBox();
-            int autoBackupIntervalSeconds = ParseAutoBackupIntervalSeconds(textBoxAutoBackupInterval.Text.Trim());
 
             settings.ZipDestinationFiles = checkBoxZipDestinationFiles.Checked;
-            settings.DefaultVersioning = comboBoxDefaultVersioning.SelectedItem?.ToString() ?? "0.0.1";
+            settings.DefaultVersioning = comboBoxDefaultVersioning.Text.Trim();
             settings.MinimizeToSystray = checkBoxMinimizeToSystray.Checked;
             settings.AutoIncrementVersion = checkBoxAutoIncrementVersion.Checked;
             settings.AutoBackupEnabled = checkBoxDummy1.Checked;
-            settings.AutoBackupIntervalSeconds = autoBackupIntervalSeconds;
-            settings.AutoBackupIntervalMinutes = Math.Max(1, (int)Math.Ceiling(autoBackupIntervalSeconds / 60.0));
+            settings.AutoBackupIntervalMinutes = int.Parse(textBoxAutoBackupInterval.Text.Trim());
             settings.IgnoreCopyErrors = checkBoxDummy1.Checked || checkBoxIgnoreCopyErrors.Checked;
             settings.BackupPathPairs = new List<BackupPathPair>();
 
@@ -250,18 +337,22 @@ namespace EasyVersionBackup
         {
             TextBox textBoxAutoBackupInterval = GetAutoBackupIntervalTextBox();
 
-            int autoBackupIntervalSeconds = 0;
-
             if (checkBoxDummy1.Checked &&
-                !TryParseAutoBackupIntervalSeconds(textBoxAutoBackupInterval.Text.Trim(), out autoBackupIntervalSeconds))
+                (!int.TryParse(textBoxAutoBackupInterval.Text.Trim(), out int autoBackupIntervalMinutes) ||
+                 autoBackupIntervalMinutes < 1 ||
+                 autoBackupIntervalMinutes > 60))
             {
-                MessageBox.Show("Backup Timer must be entered like 30s, 5m, 1h or 15.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Auto-Backup (min) must be between 1 and 60.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            if (checkBoxDummy1.Checked && autoBackupIntervalSeconds < 1)
+            string defaultVersioning = comboBoxDefaultVersioning.Text.Trim();
+
+            if (!string.Equals(defaultVersioning, "none", StringComparison.OrdinalIgnoreCase) &&
+                !VersionPatternHelper.IsDatePattern(defaultVersioning) &&
+                !VersionPatternHelper.IsValidVersionValue(defaultVersioning))
             {
-                MessageBox.Show("Backup Timer must be at least 1 second.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Default Versioning contains invalid filename characters.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 

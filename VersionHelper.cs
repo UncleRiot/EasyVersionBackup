@@ -11,18 +11,18 @@ namespace EasyVersionBackup
         public static string GetSuggestedVersion(AppSettings settings, BackupPathPair pair)
         {
             string pairKey = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
-            string defaultVersion = settings.DefaultVersioning?.Trim() ?? "none";
+            string defaultVersioning = settings.DefaultVersioning?.Trim() ?? "none";
 
-            if (string.Equals(defaultVersion, "none", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(defaultVersioning, "none", StringComparison.OrdinalIgnoreCase))
             {
-                if (settings.LastUsedVersionsByPair.TryGetValue(pairKey, out string? lastUsedNone) &&
-                    !string.IsNullOrWhiteSpace(lastUsedNone) &&
-                    settings.AutoIncrementVersion)
-                {
-                    return IncrementVersion(lastUsedNone);
-                }
-
                 return string.Empty;
+            }
+
+            string defaultVersion = VersionPatternHelper.CreateVersionFromPattern(defaultVersioning);
+
+            if (VersionPatternHelper.IsDatePattern(defaultVersioning))
+            {
+                return defaultVersion;
             }
 
             string highestExistingVersion = GetHighestExistingVersion(pair);
@@ -30,12 +30,12 @@ namespace EasyVersionBackup
                 ? lastUsed
                 : string.Empty;
 
-            string highestKnownVersion = GetHighestVersion(new[]
+            string highestKnownVersion = VersionPatternHelper.GetHighestCompatibleVersion(defaultVersion, new[]
             {
-                defaultVersion,
-                highestExistingVersion,
-                lastUsedVersion
-            });
+            defaultVersion,
+            highestExistingVersion,
+            lastUsedVersion
+        });
 
             if (string.IsNullOrWhiteSpace(highestKnownVersion))
             {
@@ -44,7 +44,7 @@ namespace EasyVersionBackup
 
             if (settings.AutoIncrementVersion)
             {
-                return IncrementVersion(highestKnownVersion);
+                return VersionPatternHelper.IncrementVersion(highestKnownVersion);
             }
 
             return highestKnownVersion;
@@ -52,93 +52,12 @@ namespace EasyVersionBackup
 
         public static string IncrementVersion(string version)
         {
-            if (string.IsNullOrWhiteSpace(version))
-            {
-                return "0.0.1";
-            }
-
-            string[] parts = version.Split('.', StringSplitOptions.RemoveEmptyEntries);
-            List<int> numbers = new List<int>();
-
-            foreach (string part in parts)
-            {
-                if (!int.TryParse(part, out int value))
-                {
-                    return "0.0.1";
-                }
-
-                numbers.Add(value);
-            }
-
-            if (numbers.Count == 0)
-            {
-                return "0.0.1";
-            }
-
-            numbers[numbers.Count - 1]++;
-
-            return string.Join(".", numbers);
-        }
-
-        public static bool IsVersionGreater(string left, string right)
-        {
-            int[] leftParts = ParseVersion(left);
-            int[] rightParts = ParseVersion(right);
-
-            int maxLength = Math.Max(leftParts.Length, rightParts.Length);
-
-            for (int i = 0; i < maxLength; i++)
-            {
-                int leftValue = i < leftParts.Length ? leftParts[i] : 0;
-                int rightValue = i < rightParts.Length ? rightParts[i] : 0;
-
-                if (leftValue > rightValue)
-                {
-                    return true;
-                }
-
-                if (leftValue < rightValue)
-                {
-                    return false;
-                }
-            }
-
-            return false;
-        }
-
-        public static string GetHighestVersion(IEnumerable<string> versions)
-        {
-            string highest = string.Empty;
-
-            foreach (string version in versions)
-            {
-                if (string.IsNullOrWhiteSpace(version))
-                {
-                    continue;
-                }
-
-                if (!IsValidVersion(version))
-                {
-                    continue;
-                }
-
-                if (string.IsNullOrWhiteSpace(highest) || IsVersionGreater(version, highest))
-                {
-                    highest = version;
-                }
-            }
-
-            return highest;
+            return VersionPatternHelper.IncrementVersion(version);
         }
 
         public static bool IsValidVersion(string version)
         {
-            if (string.IsNullOrWhiteSpace(version))
-            {
-                return false;
-            }
-
-            return Regex.IsMatch(version, @"^\d+(\.\d+)*$");
+            return VersionPatternHelper.IsValidVersionValue(version);
         }
 
         public static string BuildVersionedName(string folderName, string version)
@@ -148,7 +67,7 @@ namespace EasyVersionBackup
                 return folderName;
             }
 
-            return $"{folderName}_v{version}";
+            return $"{folderName}_{version}";
         }
 
         private static string GetHighestExistingVersion(BackupPathPair pair)
@@ -166,8 +85,8 @@ namespace EasyVersionBackup
             string sourceFolderName = new DirectoryInfo(pair.SourceDirectory).Name;
             string escapedSourceFolderName = Regex.Escape(sourceFolderName);
 
-            Regex zipRegex = new Regex($"^{escapedSourceFolderName}_v(?<version>\\d+(\\.\\d+)*)\\.zip$", RegexOptions.IgnoreCase);
-            Regex directoryRegex = new Regex($"^{escapedSourceFolderName}_v(?<version>\\d+(\\.\\d+)*)$", RegexOptions.IgnoreCase);
+            Regex zipRegex = new Regex($"^{escapedSourceFolderName}_(?<version>.+)\\.zip$", RegexOptions.IgnoreCase);
+            Regex directoryRegex = new Regex($"^{escapedSourceFolderName}_(?<version>.+)$", RegexOptions.IgnoreCase);
 
             List<string> foundVersions = new List<string>();
 
@@ -193,15 +112,7 @@ namespace EasyVersionBackup
                 }
             }
 
-            return GetHighestVersion(foundVersions);
-        }
-
-        private static int[] ParseVersion(string version)
-        {
-            return version
-                .Split('.', StringSplitOptions.RemoveEmptyEntries)
-                .Select(part => int.TryParse(part, out int number) ? number : 0)
-                .ToArray();
+            return foundVersions.FirstOrDefault() ?? string.Empty;
         }
     }
 }
