@@ -148,13 +148,18 @@ namespace EasyVersionBackup
             graphics.FillEllipse(brush, 1, 1, 16, 16);
 
             using Font font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            Size textSize = TextRenderer.MeasureText("?", font);
+
+            int x = (18 - textSize.Width) / 2 + 5; // ← HIER erhöhen (z.B. +2, +3)
+            int y = (18 - textSize.Height) / 2 - 0;
+
             TextRenderer.DrawText(
                 graphics,
                 "?",
                 font,
-                new Rectangle(0, 0, 18, 18),
+                new Point(x, y),
                 Color.White,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                TextFormatFlags.NoPadding);
 
             return bitmap;
         }
