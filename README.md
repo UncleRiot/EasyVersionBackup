@@ -4,6 +4,11 @@ EasyVersionBackup is a lightweight Windows application for creating **versioned 
 Use it for your save-games, projects, everything!
 ---
 
+<img width="755" height="234" alt="grafik" src="https://github.com/user-attachments/assets/37353745-12ab-4665-8edd-4b73ca6fc58d" />
+
+<img width="892" height="350" alt="grafik" src="https://github.com/user-attachments/assets/8ceaa7b0-7e99-4a26-a4e1-e9d4dd37109d" />
+
+
 ## 🚀 Features
 
 * **Versioned Backups**
