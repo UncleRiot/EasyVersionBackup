@@ -33,5 +33,6 @@ namespace EasyVersionBackup
         public bool IsEnabled { get; set; } = true;
         public string SourceDirectory { get; set; } = string.Empty;
         public string TargetDirectory { get; set; } = string.Empty;
+        public List<string> ExcludedPaths { get; set; } = new List<string>();
     }
 }

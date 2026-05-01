@@ -270,7 +270,7 @@ namespace EasyVersionBackup
                     File.Delete(zipPath);
                 }
 
-                skipped += CreateZipFromDirectory(pair.SourceDirectory, zipPath);
+                skipped += CreateZipFromDirectory(pair.SourceDirectory, zipPath, pair.ExcludedPaths);
                 return skipped;
             }
 
@@ -281,42 +281,47 @@ namespace EasyVersionBackup
                 Directory.Delete(destinationDirectory, true);
             }
 
-            skipped += CopyDirectory(pair.SourceDirectory, destinationDirectory);
+            skipped += CopyDirectory(pair.SourceDirectory, destinationDirectory, pair.ExcludedPaths);
 
             return skipped;
         }
 
-        private int CopyDirectory(string sourceDirectory, string destinationDirectory)
+        private int CopyDirectory(string sourceDirectory, string destinationDirectory, List<string> excludedPaths)
         {
             int skipped = 0;
 
             Directory.CreateDirectory(destinationDirectory);
 
-            foreach (string directoryPath in Directory.GetDirectories(sourceDirectory, "*", SearchOption.AllDirectories))
+            foreach (string directoryPath in GetIncludedDirectories(sourceDirectory, excludedPaths))
             {
                 string relativePath = Path.GetRelativePath(sourceDirectory, directoryPath);
                 string targetDirectoryPath = Path.Combine(destinationDirectory, relativePath);
                 Directory.CreateDirectory(targetDirectoryPath);
-            }
 
-            foreach (string filePath in Directory.GetFiles(sourceDirectory, "*", SearchOption.AllDirectories))
-            {
-                string relativePath = Path.GetRelativePath(sourceDirectory, filePath);
-                string targetFilePath = Path.Combine(destinationDirectory, relativePath);
-
-                try
+                foreach (string filePath in Directory.GetFiles(directoryPath, "*", SearchOption.TopDirectoryOnly))
                 {
-                    using FileStream sourceStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    using FileStream targetStream = new FileStream(targetFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
-
-                    sourceStream.CopyTo(targetStream);
-                }
-                catch
-                {
-                    skipped++;
-                    if (!_ignoreAllFileErrors)
+                    if (IsExcludedPath(sourceDirectory, filePath, excludedPaths))
                     {
-                        throw;
+                        continue;
+                    }
+
+                    string relativeFilePath = Path.GetRelativePath(sourceDirectory, filePath);
+                    string targetFilePath = Path.Combine(destinationDirectory, relativeFilePath);
+
+                    try
+                    {
+                        using FileStream sourceStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                        using FileStream targetStream = new FileStream(targetFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
+
+                        sourceStream.CopyTo(targetStream);
+                    }
+                    catch
+                    {
+                        skipped++;
+                        if (!_ignoreAllFileErrors)
+                        {
+                            throw;
+                        }
                     }
                 }
             }
@@ -324,38 +329,113 @@ namespace EasyVersionBackup
             return skipped;
         }
 
-        private int CreateZipFromDirectory(string sourceDirectory, string zipPath)
+        private int CreateZipFromDirectory(string sourceDirectory, string zipPath, List<string> excludedPaths)
         {
             int skipped = 0;
 
             using FileStream zipStream = new FileStream(zipPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
             using ZipArchive zipArchive = new ZipArchive(zipStream, ZipArchiveMode.Create);
 
-            foreach (string filePath in Directory.GetFiles(sourceDirectory, "*", SearchOption.AllDirectories))
+            foreach (string directoryPath in GetIncludedDirectories(sourceDirectory, excludedPaths))
             {
-                string relativeFilePath = Path.GetRelativePath(sourceDirectory, filePath).Replace('\\', '/');
-
-                try
+                foreach (string filePath in Directory.GetFiles(directoryPath, "*", SearchOption.TopDirectoryOnly))
                 {
-                    using FileStream sourceStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    ZipArchiveEntry entry = zipArchive.CreateEntry(relativeFilePath, CompressionLevel.Optimal);
-
-                    using Stream entryStream = entry.Open();
-                    sourceStream.CopyTo(entryStream);
-                }
-                catch
-                {
-                    skipped++;
-                    if (!_ignoreAllFileErrors)
+                    if (IsExcludedPath(sourceDirectory, filePath, excludedPaths))
                     {
-                        throw;
+                        continue;
+                    }
+
+                    string relativeFilePath = Path.GetRelativePath(sourceDirectory, filePath).Replace('\\', '/');
+
+                    try
+                    {
+                        using FileStream sourceStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                        ZipArchiveEntry entry = zipArchive.CreateEntry(relativeFilePath, CompressionLevel.Optimal);
+
+                        using Stream entryStream = entry.Open();
+                        sourceStream.CopyTo(entryStream);
+                    }
+                    catch
+                    {
+                        skipped++;
+                        if (!_ignoreAllFileErrors)
+                        {
+                            throw;
+                        }
                     }
                 }
             }
 
             return skipped;
         }
+        private List<string> GetIncludedDirectories(string sourceDirectory, List<string> excludedPaths)
+        {
+            List<string> directories = new List<string>();
+            Stack<string> pendingDirectories = new Stack<string>();
 
+            pendingDirectories.Push(sourceDirectory);
+
+            while (pendingDirectories.Count > 0)
+            {
+                string currentDirectory = pendingDirectories.Pop();
+
+                if (IsExcludedPath(sourceDirectory, currentDirectory, excludedPaths))
+                {
+                    continue;
+                }
+
+                directories.Add(currentDirectory);
+
+                foreach (string childDirectory in Directory.GetDirectories(currentDirectory, "*", SearchOption.TopDirectoryOnly))
+                {
+                    if (!IsExcludedPath(sourceDirectory, childDirectory, excludedPaths))
+                    {
+                        pendingDirectories.Push(childDirectory);
+                    }
+                }
+            }
+
+            return directories;
+        }
+        private bool IsExcludedPath(string sourceDirectory, string path, List<string> excludedPaths)
+        {
+            if (excludedPaths.Count == 0)
+            {
+                return false;
+            }
+
+            string fullSourceDirectory = Path.GetFullPath(sourceDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string fullPath = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+            foreach (string excludedPath in excludedPaths)
+            {
+                if (string.IsNullOrWhiteSpace(excludedPath))
+                {
+                    continue;
+                }
+
+                string fullExcludedPath = Path.IsPathRooted(excludedPath)
+                    ? Path.GetFullPath(excludedPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                    : Path.GetFullPath(Path.Combine(fullSourceDirectory, excludedPath)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+                if (string.Equals(fullPath, fullExcludedPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                if (fullPath.StartsWith(fullExcludedPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                if (fullPath.StartsWith(fullExcludedPath + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
         private FileErrorAction ShowFileErrorActionDialog(string filePath, Exception exception)
         {
             if (_ignoreAllFileErrors)

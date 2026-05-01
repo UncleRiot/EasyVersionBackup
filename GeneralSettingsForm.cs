@@ -15,6 +15,7 @@ namespace EasyVersionBackup
         {
             InitializeComponent();
 
+            InitializeExclusionColumn();
             InitializeAutoBackupControls();
             InitializeSettingsHintIcons();
 
@@ -22,6 +23,7 @@ namespace EasyVersionBackup
 
             dataGridViewPaths.ClipboardCopyMode = DataGridViewClipboardCopyMode.Disable;
             dataGridViewPaths.KeyDown += dataGridViewPaths_KeyDown;
+            dataGridViewPaths.CellPainting += dataGridViewPaths_CellPainting;
 
             ResultSettings = CloneSettings(settings);
             ApplySettingsToUi(ResultSettings);
@@ -42,6 +44,31 @@ namespace EasyVersionBackup
             {
                 checkBoxIgnoreCopyErrors.Checked = true;
             }
+        }
+        private void InitializeExclusionColumn()
+        {
+            if (dataGridViewPaths.Columns.Contains("ColumnSourceExclusions"))
+            {
+                return;
+            }
+
+            DataGridViewButtonColumn columnSourceExclusions = new DataGridViewButtonColumn
+            {
+                HeaderText = "",
+                Name = "ColumnSourceExclusions",
+                Text = "\uE71C",
+                UseColumnTextForButtonValue = true,
+                Width = 35,
+                MinimumWidth = 35,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
+                FlatStyle = FlatStyle.Flat
+            };
+
+            columnSourceExclusions.DefaultCellStyle.Font = new Font("Segoe MDL2 Assets", 9F);
+            columnSourceExclusions.DefaultCellStyle.ForeColor = System.Drawing.Color.Black;
+
+            int sourceBrowseColumnIndex = dataGridViewPaths.Columns["ColumnSourceBrowse"].Index;
+            dataGridViewPaths.Columns.Insert(sourceBrowseColumnIndex + 1, columnSourceExclusions);
         }
         private TextBox GetAutoBackupIntervalTextBox()
         {
@@ -265,12 +292,16 @@ namespace EasyVersionBackup
 
             foreach (BackupPathPair pair in settings.BackupPathPairs)
             {
-                dataGridViewPaths.Rows.Add(
+                int rowIndex = dataGridViewPaths.Rows.Add(
                     pair.IsEnabled,
                     pair.SourceDirectory,
                     "Browse...",
+                    string.Empty,
                     pair.TargetDirectory,
                     "Browse...");
+
+                dataGridViewPaths.Rows[rowIndex].Tag = new List<string>(pair.ExcludedPaths);
+                UpdateExclusionButtonStyle(rowIndex);
             }
         }
 
@@ -312,11 +343,16 @@ namespace EasyVersionBackup
                     continue;
                 }
 
+                List<string> excludedPaths = row.Tag is List<string> rowExcludedPaths
+                    ? new List<string>(rowExcludedPaths)
+                    : new List<string>();
+
                 settings.BackupPathPairs.Add(new BackupPathPair
                 {
                     IsEnabled = isEnabled,
                     SourceDirectory = sourceDirectory,
-                    TargetDirectory = targetDirectory
+                    TargetDirectory = targetDirectory,
+                    ExcludedPaths = excludedPaths
                 });
             }
 
@@ -325,7 +361,9 @@ namespace EasyVersionBackup
 
         private void buttonAddRow_Click(object sender, EventArgs e)
         {
-            dataGridViewPaths.Rows.Add(true, string.Empty, "Browse...", string.Empty, "Browse...");
+            int rowIndex = dataGridViewPaths.Rows.Add(true, string.Empty, "Browse...", string.Empty, string.Empty, "Browse...");
+            dataGridViewPaths.Rows[rowIndex].Tag = new List<string>();
+            UpdateExclusionButtonStyle(rowIndex);
         }
 
         private void buttonRemoveRow_Click(object sender, EventArgs e)
@@ -406,6 +444,19 @@ namespace EasyVersionBackup
                 }
             }
 
+            if (dataGridViewPaths.Columns[e.ColumnIndex].Name == "ColumnSourceExclusions")
+            {
+                List<string> excludedPaths = dataGridViewPaths.Rows[e.RowIndex].Tag is List<string> rowExcludedPaths
+                    ? new List<string>(rowExcludedPaths)
+                    : new List<string>();
+
+                if (ShowExclusionsDialog(excludedPaths, out List<string> resultExcludedPaths))
+                {
+                    dataGridViewPaths.Rows[e.RowIndex].Tag = resultExcludedPaths;
+                    UpdateExclusionButtonStyle(e.RowIndex);
+                }
+            }
+
             if (dataGridViewPaths.Columns[e.ColumnIndex].Name == "ColumnTargetBrowse")
             {
                 using FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog();
@@ -421,6 +472,129 @@ namespace EasyVersionBackup
                     dataGridViewPaths.Rows[e.RowIndex].Cells["ColumnTargetDirectory"].Value = folderBrowserDialog.SelectedPath;
                 }
             }
+        }
+        private void dataGridViewPaths_CellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0)
+            {
+                return;
+            }
+
+            if (dataGridViewPaths.Columns[e.ColumnIndex].Name != "ColumnSourceExclusions")
+            {
+                return;
+            }
+
+            e.Paint(e.CellBounds, DataGridViewPaintParts.All & ~DataGridViewPaintParts.ContentForeground);
+
+            bool hasExclusions = dataGridViewPaths.Rows[e.RowIndex].Tag is List<string> excludedPaths
+                && excludedPaths.Any(excludedPath => !string.IsNullOrWhiteSpace(excludedPath));
+
+            if (hasExclusions)
+            {
+                int centerX = e.CellBounds.Left + e.CellBounds.Width / 2;
+                int centerY = e.CellBounds.Top + e.CellBounds.Height / 2;
+
+                Point[] funnelPoints =
+                {
+            new Point(centerX - 8, centerY - 7),
+            new Point(centerX + 8, centerY - 7),
+            new Point(centerX + 3, centerY - 1),
+            new Point(centerX + 1, centerY + 7),
+            new Point(centerX - 1, centerY + 7),
+            new Point(centerX - 3, centerY - 1)
+        };
+
+                using SolidBrush brush = new SolidBrush(System.Drawing.Color.LimeGreen);
+                using Pen pen = new Pen(System.Drawing.Color.DarkGreen, 1F);
+
+                e.Graphics.FillPolygon(brush, funnelPoints);
+                e.Graphics.DrawPolygon(pen, funnelPoints);
+            }
+            else
+            {
+                bool isSelected = (e.State & DataGridViewElementStates.Selected) == DataGridViewElementStates.Selected;
+
+                System.Drawing.Color iconColor = isSelected
+                    ? System.Drawing.Color.White
+                    : System.Drawing.Color.Black;
+
+                using System.Drawing.Font iconFont = new System.Drawing.Font("Segoe MDL2 Assets", 9F);
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    "\uE71C",
+                    iconFont,
+                    e.CellBounds,
+                    iconColor,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            }
+
+            e.Handled = true;
+        }
+        private void UpdateExclusionButtonStyle(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= dataGridViewPaths.Rows.Count)
+            {
+                return;
+            }
+
+            if (!dataGridViewPaths.Columns.Contains("ColumnSourceExclusions"))
+            {
+                return;
+            }
+
+            dataGridViewPaths.InvalidateCell(dataGridViewPaths.Rows[rowIndex].Cells["ColumnSourceExclusions"]);
+        }
+        private bool ShowExclusionsDialog(List<string> excludedPaths, out List<string> resultExcludedPaths)
+        {
+            resultExcludedPaths = excludedPaths;
+
+            using Form form = new Form();
+            using TextBox textBoxExclusions = new TextBox();
+            using Button buttonOk = new Button();
+            using Button buttonCancel = new Button();
+
+            form.Text = "Exclusions";
+            form.StartPosition = FormStartPosition.CenterParent;
+            form.MinimizeBox = false;
+            form.MaximizeBox = false;
+            form.FormBorderStyle = FormBorderStyle.FixedDialog;
+            form.ClientSize = new Size(520, 330);
+
+            textBoxExclusions.Multiline = true;
+            textBoxExclusions.ScrollBars = ScrollBars.Vertical;
+            textBoxExclusions.WordWrap = false;
+            textBoxExclusions.Location = new Point(12, 12);
+            textBoxExclusions.Size = new Size(496, 270);
+            textBoxExclusions.Text = string.Join(Environment.NewLine, excludedPaths);
+
+            buttonOk.Text = "OK";
+            buttonOk.DialogResult = DialogResult.OK;
+            buttonOk.Location = new Point(352, 294);
+            buttonOk.Size = new Size(75, 23);
+
+            buttonCancel.Text = "Cancel";
+            buttonCancel.DialogResult = DialogResult.Cancel;
+            buttonCancel.Location = new Point(433, 294);
+            buttonCancel.Size = new Size(75, 23);
+
+            form.Controls.Add(textBoxExclusions);
+            form.Controls.Add(buttonOk);
+            form.Controls.Add(buttonCancel);
+            form.AcceptButton = buttonOk;
+            form.CancelButton = buttonCancel;
+
+            if (form.ShowDialog(this) != DialogResult.OK)
+            {
+                return false;
+            }
+
+            resultExcludedPaths = textBoxExclusions.Lines
+                .Select(line => line.Trim())
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .ToList();
+
+            return true;
         }
         private int ParseAutoBackupIntervalSeconds(string value)
         {
@@ -500,7 +674,7 @@ namespace EasyVersionBackup
             seconds = defaultMinutes * 60;
             return true;
         }
-        
+
         private AppSettings CloneSettings(AppSettings settings)
         {
             AppSettings clone = new AppSettings
@@ -528,7 +702,8 @@ namespace EasyVersionBackup
                 {
                     IsEnabled = pair.IsEnabled,
                     SourceDirectory = pair.SourceDirectory,
-                    TargetDirectory = pair.TargetDirectory
+                    TargetDirectory = pair.TargetDirectory,
+                    ExcludedPaths = new List<string>(pair.ExcludedPaths)
                 });
             }
 
