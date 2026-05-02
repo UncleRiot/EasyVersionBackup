@@ -8,15 +8,13 @@ It supports manual and automatic backups, multiple source → target configurati
 ---
 
 
-<img width="732" height="225" alt="grafik" src="https://github.com/user-attachments/assets/8516708e-c937-4a6c-aec6-bebe6ad8a1f7" />
+<img width="727" height="218" alt="grafik" src="https://github.com/user-attachments/assets/4b827037-f26e-4e53-9d47-404fe333df29" />
 
+<img width="897" height="216" alt="grafik" src="https://github.com/user-attachments/assets/dd844861-df25-4a0a-9148-cde807acad93" />
 
-<img width="898" height="603" alt="grafik" src="https://github.com/user-attachments/assets/3d9c9a9c-a2d2-4525-9094-e12278119198" />
+<img width="380" height="234" alt="grafik" src="https://github.com/user-attachments/assets/8c26e197-b003-46bb-a26e-1c189f953b53" />
 
-
-<img width="522" height="360" alt="grafik" src="https://github.com/user-attachments/assets/dd84a414-707c-48cf-b492-e48e9cc8b806" />
-
-
+<img width="520" height="352" alt="grafik" src="https://github.com/user-attachments/assets/0243527c-1cd0-49f1-b722-d8dce06e7a6b" />
 
 
 ---
