@@ -30,6 +30,8 @@
 			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
 		</Content>
 		<EmbeddedResource Include="Ressources\molotov.jpg" />
+		
+		<EmbeddedResource Include="Ressources\ko-fi.png" />
 	</ItemGroup>
 
 </Project>

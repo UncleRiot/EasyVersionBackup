@@ -57,7 +57,7 @@ namespace EasyVersionBackup
             FormBorderStyle = FormBorderStyle.None;
             MaximizeBox = false;
             MinimizeBox = false;
-            ClientSize = new Size(475, 229);
+            ClientSize = new Size(475, 315);
             BackColor = ModernTheme.WindowBackColor;
             Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
             DoubleBuffered = true;
@@ -166,16 +166,50 @@ namespace EasyVersionBackup
                 });
             };
 
+            Label labelKoFiText = new Label
+            {
+                Text = "EasyVersionBackup is free to use." + Environment.NewLine +
+                       "If this tool saves you time, you can support development here:",
+                AutoSize = false,
+                Location = new Point(20, 180),
+                Size = new Size(430, 40),
+                ForeColor = ModernTheme.TextColor,
+                BackColor = Color.Transparent
+            };
+
+            PictureBox pictureBoxKoFi = new PictureBox
+            {
+                Name = "pictureBoxKoFi",
+                Image = CreateKoFiImage(),
+                Size = new Size(179, 42),
+                Location = new Point(20, 226),
+                SizeMode = PictureBoxSizeMode.StretchImage,
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
+            };
+
+            pictureBoxKoFi.Click += (sender, e) =>
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "https://ko-fi.com/uncleriot",
+                    UseShellExecute = true
+                });
+            };
+
             Button buttonOk = new Button
             {
                 Text = "OK",
-                Size = new Size(75, 25),
-                Location = new Point(388, 192),
+                Size = ModernTheme.DialogButtonSize,
+                Location = new Point(388, 276),
                 DialogResult = DialogResult.OK,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = ModernTheme.AccentColor,
                 ForeColor = ModernTheme.DarkTextColor,
                 Cursor = Cursors.Hand,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Padding = ModernTheme.DialogPrimaryButtonTextPadding,
+                UseCompatibleTextRendering = true,
                 UseVisualStyleBackColor = false
             };
 
@@ -189,11 +223,24 @@ namespace EasyVersionBackup
             Controls.Add(labelCopyright);
             Controls.Add(labelVersion);
             Controls.Add(linkLabelGithub);
+            Controls.Add(labelKoFiText);
+            Controls.Add(pictureBoxKoFi);
             Controls.Add(buttonOk);
 
             panelModernTitleBar.BringToFront();
 
             AcceptButton = buttonOk;
+        }
+        private Image? CreateKoFiImage()
+        {
+            using Stream? stream = typeof(AboutForm).Assembly.GetManifestResourceStream("EasyVersionBackup.Ressources.ko-fi.png");
+
+            if (stream == null)
+            {
+                return null;
+            }
+
+            return Image.FromStream(stream);
         }
 
         private Button CreateModernTitleBarButton(string name, string text, Point location)
