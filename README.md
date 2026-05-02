@@ -1,21 +1,59 @@
 # EasyVersionBackup
 
-EasyVersionBackup is a lightweight Windows tool for creating versioned backups of folders. It is designed for gamers, developers, power users, and anyone who needs quick, repeatable, versioned snapshots of project folders without complex backup software.
+EasyVersionBackup is a lightweight, portable Windows tool for creating versioned backups of folders. 
+Backup your savegame-folders, office-document-folders, VisualC project folders, every folder.
 
-It supports manual and automatic backups, multiple source → target configurations, ZIP backups, per-entry exclusions, skipped-file reporting, system tray integration, and a clean WinForms interface focused on reliability and clarity.
+It supports manual and automatic backups, multiple source → target configurations, ZIP backups, per-entry exclusions, skipped-file reporting, system tray integration, and a clean WinForms interface.
 
+<br>
 
 ---
 
+<br>
+
+## ❤️ Support
+
+EasyVersionBackup is free to use.
+If this tool saves you time, you can support development here:
+
+<a href="https://ko-fi.com/uncleriot">
+  <img src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" height="36" alt="Support EasyVersionBackup on Ko-fi" />
+</a>
+
+<br>
+<br>
+
+---
+
+<br>
+<br>
+
+
+> [!IMPORTANT]
+> If Windows SmartScreen blocks the app, right-click the EXE → **Properties** → check **Unblock** → **Apply** → **OK**, then start it again.
+>
+> VirusTotal scan: https://www.virustotal.com/gui/file/dd690f2d12f1fd23b6cd24bd96a29710d5abac77b3acee92746a87becb3765b0/detection
+
+<br>
+
+---
+
+<br>
 
 <img width="727" height="218" alt="grafik" src="https://github.com/user-attachments/assets/4b827037-f26e-4e53-9d47-404fe333df29" />
+<br>
 
 <img width="897" height="216" alt="grafik" src="https://github.com/user-attachments/assets/dd844861-df25-4a0a-9148-cde807acad93" />
+<br>
 
 <img width="380" height="234" alt="grafik" src="https://github.com/user-attachments/assets/8c26e197-b003-46bb-a26e-1c189f953b53" />
+<br>
 
 <img width="520" height="352" alt="grafik" src="https://github.com/user-attachments/assets/0243527c-1cd0-49f1-b722-d8dce06e7a6b" />
 
+<br>
+<br>
+<br>
 
 ---
 
