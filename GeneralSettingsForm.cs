@@ -582,7 +582,7 @@ namespace EasyVersionBackup
             checkBoxDummy1.Checked = settings.AutoBackupEnabled;
 
             TextBox textBoxAutoBackupInterval = Controls.Find("textBoxAutoBackupInterval", true).OfType<TextBox>().First();
-            textBoxAutoBackupInterval.Text = Math.Clamp(settings.AutoBackupIntervalMinutes, 1, 60).ToString();
+            textBoxAutoBackupInterval.Text = FormatAutoBackupIntervalText(GetAutoBackupIntervalSeconds(settings));
 
             UpdateAutoBackupControls();
 
@@ -608,13 +608,15 @@ namespace EasyVersionBackup
             AppSettings settings = CloneSettings(ResultSettings);
 
             TextBox textBoxAutoBackupInterval = GetAutoBackupIntervalTextBox();
+            int autoBackupIntervalSeconds = ParseAutoBackupIntervalSeconds(textBoxAutoBackupInterval.Text.Trim());
 
             settings.ZipDestinationFiles = checkBoxZipDestinationFiles.Checked;
             settings.DefaultVersioning = comboBoxDefaultVersioning.Text.Trim();
             settings.MinimizeToSystray = checkBoxMinimizeToSystray.Checked;
             settings.AutoIncrementVersion = checkBoxAutoIncrementVersion.Checked;
             settings.AutoBackupEnabled = checkBoxDummy1.Checked;
-            settings.AutoBackupIntervalMinutes = int.Parse(textBoxAutoBackupInterval.Text.Trim());
+            settings.AutoBackupIntervalSeconds = autoBackupIntervalSeconds;
+            settings.AutoBackupIntervalMinutes = Math.Max(1, (int)Math.Ceiling(autoBackupIntervalSeconds / 60.0));
             settings.IgnoreCopyErrors = checkBoxDummy1.Checked || checkBoxIgnoreCopyErrors.Checked;
             settings.BackupPathPairs = new List<BackupPathPair>();
 
@@ -719,11 +721,9 @@ namespace EasyVersionBackup
             TextBox textBoxAutoBackupInterval = GetAutoBackupIntervalTextBox();
 
             if (checkBoxDummy1.Checked &&
-                (!int.TryParse(textBoxAutoBackupInterval.Text.Trim(), out int autoBackupIntervalMinutes) ||
-                 autoBackupIntervalMinutes < 1 ||
-                 autoBackupIntervalMinutes > 60))
+                !TryParseAutoBackupIntervalSeconds(textBoxAutoBackupInterval.Text.Trim(), out int autoBackupIntervalSeconds))
             {
-                MessageBox.Show("Auto-Backup (min) must be between 1 and 60.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Backup Timer must be valid. Examples: 30s, 5m, 1h, 15.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 

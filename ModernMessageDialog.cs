@@ -4,7 +4,7 @@ using System.Windows.Forms;
 
 namespace EasyVersionBackup
 {
-    public class FileErrorDialog : Form
+    public sealed class ModernMessageDialog : Form
     {
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern bool ReleaseCapture();
@@ -12,91 +12,66 @@ namespace EasyVersionBackup
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
 
-        public FileErrorDialog(string filePath, string errorMessage)
+        public ModernMessageDialog(Form owner, string title, string message)
         {
-            Text = "File Error";
+            Text = title;
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.None;
             MaximizeBox = false;
             MinimizeBox = false;
             ShowInTaskbar = false;
-            ClientSize = new Size(600, 232);
+            ClientSize = new Size(460, 170);
             BackColor = ModernTheme.WindowBackColor;
             Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
             DoubleBuffered = true;
-            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            Icon = owner.Icon;
             ModernWindowFrame.Apply(this);
 
             InitializeModernTitleBar();
 
-            PictureBox pictureBoxIcon = new PictureBox
+            Label labelMessage = new Label
             {
-                Location = new Point(20, 56),
-                Size = new Size(32, 32),
-                Image = SystemIcons.Warning.ToBitmap(),
-                SizeMode = PictureBoxSizeMode.StretchImage,
-                BackColor = Color.Transparent
-            };
-
-            TextBox textBoxMessage = new TextBox
-            {
-                Location = new Point(70, 48),
-                Size = new Size(500, 104),
-                Multiline = true,
-                ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical,
-                BorderStyle = BorderStyle.FixedSingle,
-                BackColor = ModernTheme.TitleBarBackColor,
+                Text = message,
+                AutoSize = false,
+                Location = new Point(18, 50),
+                Size = new Size(ClientSize.Width - 36, 62),
                 ForeColor = ModernTheme.TextColor,
-                Text = $"File:{Environment.NewLine}{filePath}{Environment.NewLine}{Environment.NewLine}Error:{Environment.NewLine}{errorMessage}"
+                BackColor = Color.Transparent,
+                TextAlign = ContentAlignment.MiddleLeft
             };
 
-            Button buttonAbort = new Button
+            Button buttonOk = new Button
             {
-                Text = "Abort",
-                DialogResult = DialogResult.Abort,
-                Size = new Size(100, 27),
-                Location = new Point(146, 176)
+                Text = "OK",
+                DialogResult = DialogResult.OK,
+                Size = ModernTheme.DialogButtonSize,
+                Location = new Point(ClientSize.Width - ModernTheme.DialogButtonSize.Width - 18, 124),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = ModernTheme.AccentColor,
+                ForeColor = ModernTheme.DarkTextColor,
+                Cursor = Cursors.Hand,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Padding = ModernTheme.DialogPrimaryButtonTextPadding,
+                UseCompatibleTextRendering = true,
+                UseVisualStyleBackColor = false
             };
 
-            Button buttonRetry = new Button
-            {
-                Text = "Retry",
-                DialogResult = DialogResult.Retry,
-                Size = new Size(100, 27),
-                Location = new Point(256, 176)
-            };
+            buttonOk.FlatAppearance.BorderSize = 0;
+            buttonOk.FlatAppearance.MouseOverBackColor = ModernTheme.AccentHoverColor;
+            buttonOk.FlatAppearance.MouseDownBackColor = ModernTheme.ControlBackColor;
 
-            Button buttonIgnore = new Button
-            {
-                Text = "Ignore",
-                DialogResult = DialogResult.Ignore,
-                Size = new Size(100, 27),
-                Location = new Point(366, 176)
-            };
+            Controls.Add(labelMessage);
+            Controls.Add(buttonOk);
 
-            Button buttonIgnoreAll = new Button
-            {
-                Text = "Ignore All",
-                DialogResult = DialogResult.Yes,
-                Size = new Size(100, 27),
-                Location = new Point(476, 176)
-            };
+            AcceptButton = buttonOk;
+            CancelButton = buttonOk;
+        }
 
-            StyleModernButton(buttonAbort, ModernTheme.ControlBackColor, ModernTheme.TextColor, true, ModernTheme.DialogSecondaryButtonTextPadding);
-            StyleModernButton(buttonRetry, ModernTheme.AccentColor, ModernTheme.DarkTextColor, false, ModernTheme.DialogPrimaryButtonTextPadding);
-            StyleModernButton(buttonIgnore, ModernTheme.ControlBackColor, ModernTheme.TextColor, true, ModernTheme.DialogSecondaryButtonTextPadding);
-            StyleModernButton(buttonIgnoreAll, ModernTheme.ControlBackColor, ModernTheme.TextColor, true, ModernTheme.DialogSecondaryButtonTextPadding);
-
-            Controls.Add(pictureBoxIcon);
-            Controls.Add(textBoxMessage);
-            Controls.Add(buttonAbort);
-            Controls.Add(buttonRetry);
-            Controls.Add(buttonIgnore);
-            Controls.Add(buttonIgnoreAll);
-
-            AcceptButton = buttonRetry;
-            CancelButton = buttonAbort;
+        public static DialogResult Show(Form owner, string title, string message)
+        {
+            using ModernMessageDialog dialog = new ModernMessageDialog(owner, title, message);
+            return dialog.ShowDialog(owner);
         }
 
         private void InitializeModernTitleBar()
@@ -139,7 +114,7 @@ namespace EasyVersionBackup
             buttonModernClose.MouseLeave += (sender, e) => buttonModernClose.BackColor = ModernTheme.TitleBarBackColor;
             buttonModernClose.Click += (sender, e) =>
             {
-                DialogResult = DialogResult.Abort;
+                DialogResult = DialogResult.OK;
                 Close();
             };
 
@@ -193,25 +168,6 @@ namespace EasyVersionBackup
             return button;
         }
 
-        private void StyleModernButton(Button button, Color backColor, Color foreColor, bool showBorder, Padding textPadding)
-        {
-            button.FlatStyle = FlatStyle.Flat;
-            button.BackColor = backColor;
-            button.ForeColor = foreColor;
-            button.Cursor = Cursors.Hand;
-            button.TextAlign = ContentAlignment.MiddleCenter;
-            button.Padding = textPadding;
-            button.UseCompatibleTextRendering = true;
-            button.UseVisualStyleBackColor = false;
-
-            button.FlatAppearance.BorderColor = ModernTheme.AccentColor;
-            button.FlatAppearance.BorderSize = showBorder ? 1 : 0;
-            button.FlatAppearance.MouseOverBackColor = showBorder
-                ? ModernTheme.ControlHoverBackColor
-                : ModernTheme.AccentHoverColor;
-            button.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
-        }
-
         private void ModernTitleBar_MouseDown(object? sender, MouseEventArgs e)
         {
             if (e.Button != MouseButtons.Left)
@@ -226,5 +182,4 @@ namespace EasyVersionBackup
             SendMessage(Handle, wmNclbuttondown, htCaption, 0);
         }
     }
-
 }

@@ -30,6 +30,8 @@ namespace EasyVersionBackup
         private const int TitleRefreshIntervalMilliseconds = 1000;
         private string _baseWindowTitle = string.Empty;
 
+
+
         public Form1()
         {
             InitializeComponent();
@@ -106,15 +108,15 @@ namespace EasyVersionBackup
             {
                 Name = "panelModernTitleBar",
                 Dock = DockStyle.Top,
-                Height = 32,
+                Height = ModernTheme.TitleBarHeight,
                 BackColor = ModernTheme.TitleBarBackColor
             };
 
             PictureBox pictureBoxModernTitleIcon = new PictureBox
             {
                 Name = "pictureBoxModernTitleIcon",
-                Location = new Point(8, 8),
-                Size = new Size(16, 16),
+                Location = new Point(ModernTheme.TitleBarIconLeft, ModernTheme.TitleBarIconTop),
+                Size = new Size(ModernTheme.TitleBarIconSize, ModernTheme.TitleBarIconSize),
                 SizeMode = PictureBoxSizeMode.StretchImage,
                 Image = Icon?.ToBitmap(),
                 BackColor = Color.Transparent
@@ -125,8 +127,8 @@ namespace EasyVersionBackup
                 Name = "labelModernTitle",
                 Text = _baseWindowTitle,
                 AutoSize = false,
-                Location = new Point(30, 0),
-                Size = new Size(ClientSize.Width - 102, 32),
+                Location = new Point(ModernTheme.TitleBarTextLeft, 0),
+                Size = new Size(ClientSize.Width - 102, ModernTheme.TitleBarHeight),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = ModernTheme.TextColor,
@@ -157,12 +159,12 @@ namespace EasyVersionBackup
 
             _modernTitleBarPanel.Resize += (sender, e) =>
             {
-                buttonModernClose.Location = new Point(_modernTitleBarPanel.ClientSize.Width - 36, 0);
-                buttonModernMinimize.Location = new Point(_modernTitleBarPanel.ClientSize.Width - 72, 0);
+                buttonModernClose.Location = new Point(_modernTitleBarPanel.ClientSize.Width - ModernTheme.TitleBarButtonSize.Width, 0);
+                buttonModernMinimize.Location = new Point(_modernTitleBarPanel.ClientSize.Width - (ModernTheme.TitleBarButtonSize.Width * 2), 0);
 
                 if (_modernTitleLabel != null)
                 {
-                    _modernTitleLabel.Size = new Size(_modernTitleBarPanel.ClientSize.Width - 102, 32);
+                    _modernTitleLabel.Size = new Size(_modernTitleBarPanel.ClientSize.Width - 102, ModernTheme.TitleBarHeight);
                 }
 
                 buttonModernMinimize.Invalidate();
@@ -259,7 +261,7 @@ namespace EasyVersionBackup
                 Name = name,
                 Text = string.Empty,
                 Tag = text,
-                Size = new Size(36, 32),
+                Size = ModernTheme.TitleBarButtonSize,
                 Location = location,
                 Anchor = AnchorStyles.Top | AnchorStyles.Right,
                 FlatStyle = FlatStyle.Flat,
@@ -373,7 +375,7 @@ namespace EasyVersionBackup
             {
                 Name = name,
                 Text = text,
-                Size = new Size(32, 32),
+                Size = ModernTheme.MainToolbarButtonSize,
                 Location = location,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = ModernTheme.ControlBackColor,
@@ -731,7 +733,7 @@ namespace EasyVersionBackup
 
             if (validPairs.Count == 0)
             {
-                MessageBox.Show("No active paths selected.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                ModernMessageDialog.Show(this, "Error", "No active paths selected.");
                 return;
             }
 
@@ -743,11 +745,11 @@ namespace EasyVersionBackup
                     SaveSettings();
                     RefreshBackupInfoColumn();
 
-                    MessageBox.Show(
-                        $"Source directory not found:{Environment.NewLine}{pair.SourceDirectory}",
+                    ModernMessageDialog.Show(
+                        this,
                         "Error",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
+                        $"Source directory not found:{Environment.NewLine}{pair.SourceDirectory}");
+
                     return;
                 }
 
@@ -871,20 +873,47 @@ namespace EasyVersionBackup
                     string relativeFilePath = Path.GetRelativePath(sourceDirectory, filePath);
                     string targetFilePath = Path.Combine(destinationDirectory, relativeFilePath);
 
-                    try
+                    while (true)
                     {
-                        using FileStream sourceStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                        using FileStream targetStream = new FileStream(targetFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
-
-                        sourceStream.CopyTo(targetStream);
-                    }
-                    catch
-                    {
-                        skipped++;
-                        skippedFilePaths.Add(filePath);
-
-                        if (!_ignoreAllFileErrors)
+                        try
                         {
+                            using FileStream sourceStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                            using FileStream targetStream = new FileStream(targetFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
+
+                            sourceStream.CopyTo(targetStream);
+                            break;
+                        }
+                        catch (Exception exception)
+                        {
+                            if (_ignoreAllFileErrors)
+                            {
+                                skipped++;
+                                skippedFilePaths.Add(filePath);
+                                break;
+                            }
+
+                            FileErrorAction action = ShowFileErrorActionDialog(filePath, exception);
+
+                            if (action == FileErrorAction.Retry)
+                            {
+                                continue;
+                            }
+
+                            if (action == FileErrorAction.Skip)
+                            {
+                                skipped++;
+                                skippedFilePaths.Add(filePath);
+                                break;
+                            }
+
+                            if (action == FileErrorAction.IgnoreAll)
+                            {
+                                _ignoreAllFileErrors = true;
+                                skipped++;
+                                skippedFilePaths.Add(filePath);
+                                break;
+                            }
+
                             throw;
                         }
                     }
@@ -912,21 +941,48 @@ namespace EasyVersionBackup
 
                     string relativeFilePath = Path.GetRelativePath(sourceDirectory, filePath).Replace('\\', '/');
 
-                    try
+                    while (true)
                     {
-                        using FileStream sourceStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                        ZipArchiveEntry entry = zipArchive.CreateEntry(relativeFilePath, CompressionLevel.Optimal);
-
-                        using Stream entryStream = entry.Open();
-                        sourceStream.CopyTo(entryStream);
-                    }
-                    catch
-                    {
-                        skipped++;
-                        skippedFilePaths.Add(filePath);
-
-                        if (!_ignoreAllFileErrors)
+                        try
                         {
+                            using FileStream sourceStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                            ZipArchiveEntry entry = zipArchive.CreateEntry(relativeFilePath, CompressionLevel.Optimal);
+
+                            using Stream entryStream = entry.Open();
+                            sourceStream.CopyTo(entryStream);
+                            break;
+                        }
+                        catch (Exception exception)
+                        {
+                            if (_ignoreAllFileErrors)
+                            {
+                                skipped++;
+                                skippedFilePaths.Add(filePath);
+                                break;
+                            }
+
+                            FileErrorAction action = ShowFileErrorActionDialog(filePath, exception);
+
+                            if (action == FileErrorAction.Retry)
+                            {
+                                continue;
+                            }
+
+                            if (action == FileErrorAction.Skip)
+                            {
+                                skipped++;
+                                skippedFilePaths.Add(filePath);
+                                break;
+                            }
+
+                            if (action == FileErrorAction.IgnoreAll)
+                            {
+                                _ignoreAllFileErrors = true;
+                                skipped++;
+                                skippedFilePaths.Add(filePath);
+                                break;
+                            }
+
                             throw;
                         }
                     }
@@ -1268,25 +1324,25 @@ namespace EasyVersionBackup
 
             if (!_settings.BackupStatusesByPair.TryGetValue(key, out BackupPathStatus? status))
             {
-                return Color.FromArgb(0, 120, 215);
+                return ModernTheme.BackupInfoDefaultColor;
             }
 
             if (status.LastBackupStatus == "OK")
             {
-                return Color.FromArgb(0, 160, 80);
+                return ModernTheme.BackupInfoOkColor;
             }
 
             if (status.LastBackupStatus == "Warning")
             {
-                return Color.FromArgb(230, 180, 0);
+                return ModernTheme.BackupInfoWarningColor;
             }
 
             if (status.LastBackupStatus == "Error")
             {
-                return Color.FromArgb(200, 0, 0);
+                return ModernTheme.BackupInfoErrorColor;
             }
 
-            return Color.FromArgb(0, 120, 215);
+            return ModernTheme.BackupInfoDefaultColor;
         }
         private Bitmap GetBackupInfoIcon(BackupPathPair pair)
         {
@@ -1303,7 +1359,7 @@ namespace EasyVersionBackup
             // circle size settings end
 
             // "i" color settings start
-            Color infoTextColor = Color.White;
+            Color infoTextColor = ModernTheme.BackupInfoTextColor;
             // "i" color settings end
 
             using SolidBrush infoBrush = new SolidBrush(infoTextColor);
@@ -1527,143 +1583,8 @@ namespace EasyVersionBackup
 
         private void ShowBackupInfoDialog(BackupPathPair pair)
         {
-            using Form form = new Form();
-            using TextBox textBoxBackupInfo = new TextBox();
-            using Button buttonOk = new Button();
-
-            form.Text = "Backup Info";
-            form.StartPosition = FormStartPosition.CenterParent;
-            form.MinimizeBox = false;
-            form.MaximizeBox = false;
-            form.FormBorderStyle = FormBorderStyle.None;
-            form.ClientSize = new Size(620, 392);
-            form.MinimumSize = SizeFromClientSize(new Size(420, 272));
-            form.BackColor = ModernTheme.WindowBackColor;
-            form.Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
-            form.Icon = Icon;
-            ModernWindowFrame.Apply(form);
-
-            Panel panelModernTitleBar = new Panel
-            {
-                Name = "panelModernTitleBar",
-                Dock = DockStyle.Top,
-                Height = 32,
-                BackColor = ModernTheme.TitleBarBackColor
-            };
-
-            PictureBox pictureBoxModernTitleIcon = new PictureBox
-            {
-                Name = "pictureBoxModernTitleIcon",
-                Location = new Point(8, 8),
-                Size = new Size(16, 16),
-                SizeMode = PictureBoxSizeMode.StretchImage,
-                Image = Icon?.ToBitmap(),
-                BackColor = Color.Transparent
-            };
-
-            Label labelModernTitle = new Label
-            {
-                Name = "labelModernTitle",
-                Text = "Backup Info",
-                AutoSize = false,
-                Location = new Point(30, 0),
-                Size = new Size(form.ClientSize.Width - 66, 32),
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-                TextAlign = ContentAlignment.MiddleLeft,
-                ForeColor = ModernTheme.TextColor,
-                Font = new Font(ModernTheme.FontFamilyName, ModernTheme.TitleFontSize, FontStyle.Regular),
-                BackColor = Color.Transparent
-            };
-
-            Button buttonModernClose = CreateModernTitleBarButton("buttonModernClose", "Close", new Point(form.ClientSize.Width - 36, 0));
-            buttonModernClose.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            buttonModernClose.MouseEnter += (sender, e) => buttonModernClose.BackColor = ModernTheme.CloseButtonHoverColor;
-            buttonModernClose.MouseLeave += (sender, e) => buttonModernClose.BackColor = ModernTheme.TitleBarBackColor;
-            buttonModernClose.Click += (sender, e) => form.Close();
-
-            panelModernTitleBar.MouseDown += (sender, e) =>
-            {
-                if (e.Button != MouseButtons.Left)
-                {
-                    return;
-                }
-
-                const int wmNclbuttondown = 0xA1;
-                const int htCaption = 0x2;
-
-                ReleaseCapture();
-                SendMessage(form.Handle, wmNclbuttondown, htCaption, 0);
-            };
-
-            pictureBoxModernTitleIcon.MouseDown += (sender, e) =>
-            {
-                if (e.Button != MouseButtons.Left)
-                {
-                    return;
-                }
-
-                const int wmNclbuttondown = 0xA1;
-                const int htCaption = 0x2;
-
-                ReleaseCapture();
-                SendMessage(form.Handle, wmNclbuttondown, htCaption, 0);
-            };
-
-            labelModernTitle.MouseDown += (sender, e) =>
-            {
-                if (e.Button != MouseButtons.Left)
-                {
-                    return;
-                }
-
-                const int wmNclbuttondown = 0xA1;
-                const int htCaption = 0x2;
-
-                ReleaseCapture();
-                SendMessage(form.Handle, wmNclbuttondown, htCaption, 0);
-            };
-
-            panelModernTitleBar.Controls.Add(pictureBoxModernTitleIcon);
-            panelModernTitleBar.Controls.Add(labelModernTitle);
-            panelModernTitleBar.Controls.Add(buttonModernClose);
-
-            textBoxBackupInfo.Multiline = true;
-            textBoxBackupInfo.ReadOnly = true;
-            textBoxBackupInfo.ScrollBars = ScrollBars.Both;
-            textBoxBackupInfo.WordWrap = false;
-            textBoxBackupInfo.BorderStyle = BorderStyle.FixedSingle;
-            textBoxBackupInfo.BackColor = ModernTheme.TitleBarBackColor;
-            textBoxBackupInfo.ForeColor = ModernTheme.TextColor;
-            textBoxBackupInfo.Location = new Point(12, 44);
-            textBoxBackupInfo.Size = new Size(form.ClientSize.Width - 24, form.ClientSize.Height - 91);
-            textBoxBackupInfo.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            textBoxBackupInfo.Text = GetBackupInfoToolTipText(pair);
-
-            buttonOk.Text = "OK";
-            buttonOk.DialogResult = DialogResult.OK;
-            buttonOk.Size = new Size(75, 27);
-            buttonOk.Location = new Point(form.ClientSize.Width - buttonOk.Width - 12, form.ClientSize.Height - buttonOk.Height - 12);
-            buttonOk.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            buttonOk.FlatStyle = FlatStyle.Flat;
-            buttonOk.BackColor = ModernTheme.AccentColor;
-            buttonOk.ForeColor = ModernTheme.DarkTextColor;
-            buttonOk.Cursor = Cursors.Hand;
-            buttonOk.TextAlign = ContentAlignment.MiddleCenter;
-            buttonOk.Padding = Padding.Empty;
-            buttonOk.UseCompatibleTextRendering = true;
-            buttonOk.UseVisualStyleBackColor = false;
-            buttonOk.FlatAppearance.BorderSize = 0;
-            buttonOk.FlatAppearance.MouseOverBackColor = ModernTheme.AccentHoverColor;
-            buttonOk.FlatAppearance.MouseDownBackColor = ModernTheme.ControlBackColor;
-
-            form.Controls.Add(panelModernTitleBar);
-            form.Controls.Add(textBoxBackupInfo);
-            form.Controls.Add(buttonOk);
-            form.AcceptButton = buttonOk;
-
-            panelModernTitleBar.BringToFront();
-
-            form.ShowDialog(this);
+            using ModernBackupInfoDialog dialog = new ModernBackupInfoDialog(this, GetBackupInfoToolTipText(pair));
+            dialog.ShowDialog(this);
         }
         private void dataGridViewConfiguredPaths_CellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
         {
@@ -1740,7 +1661,7 @@ namespace EasyVersionBackup
 
             if (hasExclusions)
             {
-                using SolidBrush brush = new SolidBrush(Color.LimeGreen);
+                using SolidBrush brush = new SolidBrush(ModernTheme.ActiveExclusionColor);
                 graphics.FillPolygon(brush, funnelPoints);
             }
 

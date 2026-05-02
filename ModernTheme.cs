@@ -16,6 +16,15 @@ namespace EasyVersionBackup
         public static readonly Color CloseButtonHoverColor = Color.FromArgb(196, 43, 28);
         // window color settings end
 
+        // status color settings start
+        public static readonly Color BackupInfoDefaultColor = Color.FromArgb(0, 120, 215);
+        public static readonly Color BackupInfoOkColor = Color.FromArgb(0, 160, 80);
+        public static readonly Color BackupInfoWarningColor = Color.FromArgb(230, 180, 0);
+        public static readonly Color BackupInfoErrorColor = Color.FromArgb(200, 0, 0);
+        public static readonly Color BackupInfoTextColor = Color.White;
+        public static readonly Color ActiveExclusionColor = Color.LimeGreen;
+        // status color settings end
+
         // window border settings start
         public static readonly Color WindowBorderColor = Color.FromArgb(92, 104, 112);
         public const float WindowBorderWidth = 1F;
@@ -28,6 +37,15 @@ namespace EasyVersionBackup
         public const float HeaderFontSize = 9F;
         // window font settings end
 
+        // title bar settings start
+        public const int TitleBarHeight = 32;
+        public static readonly Size TitleBarButtonSize = new Size(36, 32);
+        public const int TitleBarIconSize = 16;
+        public const int TitleBarIconLeft = 8;
+        public const int TitleBarIconTop = 8;
+        public const int TitleBarTextLeft = 30;
+        // title bar settings end
+
         // button text positioning settings start
         public static readonly Padding DefaultButtonTextPadding = Padding.Empty;
         public static readonly Padding DialogPrimaryButtonTextPadding = new Padding(0, 0, 0, 1);
@@ -39,6 +57,7 @@ namespace EasyVersionBackup
         // button size settings start
         public static readonly Size DialogButtonSize = new Size(75, 27);
         public static readonly Size ToolbarButtonSize = new Size(28, 26);
+        public static readonly Size MainToolbarButtonSize = new Size(32, 32);
         // button size settings end
     }
 }
