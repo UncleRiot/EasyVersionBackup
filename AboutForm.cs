@@ -50,7 +50,7 @@ namespace EasyVersionBackup
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
-            ClientSize = new Size(380, 170);
+            ClientSize = new Size(475, 197);
 
             PictureBox pictureBoxMolotov = new PictureBox
             {
@@ -77,16 +77,32 @@ namespace EasyVersionBackup
 
             Label labelVersion = new Label
             {
-                Text = "Version: 0.9.2",
+                Text = "Version: 0.9.4",
                 AutoSize = true,
                 Location = new Point(130, 85)
+            };
+
+            LinkLabel linkLabelGithub = new LinkLabel
+            {
+                Text = "https://github.com/UncleRiot/EasyVersionBackup",
+                AutoSize = true,
+                Location = new Point(130, 110)
+            };
+
+            linkLabelGithub.LinkClicked += (sender, e) =>
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = linkLabelGithub.Text,
+                    UseShellExecute = true
+                });
             };
 
             Button buttonOk = new Button
             {
                 Text = "OK",
                 Size = new Size(75, 25),
-                Location = new Point(280, 125),
+                Location = new Point(388, 160),
                 DialogResult = DialogResult.OK
             };
 
@@ -94,6 +110,7 @@ namespace EasyVersionBackup
             Controls.Add(labelTitle);
             Controls.Add(labelCopyright);
             Controls.Add(labelVersion);
+            Controls.Add(linkLabelGithub);
             Controls.Add(buttonOk);
 
             AcceptButton = buttonOk;

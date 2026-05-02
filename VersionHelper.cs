@@ -25,17 +25,17 @@ namespace EasyVersionBackup
                 return defaultVersion;
             }
 
-            string highestExistingVersion = GetHighestExistingVersion(pair);
+            string highestExistingVersion = GetHighestExistingVersion(pair, defaultVersion);
             string lastUsedVersion = settings.LastUsedVersionsByPair.TryGetValue(pairKey, out string? lastUsed)
                 ? lastUsed
                 : string.Empty;
 
             string highestKnownVersion = VersionPatternHelper.GetHighestCompatibleVersion(defaultVersion, new[]
             {
-            defaultVersion,
-            highestExistingVersion,
-            lastUsedVersion
-        });
+        defaultVersion,
+        highestExistingVersion,
+        lastUsedVersion
+    });
 
             if (string.IsNullOrWhiteSpace(highestKnownVersion))
             {
@@ -70,7 +70,7 @@ namespace EasyVersionBackup
             return $"{folderName}_{version}";
         }
 
-        private static string GetHighestExistingVersion(BackupPathPair pair)
+        private static string GetHighestExistingVersion(BackupPathPair pair, string defaultVersion)
         {
             if (string.IsNullOrWhiteSpace(pair.SourceDirectory) || string.IsNullOrWhiteSpace(pair.TargetDirectory))
             {
@@ -112,7 +112,7 @@ namespace EasyVersionBackup
                 }
             }
 
-            return foundVersions.FirstOrDefault() ?? string.Empty;
+            return VersionPatternHelper.GetHighestCompatibleVersion(defaultVersion, foundVersions);
         }
     }
 }

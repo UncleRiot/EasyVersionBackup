@@ -111,12 +111,7 @@ namespace EasyVersionBackup
                 return false;
             }
 
-            if (!string.Equals(baseMatch.Groups["prefix"].Value, versionMatch.Groups["prefix"].Value, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            return baseMatch.Groups["numbers"].Value.Split('.').Length == versionMatch.Groups["numbers"].Value.Split('.').Length;
+            return string.Equals(baseMatch.Groups["prefix"].Value, versionMatch.Groups["prefix"].Value, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsVersionGreater(string left, string right)

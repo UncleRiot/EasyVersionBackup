@@ -18,6 +18,7 @@ namespace EasyVersionBackup
             InitializeExclusionColumn();
             InitializeAutoBackupControls();
             InitializeSettingsHintIcons();
+            InitializeSettingsControlToolTips();
 
             this.MouseDown += GeneralSettingsForm_MouseDown;
 
@@ -43,6 +44,33 @@ namespace EasyVersionBackup
             if (checkBoxDummy1.Checked)
             {
                 checkBoxIgnoreCopyErrors.Checked = true;
+            }
+        }
+        private void InitializeSettingsControlToolTips()
+        {
+            _settingsHintToolTip.SetToolTip(checkBoxZipDestinationFiles, "Create a ZIP archive instead of copying to a folder");
+            _settingsHintToolTip.SetToolTip(comboBoxDefaultVersioning, "Default version or date pattern for new backups");
+            _settingsHintToolTip.SetToolTip(checkBoxAutoIncrementVersion, "Automatically increment the suggested version");
+            _settingsHintToolTip.SetToolTip(checkBoxMinimizeToSystray, "Hide the window in the system tray when minimized");
+            _settingsHintToolTip.SetToolTip(checkBoxIgnoreCopyErrors, "Skip files that cannot be copied");
+            _settingsHintToolTip.SetToolTip(checkBoxDummy1, "Run backups automatically / timer based");
+
+            TextBox textBoxAutoBackupInterval = GetAutoBackupIntervalTextBox();
+            _settingsHintToolTip.SetToolTip(textBoxAutoBackupInterval, "Time between automatic backups");
+
+            if (dataGridViewPaths.Columns.Contains("ColumnSourceBrowse"))
+            {
+                dataGridViewPaths.Columns["ColumnSourceBrowse"].ToolTipText = "Browse source directory";
+            }
+
+            if (dataGridViewPaths.Columns.Contains("ColumnSourceExclusions"))
+            {
+                dataGridViewPaths.Columns["ColumnSourceExclusions"].ToolTipText = "Edit excluded source paths";
+            }
+
+            if (dataGridViewPaths.Columns.Contains("ColumnTargetBrowse"))
+            {
+                dataGridViewPaths.Columns["ColumnTargetBrowse"].ToolTipText = "Browse target directory";
             }
         }
         private void InitializeExclusionColumn()
@@ -490,44 +518,44 @@ namespace EasyVersionBackup
             bool hasExclusions = dataGridViewPaths.Rows[e.RowIndex].Tag is List<string> excludedPaths
                 && excludedPaths.Any(excludedPath => !string.IsNullOrWhiteSpace(excludedPath));
 
+            bool isSelected = (e.State & DataGridViewElementStates.Selected) == DataGridViewElementStates.Selected;
+
+            int centerX = e.CellBounds.Left + e.CellBounds.Width / 2;
+            int centerY = e.CellBounds.Top + e.CellBounds.Height / 2;
+
+            Point[] funnelPoints =
+            {
+        new Point(centerX - 8, centerY - 7),
+        new Point(centerX + 8, centerY - 7),
+        new Point(centerX + 3, centerY - 1),
+        new Point(centerX + 1, centerY + 7),
+        new Point(centerX - 1, centerY + 7),
+        new Point(centerX - 3, centerY - 1)
+    };
+
+            System.Drawing.Drawing2D.SmoothingMode previousSmoothingMode = e.Graphics.SmoothingMode;
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
             if (hasExclusions)
             {
-                int centerX = e.CellBounds.Left + e.CellBounds.Width / 2;
-                int centerY = e.CellBounds.Top + e.CellBounds.Height / 2;
-
-                Point[] funnelPoints =
-                {
-            new Point(centerX - 8, centerY - 7),
-            new Point(centerX + 8, centerY - 7),
-            new Point(centerX + 3, centerY - 1),
-            new Point(centerX + 1, centerY + 7),
-            new Point(centerX - 1, centerY + 7),
-            new Point(centerX - 3, centerY - 1)
-        };
-
                 using SolidBrush brush = new SolidBrush(System.Drawing.Color.LimeGreen);
-                using Pen pen = new Pen(System.Drawing.Color.DarkGreen, 1F);
+                using Pen pen = new Pen(System.Drawing.Color.Black, 1F);
 
                 e.Graphics.FillPolygon(brush, funnelPoints);
                 e.Graphics.DrawPolygon(pen, funnelPoints);
             }
             else
             {
-                bool isSelected = (e.State & DataGridViewElementStates.Selected) == DataGridViewElementStates.Selected;
-
-                System.Drawing.Color iconColor = isSelected
+                System.Drawing.Color outlineColor = isSelected
                     ? System.Drawing.Color.White
                     : System.Drawing.Color.Black;
 
-                using System.Drawing.Font iconFont = new System.Drawing.Font("Segoe MDL2 Assets", 9F);
-                TextRenderer.DrawText(
-                    e.Graphics,
-                    "\uE71C",
-                    iconFont,
-                    e.CellBounds,
-                    iconColor,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                using Pen pen = new Pen(outlineColor, 1F);
+
+                e.Graphics.DrawPolygon(pen, funnelPoints);
             }
+
+            e.Graphics.SmoothingMode = previousSmoothingMode;
 
             e.Handled = true;
         }
@@ -559,24 +587,28 @@ namespace EasyVersionBackup
             form.MinimizeBox = false;
             form.MaximizeBox = false;
             form.FormBorderStyle = FormBorderStyle.FixedDialog;
-            form.ClientSize = new Size(520, 330);
+            form.ClientSize = new Size(520, 321);
 
             textBoxExclusions.Multiline = true;
             textBoxExclusions.ScrollBars = ScrollBars.Vertical;
             textBoxExclusions.WordWrap = false;
             textBoxExclusions.Location = new Point(12, 12);
-            textBoxExclusions.Size = new Size(496, 270);
+            textBoxExclusions.Size = new Size(496, 263);
             textBoxExclusions.Text = string.Join(Environment.NewLine, excludedPaths);
 
             buttonOk.Text = "OK";
             buttonOk.DialogResult = DialogResult.OK;
-            buttonOk.Location = new Point(352, 294);
-            buttonOk.Size = new Size(75, 23);
+            buttonOk.TextAlign = ContentAlignment.MiddleCenter;
+            buttonOk.Padding = Padding.Empty;
+            buttonOk.Location = new Point(352, 282);
+            buttonOk.Size = new Size(75, 27);
 
             buttonCancel.Text = "Cancel";
             buttonCancel.DialogResult = DialogResult.Cancel;
-            buttonCancel.Location = new Point(433, 294);
-            buttonCancel.Size = new Size(75, 23);
+            buttonCancel.TextAlign = ContentAlignment.MiddleCenter;
+            buttonCancel.Padding = Padding.Empty;
+            buttonCancel.Location = new Point(433, 282);
+            buttonCancel.Size = new Size(75, 27);
 
             form.Controls.Add(textBoxExclusions);
             form.Controls.Add(buttonOk);

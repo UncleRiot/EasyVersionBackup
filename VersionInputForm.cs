@@ -9,10 +9,25 @@ namespace EasyVersionBackup
     {
         public List<BackupVersionItem> ResultItems { get; private set; }
         public bool IgnoreCopyErrors { get; private set; }
+        private readonly ToolTip _versionInputToolTip = new ToolTip();
 
         public VersionInputForm(List<BackupVersionItem> items, bool ignoreCopyErrors)
         {
             InitializeComponent();
+
+            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+
+            _versionInputToolTip.SetToolTip(checkBoxIgnoreCopyErrors, "Skip files that cannot be copied");
+
+            if (dataGridViewVersions.Columns.Count > 0)
+            {
+                dataGridViewVersions.Columns[0].ToolTipText = "Source folder";
+            }
+
+            if (dataGridViewVersions.Columns.Count > 1)
+            {
+                dataGridViewVersions.Columns[1].ToolTipText = "Backup version";
+            }
 
             ResultItems = new List<BackupVersionItem>();
             checkBoxIgnoreCopyErrors.Checked = ignoreCopyErrors;

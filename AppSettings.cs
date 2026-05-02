@@ -17,7 +17,7 @@ namespace EasyVersionBackup
         public Dictionary<string, string> LastUsedVersionsByPair { get; set; } = new Dictionary<string, string>();
         public Dictionary<string, BackupPathStatus> BackupStatusesByPair { get; set; } = new Dictionary<string, BackupPathStatus>();
         public int MainWindowWidth { get; set; } = 800;
-        public int MainWindowHeight { get; set; } = 395;
+        public int MainWindowHeight { get; set; } = 207;
         public int MainWindowLeft { get; set; } = -1;
         public int MainWindowTop { get; set; } = -1;
     }
