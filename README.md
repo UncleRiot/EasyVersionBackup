@@ -32,7 +32,7 @@ If this tool saves you time, you can support development here:
 > [!IMPORTANT]
 > If Windows SmartScreen blocks the app, right-click the EXE → **Properties** → check **Unblock** → **Apply** → **OK**, then start it again.
 >
-> VirusTotal scan: https://www.virustotal.com/gui/file/dd690f2d12f1fd23b6cd24bd96a29710d5abac77b3acee92746a87becb3765b0/detection
+> VirusTotal scan: https://www.virustotal.com/gui/file/f6b9a2e7084680248d013ac2d0de8cd8c88d7aece87dee745a26e25aee0967d6?nocache=1
 
 <br>
 
