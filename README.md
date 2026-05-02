@@ -1,12 +1,24 @@
 # EasyVersionBackup
 
-EasyVersionBackup is a lightweight Windows application for creating **versioned backups** of your directories — fast, reliable, and focused on real-world usage without unnecessary complexity.
-Use it for your save-games, projects, everything!
+EasyVersionBackup is a lightweight Windows tool for creating versioned backups of folders. It is designed for gamers, developers, power users, and anyone who needs quick, repeatable, versioned snapshots of project folders without complex backup software.
+
+It supports manual and automatic backups, multiple source → target configurations, ZIP backups, per-entry exclusions, skipped-file reporting, system tray integration, and a clean WinForms interface focused on reliability and clarity.
+
+
 ---
 
-<img width="755" height="234" alt="grafik" src="https://github.com/user-attachments/assets/37353745-12ab-4665-8edd-4b73ca6fc58d" />
 
-<img width="892" height="350" alt="grafik" src="https://github.com/user-attachments/assets/8ceaa7b0-7e99-4a26-a4e1-e9d4dd37109d" />
+<img width="727" height="218" alt="grafik" src="https://github.com/user-attachments/assets/4b827037-f26e-4e53-9d47-404fe333df29" />
+
+<img width="897" height="216" alt="grafik" src="https://github.com/user-attachments/assets/dd844861-df25-4a0a-9148-cde807acad93" />
+
+<img width="380" height="234" alt="grafik" src="https://github.com/user-attachments/assets/8c26e197-b003-46bb-a26e-1c189f953b53" />
+
+<img width="520" height="352" alt="grafik" src="https://github.com/user-attachments/assets/0243527c-1cd0-49f1-b722-d8dce06e7a6b" />
+
+
+---
+
 
 
 ## 🚀 Features
@@ -15,75 +27,103 @@ Use it for your save-games, projects, everything!
 
   * Create structured backups with version numbers
   * Supports manual input, auto-increment, and timestamp-based versions
+  * Remembers manually adjusted versions per source → target pair
+  * Detects existing versions and suggests the next logical version
+
+* **Multiple Backup Configurations**
+
+  * Configure multiple source → target pairs
+  * Enable or disable each entry individually
+  * Edit source and target paths directly in the main window
+  * Browse folders directly from the main table
+
+* **Per-Entry Exclusions**
+
+  * Define excluded files or folders per backup entry
+  * Edit exclusions directly from the main window or Settings
+  * Add and remove exclusions via a table-based editor
+  * Confirmation prompt before removing existing exclusion entries
 
 * **Flexible Backup Timer**
 
   * Define intervals like `30s`, `5m`, `1h`
   * Live countdown visible:
-    * In the UI
+    * In the main UI
     * In the window title
     * In the system tray tooltip
 
 * **Automatic Background Backups**
 
   * Runs fully in the background
-  * Works while you use other applications (e.g. games)
+  * Works while you use other applications
   * No interaction required once configured
-
-* **Multiple Backup Configurations**
-
-  * Configure multiple source → target pairs
-  * Enable/disable each entry individually
+  * Optional minimize-to-system-tray behavior
 
 * **Status & Feedback System**
 
   * Per-entry status indicator:
-
     * 🟢 OK
     * 🟡 Warning
     * 🔴 Error
-  * Hover for details:
-
+  * Hover for quick details:
     * Last backup time
-    * Error messages (if any)
+    * Error messages
+    * Skipped-file summary
+  * Click the info icon to open a copyable details dialog
+  * Skipped files are listed individually when available
 
 * **ZIP Support**
 
   * Optional compression into `.zip` archives
+  * Uses the same versioning logic as folder-based backups
 
 * **Robust Error Handling**
 
-  * Option to ignore locked/in-use files
-  * Backup continues without interruption
-  * Reports skipped files
+  * Option to ignore locked or in-use files
+  * Backup can continue without interruption
+  * Skipped files are reported per backup entry
+  * Useful for projects with temporary build files, IDE locks, or active services
 
 * **System Tray Integration**
 
   * Minimize to tray
-  * Hover shows:
+  * Tray tooltip shows the next scheduled backup:
 
+    ```text
+    Next backup in 2 minutes (19:52)
     ```
-    Next Backup in 2 minutes (19:52)
-    ```
+
+  * Manual and automatic backups can show tray notifications
 
 * **Modernized UI**
 
-  * Clean, minimal layout
-  * Focus on clarity and speed
-  * No clutter, no unnecessary dialogs
+  * Clean, compact main window
+  * Toolbar with quick actions:
+    * Exit
+    * Add path
+    * Remove path
+    * Settings
+    * About
+    * Backup
+  * Main window initially shows only a small number of rows
+  * Window remains resizable
+  * Resize indicator included
+  * Tooltips/hints added for important controls
 
 ---
 
 ## 🧩 How It Works
 
 1. Configure one or more **source → target** paths
-2. (Optional) Enable **Backup Timer**
-3. Click **Backup** or let it run automatically
-4. The app will:
-
-   * Create versioned copies
+2. Optionally define exclusions per source path
+3. Choose versioning behavior
+4. Optionally enable the **Backup Timer**
+5. Click **Backup** or let it run automatically
+6. The app will:
+   * Create versioned copies or ZIP archives
    * Skip problematic files if configured
-   * Store status per entry
+   * Store backup status per entry
+   * Remember the last used version per source → target pair
 
 ---
 
@@ -92,70 +132,47 @@ Use it for your save-games, projects, everything!
 * **Backup Timer**
 
   * Flexible input:
-
     * `30s` → 30 seconds
     * `5m` → 5 minutes
     * `1h` → 1 hour
-    * `15` → 15 minutes (default)
+    * `15` → 15 minutes by default
 
 * **Zip Destination Files**
 
-  * Store backups as `.zip`
+  * Store backups as `.zip` archives instead of normal folders
 
 * **Default Versioning**
 
-  * Starting version (e.g. `0.0.1`)
+  * Starting version or pattern, for example:
+    * `none`
+    * `v1.0`
+    * `1.0`
+    * `yyyy-MM-dd`
+    * `yyyyMMdd`
+    * `yyyy-MM-dd-HH-mm`
+    * `yyyyMMddHHmm`
 
 * **Auto Increment**
 
-  * Automatically increase version numbers
+  * Automatically increases compatible version numbers
 
 * **Minimize to Systray**
 
-  * Run silently in background
+  * Keeps the app running quietly in the background
 
 * **Ignore Copy Errors**
 
-  * Skip locked/problematic files
+  * Skips locked or problematic files instead of stopping the backup
+
+* **Per-Path Exclusions**
+
+  * Exclude folders or files from individual backup entries
 
 ---
 
 ## 💡 Use Cases
 
 * Backup Visual Studio projects
-* Safe snapshots before deployments
-* Background backups while working or gaming
-* Handling projects with locked files (services, builds, etc.)
-
----
-
-## 🛠️ Tech Stack
-
-* C#
-* .NET (Windows Forms)
-* No external dependencies
-
----
-
-## 🎯 Philosophy
-
-EasyVersionBackup focuses on:
-
-* **Simplicity over complexity**
-* **Reliability over features**
-* **Clarity over configuration overload**
-
-It does one thing — **versioned backups** — and does it right.
-
----
-
-## 📦 Installation
-
-Build and run — no installer required.
-
----
-
-## 📄 License
-
-(c) Daniel Capilla
-Version: 0.0.7
+* Create safe snapshots before refactoring
+* Save versions before deployments or releases
+* Run automatic backups while working
