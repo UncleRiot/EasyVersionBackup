@@ -577,55 +577,14 @@ namespace EasyVersionBackup
         {
             resultExcludedPaths = excludedPaths;
 
-            using Form form = new Form();
-            using TextBox textBoxExclusions = new TextBox();
-            using Button buttonOk = new Button();
-            using Button buttonCancel = new Button();
+            using ExclusionsDialog dialog = new ExclusionsDialog(excludedPaths);
 
-            form.Text = "Exclusions";
-            form.StartPosition = FormStartPosition.CenterParent;
-            form.MinimizeBox = false;
-            form.MaximizeBox = false;
-            form.FormBorderStyle = FormBorderStyle.FixedDialog;
-            form.ClientSize = new Size(520, 321);
-
-            textBoxExclusions.Multiline = true;
-            textBoxExclusions.ScrollBars = ScrollBars.Vertical;
-            textBoxExclusions.WordWrap = false;
-            textBoxExclusions.Location = new Point(12, 12);
-            textBoxExclusions.Size = new Size(496, 263);
-            textBoxExclusions.Text = string.Join(Environment.NewLine, excludedPaths);
-
-            buttonOk.Text = "OK";
-            buttonOk.DialogResult = DialogResult.OK;
-            buttonOk.TextAlign = ContentAlignment.MiddleCenter;
-            buttonOk.Padding = Padding.Empty;
-            buttonOk.Location = new Point(352, 282);
-            buttonOk.Size = new Size(75, 27);
-
-            buttonCancel.Text = "Cancel";
-            buttonCancel.DialogResult = DialogResult.Cancel;
-            buttonCancel.TextAlign = ContentAlignment.MiddleCenter;
-            buttonCancel.Padding = Padding.Empty;
-            buttonCancel.Location = new Point(433, 282);
-            buttonCancel.Size = new Size(75, 27);
-
-            form.Controls.Add(textBoxExclusions);
-            form.Controls.Add(buttonOk);
-            form.Controls.Add(buttonCancel);
-            form.AcceptButton = buttonOk;
-            form.CancelButton = buttonCancel;
-
-            if (form.ShowDialog(this) != DialogResult.OK)
+            if (dialog.ShowDialog(this) != DialogResult.OK)
             {
                 return false;
             }
 
-            resultExcludedPaths = textBoxExclusions.Lines
-                .Select(line => line.Trim())
-                .Where(line => !string.IsNullOrWhiteSpace(line))
-                .ToList();
-
+            resultExcludedPaths = dialog.ResultExcludedPaths;
             return true;
         }
         private int ParseAutoBackupIntervalSeconds(string value)

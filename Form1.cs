@@ -552,13 +552,13 @@ namespace EasyVersionBackup
 
                 try
                 {
-                    int skippedForPair = ExecuteBackup(pair, versionItem.Version);
+                    int skippedForPair = ExecuteBackup(pair, versionItem.Version, out List<string> skippedFilePaths);
                     skippedFiles += skippedForPair;
 
                     SetBackupStatus(
                         pair,
                         skippedForPair == 0 ? "OK" : "Warning",
-                        skippedForPair == 0 ? string.Empty : $"{skippedForPair} files skipped.");
+                        skippedForPair == 0 ? string.Empty : FormatSkippedFilesMessage(skippedForPair, skippedFilePaths));
 
                     string key = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
                     _settings.LastUsedVersionsByPair[key] = versionItem.Version;
@@ -582,9 +582,10 @@ namespace EasyVersionBackup
             notifyIconMain.ShowBalloonTip(5000);
         }
 
-        private int ExecuteBackup(BackupPathPair pair, string version)
+        private int ExecuteBackup(BackupPathPair pair, string version, out List<string> skippedFilePaths)
         {
             int skipped = 0;
+            skippedFilePaths = new List<string>();
 
             string sourceName = new DirectoryInfo(pair.SourceDirectory).Name;
             string versionedName = VersionHelper.BuildVersionedName(sourceName, version);
@@ -598,7 +599,7 @@ namespace EasyVersionBackup
                     File.Delete(zipPath);
                 }
 
-                skipped += CreateZipFromDirectory(pair.SourceDirectory, zipPath, pair.ExcludedPaths);
+                skipped += CreateZipFromDirectory(pair.SourceDirectory, zipPath, pair.ExcludedPaths, skippedFilePaths);
                 return skipped;
             }
 
@@ -609,12 +610,12 @@ namespace EasyVersionBackup
                 Directory.Delete(destinationDirectory, true);
             }
 
-            skipped += CopyDirectory(pair.SourceDirectory, destinationDirectory, pair.ExcludedPaths);
+            skipped += CopyDirectory(pair.SourceDirectory, destinationDirectory, pair.ExcludedPaths, skippedFilePaths);
 
             return skipped;
         }
 
-        private int CopyDirectory(string sourceDirectory, string destinationDirectory, List<string> excludedPaths)
+        private int CopyDirectory(string sourceDirectory, string destinationDirectory, List<string> excludedPaths, List<string> skippedFilePaths)
         {
             int skipped = 0;
 
@@ -646,6 +647,8 @@ namespace EasyVersionBackup
                     catch
                     {
                         skipped++;
+                        skippedFilePaths.Add(filePath);
+
                         if (!_ignoreAllFileErrors)
                         {
                             throw;
@@ -657,7 +660,7 @@ namespace EasyVersionBackup
             return skipped;
         }
 
-        private int CreateZipFromDirectory(string sourceDirectory, string zipPath, List<string> excludedPaths)
+        private int CreateZipFromDirectory(string sourceDirectory, string zipPath, List<string> excludedPaths, List<string> skippedFilePaths)
         {
             int skipped = 0;
 
@@ -686,6 +689,8 @@ namespace EasyVersionBackup
                     catch
                     {
                         skipped++;
+                        skippedFilePaths.Add(filePath);
+
                         if (!_ignoreAllFileErrors)
                         {
                             throw;
@@ -695,6 +700,16 @@ namespace EasyVersionBackup
             }
 
             return skipped;
+        }
+        private string FormatSkippedFilesMessage(int skippedFiles, List<string> skippedFilePaths)
+        {
+            if (skippedFilePaths.Count == 0)
+            {
+                return $"{skippedFiles} files skipped.";
+            }
+
+            return $"{skippedFiles} files skipped:{Environment.NewLine}" +
+                string.Join(Environment.NewLine, skippedFilePaths);
         }
         private List<string> GetIncludedDirectories(string sourceDirectory, List<string> excludedPaths)
         {
@@ -833,13 +848,13 @@ namespace EasyVersionBackup
 
                 try
                 {
-                    int skippedForPair = ExecuteBackup(pair, automaticVersion);
+                    int skippedForPair = ExecuteBackup(pair, automaticVersion, out List<string> skippedFilePaths);
                     skippedFiles += skippedForPair;
 
                     SetBackupStatus(
                         pair,
                         skippedForPair == 0 ? "OK" : "Warning",
-                        skippedForPair == 0 ? string.Empty : $"{skippedForPair} files skipped.");
+                        skippedForPair == 0 ? string.Empty : FormatSkippedFilesMessage(skippedForPair, skippedFilePaths));
 
                     string key = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
                     _settings.LastUsedVersionsByPair[key] = suggestedVersion;
@@ -996,7 +1011,7 @@ namespace EasyVersionBackup
                 }
                 else if (status.LastBackupStatus == "Warning")
                 {
-                    text += $"{Environment.NewLine}Warning: {status.LastBackupErrorMessage}";
+                    text += $"{Environment.NewLine}{status.LastBackupErrorMessage}";
                 }
             }
 
@@ -1037,21 +1052,24 @@ namespace EasyVersionBackup
             graphics.Clear(Color.Transparent);
 
             using SolidBrush brush = new SolidBrush(color);
-            graphics.FillEllipse(brush, 1, 1, 14, 14);
 
-            using Font font = new Font("Segoe UI", 8F, FontStyle.Regular);
-            Size textSize = TextRenderer.MeasureText("i", font);
+            // circle size settings start
+            graphics.FillEllipse(brush, 0, 0, 16, 16);
+            // circle size settings end
 
-            int x = (16 - textSize.Width) / 2 + 5;
-            int y = (16 - textSize.Height) / 2 - 1;
+            // "i" color settings start
+            Color infoTextColor = Color.White;
+            // "i" color settings end
 
-            TextRenderer.DrawText(
-                graphics,
-                "i",
-                font,
-                new Point(x, y),
-                Color.Black,
-                TextFormatFlags.NoPadding);
+            using SolidBrush infoBrush = new SolidBrush(infoTextColor);
+
+            // "i" dot position settings start
+            graphics.FillEllipse(infoBrush, 7, 3, 2, 2);
+            // "i" dot position settings end
+
+            // "i" line position settings start
+            graphics.FillRectangle(infoBrush, 7, 7, 2, 6);
+            // "i" line position settings end
 
             return bitmap;
         }
@@ -1215,6 +1233,16 @@ namespace EasyVersionBackup
 
             string columnName = dataGridViewConfiguredPaths.Columns[e.ColumnIndex].Name;
 
+            if (columnName == "ColumnConfiguredBackupInfo")
+            {
+                if (e.RowIndex >= _settings.BackupPathPairs.Count)
+                {
+                    return;
+                }
+
+                ShowBackupInfoDialog(_settings.BackupPathPairs[e.RowIndex]);
+            }
+
             if (columnName == "ColumnConfiguredSourceBrowse")
             {
                 using FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog();
@@ -1264,6 +1292,41 @@ namespace EasyVersionBackup
             }
         }
 
+        private void ShowBackupInfoDialog(BackupPathPair pair)
+        {
+            using Form form = new Form();
+            using TextBox textBoxBackupInfo = new TextBox();
+            using Button buttonOk = new Button();
+
+            form.Text = "Backup Info";
+            form.StartPosition = FormStartPosition.CenterParent;
+            form.MinimizeBox = false;
+            form.MaximizeBox = false;
+            form.FormBorderStyle = FormBorderStyle.Sizable;
+            form.ClientSize = new Size(620, 360);
+            form.MinimumSize = SizeFromClientSize(new Size(420, 240));
+
+            textBoxBackupInfo.Multiline = true;
+            textBoxBackupInfo.ReadOnly = true;
+            textBoxBackupInfo.ScrollBars = ScrollBars.Both;
+            textBoxBackupInfo.WordWrap = false;
+            textBoxBackupInfo.Location = new Point(12, 12);
+            textBoxBackupInfo.Size = new Size(form.ClientSize.Width - 24, form.ClientSize.Height - 59);
+            textBoxBackupInfo.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            textBoxBackupInfo.Text = GetBackupInfoToolTipText(pair);
+
+            buttonOk.Text = "OK";
+            buttonOk.DialogResult = DialogResult.OK;
+            buttonOk.Size = new Size(75, 25);
+            buttonOk.Location = new Point(form.ClientSize.Width - buttonOk.Width - 12, form.ClientSize.Height - buttonOk.Height - 12);
+            buttonOk.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+
+            form.Controls.Add(textBoxBackupInfo);
+            form.Controls.Add(buttonOk);
+            form.AcceptButton = buttonOk;
+
+            form.ShowDialog(this);
+        }
         private void dataGridViewConfiguredPaths_CellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
         {
             if (e.RowIndex < 0 || e.ColumnIndex < 0)
@@ -1367,55 +1430,14 @@ namespace EasyVersionBackup
         {
             resultExcludedPaths = excludedPaths;
 
-            using Form form = new Form();
-            using TextBox textBoxExclusions = new TextBox();
-            using Button buttonOk = new Button();
-            using Button buttonCancel = new Button();
+            using ExclusionsDialog dialog = new ExclusionsDialog(excludedPaths);
 
-            form.Text = "Exclusions";
-            form.StartPosition = FormStartPosition.CenterParent;
-            form.MinimizeBox = false;
-            form.MaximizeBox = false;
-            form.FormBorderStyle = FormBorderStyle.FixedDialog;
-            form.ClientSize = new Size(520, 321);
-
-            textBoxExclusions.Multiline = true;
-            textBoxExclusions.ScrollBars = ScrollBars.Vertical;
-            textBoxExclusions.WordWrap = false;
-            textBoxExclusions.Location = new Point(12, 12);
-            textBoxExclusions.Size = new Size(496, 263);
-            textBoxExclusions.Text = string.Join(Environment.NewLine, excludedPaths);
-
-            buttonOk.Text = "OK";
-            buttonOk.DialogResult = DialogResult.OK;
-            buttonOk.TextAlign = ContentAlignment.MiddleCenter;
-            buttonOk.Padding = Padding.Empty;
-            buttonOk.Location = new Point(352, 282);
-            buttonOk.Size = new Size(75, 27);
-
-            buttonCancel.Text = "Cancel";
-            buttonCancel.DialogResult = DialogResult.Cancel;
-            buttonCancel.TextAlign = ContentAlignment.MiddleCenter;
-            buttonCancel.Padding = Padding.Empty;
-            buttonCancel.Location = new Point(433, 282);
-            buttonCancel.Size = new Size(75, 27);
-
-            form.Controls.Add(textBoxExclusions);
-            form.Controls.Add(buttonOk);
-            form.Controls.Add(buttonCancel);
-            form.AcceptButton = buttonOk;
-            form.CancelButton = buttonCancel;
-
-            if (form.ShowDialog(this) != DialogResult.OK)
+            if (dialog.ShowDialog(this) != DialogResult.OK)
             {
                 return false;
             }
 
-            resultExcludedPaths = textBoxExclusions.Lines
-                .Select(line => line.Trim())
-                .Where(line => !string.IsNullOrWhiteSpace(line))
-                .ToList();
-
+            resultExcludedPaths = dialog.ResultExcludedPaths;
             return true;
         }
         private void dataGridViewConfiguredPaths_CellValueChanged(object sender, DataGridViewCellEventArgs e)
