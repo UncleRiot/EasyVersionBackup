@@ -1,8 +1,9 @@
 # EasyVersionBackup
 
-EasyVersionBackup is a lightweight Windows tool for creating versioned backups of folders. It is designed for gamers, developers, power users, and anyone who needs quick, repeatable, versioned snapshots of project folders without complex backup software.
+EasyVersionBackup is a lightweight, portable Windows tool for creating versioned backups of folders. 
+Backup your savegame-folders, office-document-folders, VisualC project folders, every folder.
 
-It supports manual and automatic backups, multiple source → target configurations, ZIP backups, per-entry exclusions, skipped-file reporting, system tray integration, and a clean WinForms interface focused on reliability and clarity.
+It supports manual and automatic backups, multiple source → target configurations, ZIP backups, per-entry exclusions, skipped-file reporting, system tray integration, and a clean WinForms interface.
 
 
 > [!IMPORTANT]
