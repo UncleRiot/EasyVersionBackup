@@ -6,6 +6,12 @@ namespace EasyVersionBackup
 {
     public class AboutForm : Form
     {
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool ReleaseCapture();
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
+
         private Bitmap CreateCircularMolotovImage()
         {
             Bitmap output = new Bitmap(90, 90);
@@ -18,7 +24,7 @@ namespace EasyVersionBackup
 
             if (stream == null)
             {
-                using Pen fallbackPen = new Pen(Color.Gray, 2);
+                using Pen fallbackPen = new Pen(ModernTheme.AccentColor, 2);
                 graphics.DrawEllipse(fallbackPen, 1, 1, 88, 88);
                 return output;
             }
@@ -38,55 +44,117 @@ namespace EasyVersionBackup
             graphics.DrawImage(sourceImage, x, y, scaledWidth, scaledHeight);
             graphics.ResetClip();
 
-            using Pen borderPen = new Pen(Color.Gray, 2);
+            using Pen borderPen = new Pen(ModernTheme.AccentColor, 2);
             graphics.DrawEllipse(borderPen, 4, 4, 82, 82);
 
             return output;
         }
+
         public AboutForm()
         {
             Text = "About";
             StartPosition = FormStartPosition.CenterParent;
-            FormBorderStyle = FormBorderStyle.FixedDialog;
+            FormBorderStyle = FormBorderStyle.None;
             MaximizeBox = false;
             MinimizeBox = false;
-            ClientSize = new Size(475, 197);
+            ClientSize = new Size(475, 229);
+            BackColor = ModernTheme.WindowBackColor;
+            Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
+            DoubleBuffered = true;
+            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            ModernWindowFrame.Apply(this);
+
+            Panel panelModernTitleBar = new Panel
+            {
+                Name = "panelModernTitleBar",
+                Dock = DockStyle.Top,
+                Height = 32,
+                BackColor = ModernTheme.TitleBarBackColor
+            };
+
+            PictureBox pictureBoxModernTitleIcon = new PictureBox
+            {
+                Name = "pictureBoxModernTitleIcon",
+                Location = new Point(8, 8),
+                Size = new Size(16, 16),
+                SizeMode = PictureBoxSizeMode.StretchImage,
+                Image = Icon?.ToBitmap(),
+                BackColor = Color.Transparent
+            };
+
+            Label labelModernTitle = new Label
+            {
+                Name = "labelModernTitle",
+                Text = "About",
+                AutoSize = false,
+                Location = new Point(30, 0),
+                Size = new Size(ClientSize.Width - 66, 32),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = ModernTheme.TextColor,
+                Font = new Font(ModernTheme.FontFamilyName, ModernTheme.TitleFontSize, FontStyle.Regular)
+            };
+
+            Button buttonModernClose = CreateModernTitleBarButton("buttonModernClose", "Close", new Point(ClientSize.Width - 36, 0));
+            buttonModernClose.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonModernClose.MouseEnter += (sender, e) => buttonModernClose.BackColor = ModernTheme.CloseButtonHoverColor;
+            buttonModernClose.MouseLeave += (sender, e) => buttonModernClose.BackColor = ModernTheme.TitleBarBackColor;
+            buttonModernClose.Click += (sender, e) => Close();
+
+            panelModernTitleBar.MouseDown += ModernTitleBar_MouseDown;
+            pictureBoxModernTitleIcon.MouseDown += ModernTitleBar_MouseDown;
+            labelModernTitle.MouseDown += ModernTitleBar_MouseDown;
+
+            panelModernTitleBar.Controls.Add(pictureBoxModernTitleIcon);
+            panelModernTitleBar.Controls.Add(labelModernTitle);
+            panelModernTitleBar.Controls.Add(buttonModernClose);
 
             PictureBox pictureBoxMolotov = new PictureBox
             {
                 Image = CreateCircularMolotovImage(),
                 Size = new Size(90, 90),
-                Location = new Point(20, 25),
-                SizeMode = PictureBoxSizeMode.CenterImage
+                Location = new Point(20, 57),
+                SizeMode = PictureBoxSizeMode.CenterImage,
+                BackColor = Color.Transparent
             };
 
             Label labelTitle = new Label
             {
                 Text = "EasyVersionBackup",
-                Font = new Font(Font.FontFamily, 11, FontStyle.Bold),
+                Font = new Font(ModernTheme.FontFamilyName, 11F, FontStyle.Bold),
                 AutoSize = true,
-                Location = new Point(130, 25)
+                Location = new Point(130, 57),
+                ForeColor = ModernTheme.TextColor,
+                BackColor = Color.Transparent
             };
 
             Label labelCopyright = new Label
             {
                 Text = "(c) Daniel Capilla",
                 AutoSize = true,
-                Location = new Point(130, 60)
+                Location = new Point(130, 92),
+                ForeColor = ModernTheme.TextColor,
+                BackColor = Color.Transparent
             };
 
             Label labelVersion = new Label
             {
-                Text = "Version: 0.9.4.4",
+                Text = "Version: 0.9.5",
                 AutoSize = true,
-                Location = new Point(130, 85)
+                Location = new Point(130, 117),
+                ForeColor = ModernTheme.TextColor,
+                BackColor = Color.Transparent
             };
 
             LinkLabel linkLabelGithub = new LinkLabel
             {
                 Text = "https://github.com/UncleRiot/EasyVersionBackup",
                 AutoSize = true,
-                Location = new Point(130, 110)
+                Location = new Point(130, 142),
+                LinkColor = ModernTheme.AccentColor,
+                ActiveLinkColor = ModernTheme.AccentHoverColor,
+                VisitedLinkColor = ModernTheme.AccentColor,
+                BackColor = Color.Transparent
             };
 
             linkLabelGithub.LinkClicked += (sender, e) =>
@@ -102,10 +170,20 @@ namespace EasyVersionBackup
             {
                 Text = "OK",
                 Size = new Size(75, 25),
-                Location = new Point(388, 160),
-                DialogResult = DialogResult.OK
+                Location = new Point(388, 192),
+                DialogResult = DialogResult.OK,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = ModernTheme.AccentColor,
+                ForeColor = ModernTheme.DarkTextColor,
+                Cursor = Cursors.Hand,
+                UseVisualStyleBackColor = false
             };
 
+            buttonOk.FlatAppearance.BorderSize = 0;
+            buttonOk.FlatAppearance.MouseOverBackColor = ModernTheme.AccentHoverColor;
+            buttonOk.FlatAppearance.MouseDownBackColor = ModernTheme.ControlBackColor;
+
+            Controls.Add(panelModernTitleBar);
             Controls.Add(pictureBoxMolotov);
             Controls.Add(labelTitle);
             Controls.Add(labelCopyright);
@@ -113,7 +191,65 @@ namespace EasyVersionBackup
             Controls.Add(linkLabelGithub);
             Controls.Add(buttonOk);
 
+            panelModernTitleBar.BringToFront();
+
             AcceptButton = buttonOk;
+        }
+
+        private Button CreateModernTitleBarButton(string name, string text, Point location)
+        {
+            Button button = new Button
+            {
+                Name = name,
+                Text = string.Empty,
+                Tag = text,
+                Size = new Size(36, 32),
+                Location = location,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = ModernTheme.TitleBarBackColor,
+                ForeColor = ModernTheme.TextColor,
+                Cursor = Cursors.Hand,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Padding = Padding.Empty,
+                UseVisualStyleBackColor = false
+            };
+
+            button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.MouseOverBackColor = ModernTheme.ControlBackColor;
+            button.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
+
+            button.Paint += (sender, e) =>
+            {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+                using Pen pen = new Pen(ModernTheme.TextColor, 1.4F)
+                {
+                    StartCap = System.Drawing.Drawing2D.LineCap.Square,
+                    EndCap = System.Drawing.Drawing2D.LineCap.Square
+                };
+
+                if (button.Tag?.ToString() == "Close")
+                {
+                    e.Graphics.DrawLine(pen, 13, 11, 23, 21);
+                    e.Graphics.DrawLine(pen, 23, 11, 13, 21);
+                }
+            };
+
+            return button;
+        }
+
+        private void ModernTitleBar_MouseDown(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left)
+            {
+                return;
+            }
+
+            const int wmNclbuttondown = 0xA1;
+            const int htCaption = 0x2;
+
+            ReleaseCapture();
+            SendMessage(Handle, wmNclbuttondown, htCaption, 0);
         }
     }
 }

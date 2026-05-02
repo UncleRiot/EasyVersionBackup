@@ -6,25 +6,27 @@
 		<UseWindowsForms>true</UseWindowsForms>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
-		<ApplicationIcon>Ressources\favicon.ico</ApplicationIcon>
+		<ApplicationIcon>Ressources\favicon2.ico</ApplicationIcon>
 		<SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
+
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<SelfContained>false</SelfContained>
+		<PublishSingleFile>true</PublishSingleFile>
 
 		<Authors>Daniel Capilla</Authors>
 		<Company>Daniel Capilla</Company>
 		<Product>EasyVersionBackup</Product>
 		<Copyright>Copyright © Daniel Capilla</Copyright>
 
-		<Version>0.9.4.4</Version>
-		<AssemblyVersion>0.9.4.4</AssemblyVersion>
-		<FileVersion>0.9.4.4</FileVersion>
-		<InformationalVersion>0.9.4.4</InformationalVersion>
+		<Version>0.9.5</Version>
+		<AssemblyVersion>0.9.5</AssemblyVersion>
+		<FileVersion>0.9.5</FileVersion>
+		<InformationalVersion>0.9.5</InformationalVersion>
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 	</PropertyGroup>
 
-	
-
 	<ItemGroup>
-		<Content Include="Ressources\favicon.ico">
+		<Content Include="Ressources\favicon2.ico">
 			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
 		</Content>
 		<EmbeddedResource Include="Ressources\molotov.jpg" />

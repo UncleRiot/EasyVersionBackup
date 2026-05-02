@@ -11,11 +11,35 @@ namespace EasyVersionBackup
         public bool IgnoreCopyErrors { get; private set; }
         private readonly ToolTip _versionInputToolTip = new ToolTip();
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool ReleaseCapture();
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
+
         public VersionInputForm(List<BackupVersionItem> items, bool ignoreCopyErrors)
         {
             InitializeComponent();
 
+            Text = "Backup Version";
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            FormBorderStyle = FormBorderStyle.None;
+            BackColor = ModernTheme.WindowBackColor;
+            Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
+            DoubleBuffered = true;
+            ModernWindowFrame.Apply(this);
+
+            OffsetExistingControlsForModernTitleBar(32);
+            InitializeModernTitleBar();
+
+            foreach (Control control in Controls)
+            {
+                if (control is Label label)
+                {
+                    label.ForeColor = ModernTheme.TextColor;
+                    label.BackColor = Color.Transparent;
+                }
+            }
 
             _versionInputToolTip.SetToolTip(checkBoxIgnoreCopyErrors, "Skip files that cannot be copied");
 
@@ -28,6 +52,29 @@ namespace EasyVersionBackup
             {
                 dataGridViewVersions.Columns[1].ToolTipText = "Backup version";
             }
+
+            checkBoxIgnoreCopyErrors.BackColor = ModernTheme.WindowBackColor;
+            checkBoxIgnoreCopyErrors.ForeColor = ModernTheme.TextColor;
+            checkBoxIgnoreCopyErrors.UseVisualStyleBackColor = false;
+
+            dataGridViewVersions.BorderStyle = BorderStyle.None;
+            dataGridViewVersions.BackgroundColor = ModernTheme.WindowBackColor;
+            dataGridViewVersions.GridColor = ModernTheme.ControlBackColor;
+            dataGridViewVersions.EnableHeadersVisualStyles = false;
+            dataGridViewVersions.ColumnHeadersDefaultCellStyle.BackColor = ModernTheme.ControlBackColor;
+            dataGridViewVersions.ColumnHeadersDefaultCellStyle.ForeColor = ModernTheme.TextColor;
+            dataGridViewVersions.ColumnHeadersDefaultCellStyle.SelectionBackColor = ModernTheme.ControlBackColor;
+            dataGridViewVersions.ColumnHeadersDefaultCellStyle.SelectionForeColor = ModernTheme.TextColor;
+            dataGridViewVersions.ColumnHeadersDefaultCellStyle.Font = new Font(ModernTheme.FontFamilyName, ModernTheme.HeaderFontSize, FontStyle.Bold);
+            dataGridViewVersions.DefaultCellStyle.BackColor = ModernTheme.TitleBarBackColor;
+            dataGridViewVersions.DefaultCellStyle.ForeColor = ModernTheme.TextColor;
+            dataGridViewVersions.DefaultCellStyle.SelectionBackColor = ModernTheme.AccentColor;
+            dataGridViewVersions.DefaultCellStyle.SelectionForeColor = ModernTheme.DarkTextColor;
+            dataGridViewVersions.AlternatingRowsDefaultCellStyle.BackColor = ModernTheme.WindowBackColor;
+            dataGridViewVersions.AlternatingRowsDefaultCellStyle.ForeColor = ModernTheme.TextColor;
+
+            StyleModernButton(buttonOk, ModernTheme.AccentColor, ModernTheme.DarkTextColor, false, ModernTheme.DialogPrimaryButtonTextPadding);
+            StyleModernButton(buttonCancel, ModernTheme.ControlBackColor, ModernTheme.TextColor, true, ModernTheme.DialogSecondaryButtonTextPadding);
 
             ResultItems = new List<BackupVersionItem>();
             checkBoxIgnoreCopyErrors.Checked = ignoreCopyErrors;
@@ -52,9 +99,138 @@ namespace EasyVersionBackup
             buttonCancel.Left = ClientSize.Width - buttonCancel.Width - 12;
             buttonOk.Left = buttonCancel.Left - buttonOk.Width - 8;
 
-            Height = buttonOk.Bottom + 60;
+            Height = buttonOk.Bottom + 12;
 
             PositionBottomRight();
+        }
+        private void OffsetExistingControlsForModernTitleBar(int offsetY)
+        {
+            ClientSize = new Size(ClientSize.Width, ClientSize.Height + offsetY);
+
+            foreach (Control control in Controls)
+            {
+                control.Top += offsetY;
+            }
+        }
+        private void InitializeModernTitleBar()
+        {
+            Panel panelModernTitleBar = new Panel
+            {
+                Name = "panelModernTitleBar",
+                Dock = DockStyle.Top,
+                Height = 32,
+                BackColor = ModernTheme.TitleBarBackColor
+            };
+
+            PictureBox pictureBoxModernTitleIcon = new PictureBox
+            {
+                Name = "pictureBoxModernTitleIcon",
+                Location = new Point(8, 8),
+                Size = new Size(16, 16),
+                SizeMode = PictureBoxSizeMode.StretchImage,
+                Image = Icon?.ToBitmap(),
+                BackColor = Color.Transparent
+            };
+
+            Label labelModernTitle = new Label
+            {
+                Name = "labelModernTitle",
+                Text = Text,
+                AutoSize = false,
+                Location = new Point(30, 0),
+                Size = new Size(ClientSize.Width - 66, 32),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = ModernTheme.TextColor,
+                Font = new Font(ModernTheme.FontFamilyName, ModernTheme.TitleFontSize, FontStyle.Regular),
+                BackColor = Color.Transparent
+            };
+
+            Button buttonModernClose = CreateModernTitleBarButton("buttonModernClose", new Point(ClientSize.Width - 36, 0));
+            buttonModernClose.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonModernClose.MouseEnter += (sender, e) => buttonModernClose.BackColor = ModernTheme.CloseButtonHoverColor;
+            buttonModernClose.MouseLeave += (sender, e) => buttonModernClose.BackColor = ModernTheme.TitleBarBackColor;
+            buttonModernClose.Click += (sender, e) => Close();
+
+            panelModernTitleBar.MouseDown += ModernTitleBar_MouseDown;
+            pictureBoxModernTitleIcon.MouseDown += ModernTitleBar_MouseDown;
+            labelModernTitle.MouseDown += ModernTitleBar_MouseDown;
+
+            panelModernTitleBar.Controls.Add(pictureBoxModernTitleIcon);
+            panelModernTitleBar.Controls.Add(labelModernTitle);
+            panelModernTitleBar.Controls.Add(buttonModernClose);
+
+            Controls.Add(panelModernTitleBar);
+            panelModernTitleBar.BringToFront();
+        }
+        private Button CreateModernTitleBarButton(string name, Point location)
+        {
+            Button button = new Button
+            {
+                Name = name,
+                Text = string.Empty,
+                Size = new Size(36, 32),
+                Location = location,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = ModernTheme.TitleBarBackColor,
+                ForeColor = ModernTheme.TextColor,
+                Cursor = Cursors.Hand,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Padding = Padding.Empty,
+                UseVisualStyleBackColor = false
+            };
+
+            button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.MouseOverBackColor = ModernTheme.ControlBackColor;
+            button.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
+
+            button.Paint += (sender, e) =>
+            {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+                using Pen pen = new Pen(ModernTheme.TextColor, 1.4F)
+                {
+                    StartCap = System.Drawing.Drawing2D.LineCap.Square,
+                    EndCap = System.Drawing.Drawing2D.LineCap.Square
+                };
+
+                e.Graphics.DrawLine(pen, 13, 11, 23, 21);
+                e.Graphics.DrawLine(pen, 23, 11, 13, 21);
+            };
+
+            return button;
+        }
+        private void ModernTitleBar_MouseDown(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left)
+            {
+                return;
+            }
+
+            const int wmNclbuttondown = 0xA1;
+            const int htCaption = 0x2;
+
+            ReleaseCapture();
+            SendMessage(Handle, wmNclbuttondown, htCaption, 0);
+        }
+        private void StyleModernButton(Button button, Color backColor, Color foreColor, bool showBorder, Padding textPadding)
+        {
+            button.Size = ModernTheme.DialogButtonSize;
+            button.FlatStyle = FlatStyle.Flat;
+            button.BackColor = backColor;
+            button.ForeColor = foreColor;
+            button.Cursor = Cursors.Hand;
+            button.TextAlign = ContentAlignment.MiddleCenter;
+            button.Padding = textPadding;
+            button.UseCompatibleTextRendering = true;
+            button.UseVisualStyleBackColor = false;
+
+            button.FlatAppearance.BorderColor = ModernTheme.AccentColor;
+            button.FlatAppearance.BorderSize = showBorder ? 1 : 0;
+            button.FlatAppearance.MouseOverBackColor = showBorder
+                ? ModernTheme.ControlHoverBackColor
+                : ModernTheme.AccentHoverColor;
+            button.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
         }
 
         private void PositionBottomRight()

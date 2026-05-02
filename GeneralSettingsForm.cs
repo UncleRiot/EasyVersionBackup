@@ -1,7 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
+
+
 
 namespace EasyVersionBackup
 {
@@ -9,16 +13,34 @@ namespace EasyVersionBackup
     {
         private readonly ToolTip _settingsHintToolTip = new ToolTip();
         private PictureBox? _activeHintOwner;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool ReleaseCapture();
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
+
         public AppSettings ResultSettings { get; private set; }
 
         public GeneralSettingsForm(AppSettings settings)
         {
             InitializeComponent();
 
+            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            FormBorderStyle = FormBorderStyle.None;
+            BackColor = ModernTheme.WindowBackColor;
+            Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
+            DoubleBuffered = true;
+            ModernWindowFrame.Apply(this);
+
+            OffsetExistingControlsForModernTitleBar(32);
+            InitializeModernTitleBar();
+
             InitializeExclusionColumn();
             InitializeAutoBackupControls();
             InitializeSettingsHintIcons();
             InitializeSettingsControlToolTips();
+            ApplyModernSettingsStyle();
 
             this.MouseDown += GeneralSettingsForm_MouseDown;
 
@@ -28,6 +50,211 @@ namespace EasyVersionBackup
 
             ResultSettings = CloneSettings(settings);
             ApplySettingsToUi(ResultSettings);
+        }
+        private void OffsetExistingControlsForModernTitleBar(int offsetY)
+        {
+            ClientSize = new Size(ClientSize.Width, ClientSize.Height + offsetY);
+
+            foreach (Control control in Controls)
+            {
+                control.Top += offsetY;
+            }
+        }
+        private void InitializeModernTitleBar()
+        {
+            Panel panelModernTitleBar = new Panel
+            {
+                Name = "panelModernTitleBar",
+                Dock = DockStyle.Top,
+                Height = 32,
+                BackColor = ModernTheme.TitleBarBackColor
+            };
+
+            PictureBox pictureBoxModernTitleIcon = new PictureBox
+            {
+                Name = "pictureBoxModernTitleIcon",
+                Location = new Point(8, 8),
+                Size = new Size(16, 16),
+                SizeMode = PictureBoxSizeMode.StretchImage,
+                Image = Icon?.ToBitmap(),
+                BackColor = Color.Transparent
+            };
+
+            Label labelModernTitle = new Label
+            {
+                Name = "labelModernTitle",
+                Text = "Settings",
+                AutoSize = false,
+                Location = new Point(30, 0),
+                Size = new Size(ClientSize.Width - 66, 32),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = ModernTheme.TextColor,
+                Font = new Font(ModernTheme.FontFamilyName, ModernTheme.TitleFontSize, FontStyle.Regular),
+                BackColor = Color.Transparent
+            };
+
+            Button buttonModernClose = CreateModernTitleBarButton("buttonModernClose", "Close", new Point(ClientSize.Width - 36, 0));
+            buttonModernClose.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonModernClose.MouseEnter += (sender, e) => buttonModernClose.BackColor = ModernTheme.CloseButtonHoverColor;
+            buttonModernClose.MouseLeave += (sender, e) => buttonModernClose.BackColor = ModernTheme.TitleBarBackColor;
+            buttonModernClose.Click += (sender, e) => Close();
+
+            panelModernTitleBar.MouseDown += ModernTitleBar_MouseDown;
+            pictureBoxModernTitleIcon.MouseDown += ModernTitleBar_MouseDown;
+            labelModernTitle.MouseDown += ModernTitleBar_MouseDown;
+
+            panelModernTitleBar.Controls.Add(pictureBoxModernTitleIcon);
+            panelModernTitleBar.Controls.Add(labelModernTitle);
+            panelModernTitleBar.Controls.Add(buttonModernClose);
+
+            Controls.Add(panelModernTitleBar);
+            panelModernTitleBar.BringToFront();
+        }
+        private Button CreateModernTitleBarButton(string name, string text, Point location)
+        {
+            Button button = new Button
+            {
+                Name = name,
+                Text = string.Empty,
+                Tag = text,
+                Size = new Size(36, 32),
+                Location = location,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = ModernTheme.TitleBarBackColor,
+                ForeColor = ModernTheme.TextColor,
+                Cursor = Cursors.Hand,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Padding = Padding.Empty,
+                UseVisualStyleBackColor = false
+            };
+
+            button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.MouseOverBackColor = ModernTheme.ControlBackColor;
+            button.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
+
+            button.Paint += (sender, e) =>
+            {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+                using Pen pen = new Pen(ModernTheme.TextColor, 1.4F)
+                {
+                    StartCap = System.Drawing.Drawing2D.LineCap.Square,
+                    EndCap = System.Drawing.Drawing2D.LineCap.Square
+                };
+
+                if (button.Tag?.ToString() == "Close")
+                {
+                    e.Graphics.DrawLine(pen, 13, 11, 23, 21);
+                    e.Graphics.DrawLine(pen, 23, 11, 13, 21);
+                }
+            };
+
+            return button;
+        }
+        private void ApplyModernSettingsStyle()
+        {
+            foreach (Control control in Controls)
+            {
+                ApplyModernControlStyle(
+                    control,
+                    ModernTheme.WindowBackColor,
+                    ModernTheme.TitleBarBackColor,
+                    ModernTheme.ControlBackColor,
+                    ModernTheme.TextColor,
+                    ModernTheme.AccentColor);
+            }
+
+            StyleModernButton(buttonAddRow, ModernTheme.ControlBackColor, ModernTheme.TextColor, ModernTheme.AccentColor);
+            StyleModernButton(buttonRemoveRow, ModernTheme.ControlBackColor, ModernTheme.TextColor, ModernTheme.AccentColor);
+            StyleModernButton(buttonOk, ModernTheme.AccentColor, ModernTheme.DarkTextColor, ModernTheme.AccentColor);
+            StyleModernButton(buttonCancel, ModernTheme.ControlBackColor, ModernTheme.TextColor, ModernTheme.AccentColor);
+
+            dataGridViewPaths.BorderStyle = BorderStyle.None;
+            dataGridViewPaths.BackgroundColor = ModernTheme.WindowBackColor;
+            dataGridViewPaths.GridColor = ModernTheme.ControlBackColor;
+            dataGridViewPaths.EnableHeadersVisualStyles = false;
+
+            dataGridViewPaths.ColumnHeadersDefaultCellStyle.BackColor = ModernTheme.ControlBackColor;
+            dataGridViewPaths.ColumnHeadersDefaultCellStyle.ForeColor = ModernTheme.TextColor;
+            dataGridViewPaths.ColumnHeadersDefaultCellStyle.SelectionBackColor = ModernTheme.ControlBackColor;
+            dataGridViewPaths.ColumnHeadersDefaultCellStyle.SelectionForeColor = ModernTheme.TextColor;
+            dataGridViewPaths.ColumnHeadersDefaultCellStyle.Font = new Font(ModernTheme.FontFamilyName, ModernTheme.HeaderFontSize, FontStyle.Bold);
+
+            dataGridViewPaths.DefaultCellStyle.BackColor = ModernTheme.TitleBarBackColor;
+            dataGridViewPaths.DefaultCellStyle.ForeColor = ModernTheme.TextColor;
+            dataGridViewPaths.DefaultCellStyle.SelectionBackColor = ModernTheme.AccentColor;
+            dataGridViewPaths.DefaultCellStyle.SelectionForeColor = ModernTheme.DarkTextColor;
+
+            dataGridViewPaths.AlternatingRowsDefaultCellStyle.BackColor = ModernTheme.WindowBackColor;
+            dataGridViewPaths.AlternatingRowsDefaultCellStyle.ForeColor = ModernTheme.TextColor;
+        }
+        private void ApplyModernControlStyle(Control control, Color windowBackColor, Color panelBackColor, Color controlBackColor, Color textColor, Color accentColor)
+        {
+            if (control.Name == "panelModernTitleBar")
+            {
+                return;
+            }
+
+            if (control is Label)
+            {
+                control.BackColor = Color.Transparent;
+                control.ForeColor = textColor;
+            }
+            else if (control is CheckBox checkBox)
+            {
+                checkBox.BackColor = windowBackColor;
+                checkBox.ForeColor = textColor;
+                checkBox.UseVisualStyleBackColor = false;
+            }
+            else if (control is TextBox textBox)
+            {
+                textBox.BackColor = panelBackColor;
+                textBox.ForeColor = textColor;
+                textBox.BorderStyle = BorderStyle.FixedSingle;
+            }
+            else if (control is ComboBox comboBox)
+            {
+                comboBox.BackColor = panelBackColor;
+                comboBox.ForeColor = textColor;
+                comboBox.FlatStyle = FlatStyle.Flat;
+            }
+            else if (control is DataGridView)
+            {
+                control.BackColor = windowBackColor;
+                control.ForeColor = textColor;
+            }
+
+            foreach (Control childControl in control.Controls)
+            {
+                ApplyModernControlStyle(childControl, windowBackColor, panelBackColor, controlBackColor, textColor, accentColor);
+            }
+        }
+        private void StyleModernButton(Button button, Color backColor, Color foreColor, Color accentColor)
+        {
+            button.FlatStyle = FlatStyle.Flat;
+            button.BackColor = backColor;
+            button.ForeColor = foreColor;
+            button.Cursor = Cursors.Hand;
+            button.UseVisualStyleBackColor = false;
+
+            button.FlatAppearance.BorderColor = accentColor;
+            button.FlatAppearance.BorderSize = 1;
+            button.FlatAppearance.MouseOverBackColor = ModernTheme.ControlHoverBackColor;
+            button.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
+        }
+        private void ModernTitleBar_MouseDown(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left)
+            {
+                return;
+            }
+
+            const int wmNclbuttondown = 0xA1;
+            const int htCaption = 0x2;
+
+            ReleaseCapture();
+            SendMessage(Handle, wmNclbuttondown, htCaption, 0);
         }
 
         private void checkBoxDummy1_CheckedChanged(object? sender, EventArgs e)
@@ -75,8 +302,50 @@ namespace EasyVersionBackup
         }
         private void InitializeExclusionColumn()
         {
+            if (dataGridViewPaths.Columns.Contains("ColumnSourceBrowse"))
+            {
+                dataGridViewPaths.Columns["ColumnSourceBrowse"].HeaderText = "";
+                dataGridViewPaths.Columns["ColumnSourceBrowse"].Width = 35;
+                dataGridViewPaths.Columns["ColumnSourceBrowse"].MinimumWidth = 35;
+                dataGridViewPaths.Columns["ColumnSourceBrowse"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+
+                if (dataGridViewPaths.Columns["ColumnSourceBrowse"] is DataGridViewButtonColumn columnSourceBrowse)
+                {
+                    columnSourceBrowse.Text = string.Empty;
+                    columnSourceBrowse.UseColumnTextForButtonValue = false;
+                    columnSourceBrowse.FlatStyle = FlatStyle.Flat;
+                }
+            }
+
+            if (dataGridViewPaths.Columns.Contains("ColumnTargetBrowse"))
+            {
+                dataGridViewPaths.Columns["ColumnTargetBrowse"].HeaderText = "";
+                dataGridViewPaths.Columns["ColumnTargetBrowse"].Width = 35;
+                dataGridViewPaths.Columns["ColumnTargetBrowse"].MinimumWidth = 35;
+                dataGridViewPaths.Columns["ColumnTargetBrowse"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+
+                if (dataGridViewPaths.Columns["ColumnTargetBrowse"] is DataGridViewButtonColumn columnTargetBrowse)
+                {
+                    columnTargetBrowse.Text = string.Empty;
+                    columnTargetBrowse.UseColumnTextForButtonValue = false;
+                    columnTargetBrowse.FlatStyle = FlatStyle.Flat;
+                }
+            }
+
             if (dataGridViewPaths.Columns.Contains("ColumnSourceExclusions"))
             {
+                dataGridViewPaths.Columns["ColumnSourceExclusions"].HeaderText = "";
+                dataGridViewPaths.Columns["ColumnSourceExclusions"].Width = 35;
+                dataGridViewPaths.Columns["ColumnSourceExclusions"].MinimumWidth = 35;
+                dataGridViewPaths.Columns["ColumnSourceExclusions"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+
+                if (dataGridViewPaths.Columns["ColumnSourceExclusions"] is DataGridViewButtonColumn existingColumnSourceExclusions)
+                {
+                    existingColumnSourceExclusions.Text = string.Empty;
+                    existingColumnSourceExclusions.UseColumnTextForButtonValue = false;
+                    existingColumnSourceExclusions.FlatStyle = FlatStyle.Flat;
+                }
+
                 return;
             }
 
@@ -84,16 +353,13 @@ namespace EasyVersionBackup
             {
                 HeaderText = "",
                 Name = "ColumnSourceExclusions",
-                Text = "\uE71C",
-                UseColumnTextForButtonValue = true,
+                Text = string.Empty,
+                UseColumnTextForButtonValue = false,
                 Width = 35,
                 MinimumWidth = 35,
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
                 FlatStyle = FlatStyle.Flat
             };
-
-            columnSourceExclusions.DefaultCellStyle.Font = new Font("Segoe MDL2 Assets", 9F);
-            columnSourceExclusions.DefaultCellStyle.ForeColor = System.Drawing.Color.Black;
 
             int sourceBrowseColumnIndex = dataGridViewPaths.Columns["ColumnSourceBrowse"].Index;
             dataGridViewPaths.Columns.Insert(sourceBrowseColumnIndex + 1, columnSourceExclusions);
@@ -192,6 +458,7 @@ namespace EasyVersionBackup
 
             return pictureBox;
         }
+
         private Bitmap CreateSettingsHintIconBitmap()
         {
             Bitmap bitmap = new Bitmap(18, 18);
@@ -199,25 +466,28 @@ namespace EasyVersionBackup
             using Graphics graphics = Graphics.FromImage(bitmap);
             graphics.Clear(Color.Transparent);
 
-            using SolidBrush brush = new SolidBrush(Color.FromArgb(0, 120, 215));
+            using SolidBrush brush = new SolidBrush(ModernTheme.AccentColor);
             graphics.FillEllipse(brush, 1, 1, 16, 16);
 
-            using Font font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            // hint icon font settings start
+            using Font font = new Font(ModernTheme.FontFamilyName, 8F, FontStyle.Regular);
             Size textSize = TextRenderer.MeasureText("?", font);
 
-            int x = (18 - textSize.Width) / 2 + 5; // ← HIER erhöhen (z.B. +2, +3)
-            int y = (18 - textSize.Height) / 2 - 0;
+            int x = (18 - textSize.Width) / 2 + 5;
+            int y = (18 - textSize.Height) / 2;
+            // hint icon font settings end
 
             TextRenderer.DrawText(
                 graphics,
                 "?",
                 font,
                 new Point(x, y),
-                Color.White,
+                ModernTheme.DarkTextColor,
                 TextFormatFlags.NoPadding);
 
             return bitmap;
         }
+
         private void dataGridViewPaths_KeyDown(object? sender, KeyEventArgs e)
         {
             if (!e.Control || e.KeyCode != Keys.C)
@@ -401,7 +671,47 @@ namespace EasyVersionBackup
                 return;
             }
 
+            if (ConfiguredSettingsPathRowContainsData(dataGridViewPaths.CurrentRow))
+            {
+                DialogResult result = ShowModernConfirmationDialog(
+                    "Remove path",
+                    "The selected path contains configured data. Do you really want to remove it?");
+
+                if (result != DialogResult.Yes)
+                {
+                    return;
+                }
+            }
+
             dataGridViewPaths.Rows.Remove(dataGridViewPaths.CurrentRow);
+        }
+        private DialogResult ShowModernConfirmationDialog(string title, string message)
+        {
+            return ModernConfirmationDialog.Show(this, title, message);
+        }
+        private bool ConfiguredSettingsPathRowContainsData(DataGridViewRow row)
+        {
+            string sourceDirectory = row.Cells["ColumnSourceDirectory"].Value?.ToString()?.Trim() ?? string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(sourceDirectory))
+            {
+                return true;
+            }
+
+            string targetDirectory = row.Cells["ColumnTargetDirectory"].Value?.ToString()?.Trim() ?? string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(targetDirectory))
+            {
+                return true;
+            }
+
+            if (row.Tag is List<string> excludedPaths &&
+                excludedPaths.Any(excludedPath => !string.IsNullOrWhiteSpace(excludedPath)))
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private void buttonOk_Click(object sender, EventArgs e)
@@ -458,17 +768,11 @@ namespace EasyVersionBackup
 
             if (dataGridViewPaths.Columns[e.ColumnIndex].Name == "ColumnSourceBrowse")
             {
-                using FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog();
-
                 string currentValue = dataGridViewPaths.Rows[e.RowIndex].Cells["ColumnSourceDirectory"].Value?.ToString() ?? string.Empty;
-                if (Directory.Exists(currentValue))
-                {
-                    folderBrowserDialog.SelectedPath = currentValue;
-                }
 
-                if (folderBrowserDialog.ShowDialog(this) == DialogResult.OK)
+                if (ModernFolderBrowserDialog.Show(this, "Select source directory", currentValue, out string selectedPath))
                 {
-                    dataGridViewPaths.Rows[e.RowIndex].Cells["ColumnSourceDirectory"].Value = folderBrowserDialog.SelectedPath;
+                    dataGridViewPaths.Rows[e.RowIndex].Cells["ColumnSourceDirectory"].Value = selectedPath;
                 }
             }
 
@@ -487,17 +791,11 @@ namespace EasyVersionBackup
 
             if (dataGridViewPaths.Columns[e.ColumnIndex].Name == "ColumnTargetBrowse")
             {
-                using FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog();
-
                 string currentValue = dataGridViewPaths.Rows[e.RowIndex].Cells["ColumnTargetDirectory"].Value?.ToString() ?? string.Empty;
-                if (Directory.Exists(currentValue))
-                {
-                    folderBrowserDialog.SelectedPath = currentValue;
-                }
 
-                if (folderBrowserDialog.ShowDialog(this) == DialogResult.OK)
+                if (ModernFolderBrowserDialog.Show(this, "Select target directory", currentValue, out string selectedPath))
                 {
-                    dataGridViewPaths.Rows[e.RowIndex].Cells["ColumnTargetDirectory"].Value = folderBrowserDialog.SelectedPath;
+                    dataGridViewPaths.Rows[e.RowIndex].Cells["ColumnTargetDirectory"].Value = selectedPath;
                 }
             }
         }
@@ -508,56 +806,80 @@ namespace EasyVersionBackup
                 return;
             }
 
-            if (dataGridViewPaths.Columns[e.ColumnIndex].Name != "ColumnSourceExclusions")
+            string columnName = dataGridViewPaths.Columns[e.ColumnIndex].Name;
+
+            if (columnName != "ColumnSourceBrowse" &&
+                columnName != "ColumnSourceExclusions" &&
+                columnName != "ColumnTargetBrowse")
             {
                 return;
             }
 
             e.Paint(e.CellBounds, DataGridViewPaintParts.All & ~DataGridViewPaintParts.ContentForeground);
 
-            bool hasExclusions = dataGridViewPaths.Rows[e.RowIndex].Tag is List<string> excludedPaths
-                && excludedPaths.Any(excludedPath => !string.IsNullOrWhiteSpace(excludedPath));
-
             bool isSelected = (e.State & DataGridViewElementStates.Selected) == DataGridViewElementStates.Selected;
+            Color outlineColor = isSelected ? Color.FromArgb(23, 26, 33) : Color.FromArgb(199, 213, 224);
 
-            int centerX = e.CellBounds.Left + e.CellBounds.Width / 2;
-            int centerY = e.CellBounds.Top + e.CellBounds.Height / 2;
-
-            Point[] funnelPoints =
+            if (columnName == "ColumnSourceBrowse" || columnName == "ColumnTargetBrowse")
             {
-        new Point(centerX - 8, centerY - 7),
-        new Point(centerX + 8, centerY - 7),
-        new Point(centerX + 3, centerY - 1),
-        new Point(centerX + 1, centerY + 7),
-        new Point(centerX - 1, centerY + 7),
-        new Point(centerX - 3, centerY - 1)
-    };
-
-            System.Drawing.Drawing2D.SmoothingMode previousSmoothingMode = e.Graphics.SmoothingMode;
-            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-
-            if (hasExclusions)
-            {
-                using SolidBrush brush = new SolidBrush(System.Drawing.Color.LimeGreen);
-                using Pen pen = new Pen(System.Drawing.Color.Black, 1F);
-
-                e.Graphics.FillPolygon(brush, funnelPoints);
-                e.Graphics.DrawPolygon(pen, funnelPoints);
-            }
-            else
-            {
-                System.Drawing.Color outlineColor = isSelected
-                    ? System.Drawing.Color.White
-                    : System.Drawing.Color.Black;
-
-                using Pen pen = new Pen(outlineColor, 1F);
-
-                e.Graphics.DrawPolygon(pen, funnelPoints);
+                DrawSettingsBrowseIcon(e.Graphics, e.CellBounds, outlineColor);
             }
 
-            e.Graphics.SmoothingMode = previousSmoothingMode;
+            if (columnName == "ColumnSourceExclusions")
+            {
+                bool hasExclusions = dataGridViewPaths.Rows[e.RowIndex].Tag is List<string> excludedPaths
+                    && excludedPaths.Any(excludedPath => !string.IsNullOrWhiteSpace(excludedPath));
+
+                int centerX = e.CellBounds.Left + e.CellBounds.Width / 2;
+                int centerY = e.CellBounds.Top + e.CellBounds.Height / 2;
+
+                Point[] funnelPoints =
+                {
+            new Point(centerX - 8, centerY - 7),
+            new Point(centerX + 8, centerY - 7),
+            new Point(centerX + 3, centerY - 1),
+            new Point(centerX + 1, centerY + 7),
+            new Point(centerX - 1, centerY + 7),
+            new Point(centerX - 3, centerY - 1)
+        };
+
+                System.Drawing.Drawing2D.SmoothingMode previousSmoothingMode = e.Graphics.SmoothingMode;
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+                if (hasExclusions)
+                {
+                    using SolidBrush brush = new SolidBrush(Color.LimeGreen);
+                    using Pen pen = new Pen(Color.FromArgb(23, 26, 33), 1F);
+
+                    e.Graphics.FillPolygon(brush, funnelPoints);
+                    e.Graphics.DrawPolygon(pen, funnelPoints);
+                }
+                else
+                {
+                    using Pen pen = new Pen(outlineColor, 1F);
+
+                    e.Graphics.DrawPolygon(pen, funnelPoints);
+                }
+
+                e.Graphics.SmoothingMode = previousSmoothingMode;
+            }
 
             e.Handled = true;
+        }
+        private void DrawSettingsBrowseIcon(Graphics graphics, Rectangle cellBounds, Color outlineColor)
+        {
+            int centerX = cellBounds.Left + cellBounds.Width / 2;
+            int centerY = cellBounds.Top + cellBounds.Height / 2 - 1;
+
+            System.Drawing.Drawing2D.SmoothingMode previousSmoothingMode = graphics.SmoothingMode;
+            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            using Pen pen = new Pen(outlineColor, 1.6F);
+
+            graphics.DrawEllipse(pen, centerX - 6, centerY - 6, 9, 9);
+            graphics.DrawLine(pen, centerX + 1, centerY + 1, centerX + 7, centerY + 7);
+
+            graphics.SmoothingMode = previousSmoothingMode;
         }
         private void UpdateExclusionButtonStyle(int rowIndex)
         {

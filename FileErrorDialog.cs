@@ -15,13 +15,17 @@ namespace EasyVersionBackup
             MinimizeBox = false;
             ShowInTaskbar = false;
             ClientSize = new Size(600, 200);
+            BackColor = ModernTheme.WindowBackColor;
+            Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
+            ModernWindowFrame.Apply(this);
 
             PictureBox pictureBoxIcon = new PictureBox
             {
                 Location = new Point(20, 20),
                 Size = new Size(32, 32),
                 Image = SystemIcons.Warning.ToBitmap(),
-                SizeMode = PictureBoxSizeMode.StretchImage
+                SizeMode = PictureBoxSizeMode.StretchImage,
+                BackColor = Color.Transparent
             };
 
             TextBox textBoxMessage = new TextBox
@@ -31,8 +35,9 @@ namespace EasyVersionBackup
                 Multiline = true,
                 ReadOnly = true,
                 ScrollBars = ScrollBars.Vertical,
-                BorderStyle = BorderStyle.None,
-                BackColor = SystemColors.Control,
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = ModernTheme.TitleBarBackColor,
+                ForeColor = ModernTheme.TextColor,
                 Text = errorMessage
             };
 
@@ -68,6 +73,11 @@ namespace EasyVersionBackup
                 Location = new Point(480, 140)
             };
 
+            StyleModernButton(buttonAbort, ModernTheme.ControlBackColor, ModernTheme.TextColor, true);
+            StyleModernButton(buttonRetry, ModernTheme.AccentColor, ModernTheme.DarkTextColor, false);
+            StyleModernButton(buttonIgnore, ModernTheme.ControlBackColor, ModernTheme.TextColor, true);
+            StyleModernButton(buttonIgnoreAll, ModernTheme.ControlBackColor, ModernTheme.TextColor, true);
+
             Controls.Add(pictureBoxIcon);
             Controls.Add(textBoxMessage);
             Controls.Add(buttonAbort);
@@ -78,5 +88,21 @@ namespace EasyVersionBackup
             AcceptButton = buttonRetry;
             CancelButton = buttonAbort;
         }
+        private void StyleModernButton(Button button, Color backColor, Color foreColor, bool showBorder)
+        {
+            button.FlatStyle = FlatStyle.Flat;
+            button.BackColor = backColor;
+            button.ForeColor = foreColor;
+            button.Cursor = Cursors.Hand;
+            button.UseVisualStyleBackColor = false;
+
+            button.FlatAppearance.BorderColor = ModernTheme.AccentColor;
+            button.FlatAppearance.BorderSize = showBorder ? 1 : 0;
+            button.FlatAppearance.MouseOverBackColor = showBorder
+                ? ModernTheme.ControlHoverBackColor
+                : ModernTheme.AccentHoverColor;
+            button.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
+        }
     }
+
 }
