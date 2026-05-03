@@ -1,4 +1,10 @@
-﻿using System;
+﻿// Design-Rule / UI consistency:
+// Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
+// Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
+// 03.05.2026 /dc
+
+
+using System;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -6,11 +12,19 @@ namespace EasyVersionBackup
 {
     public sealed class ModernMessageDialog : Form
     {
+        private const int WmNclButtonDown = 0xA1;
+        private const int HtCaption = 0x2;
+        private const int WmNcHitTest = 0x84;
+        private const int HtBottomRight = 17;
+
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern bool ReleaseCapture();
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
+
+        private readonly Label labelMessage;
+        private readonly Button buttonOk;
 
         public ModernMessageDialog(Form owner, string title, string message)
         {
@@ -20,7 +34,8 @@ namespace EasyVersionBackup
             MaximizeBox = false;
             MinimizeBox = false;
             ShowInTaskbar = false;
-            ClientSize = new Size(460, 170);
+            ClientSize = ModernTheme.MessageDialogDefaultSize;
+            MinimumSize = ModernTheme.MessageDialogMinimumSize;
             BackColor = ModernTheme.WindowBackColor;
             Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
             DoubleBuffered = true;
@@ -29,37 +44,24 @@ namespace EasyVersionBackup
 
             InitializeModernTitleBar();
 
-            Label labelMessage = new Label
+            labelMessage = new Label
             {
+                Name = "labelMessage",
                 Text = message,
                 AutoSize = false,
-                Location = new Point(18, 50),
-                Size = new Size(ClientSize.Width - 36, 62),
+                Location = new Point(ModernTheme.MessageDialogContentLeft, ModernTheme.MessageDialogContentTop),
+                Size = new Size(
+                    ClientSize.Width - ModernTheme.MessageDialogContentLeft - ModernTheme.MessageDialogContentRightMargin,
+                    ClientSize.Height - ModernTheme.MessageDialogContentTop - ModernTheme.MessageDialogButtonAreaHeight),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 ForeColor = ModernTheme.TextColor,
                 BackColor = Color.Transparent,
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
-            Button buttonOk = new Button
-            {
-                Text = "OK",
-                DialogResult = DialogResult.OK,
-                Size = ModernTheme.DialogButtonSize,
-                Location = new Point(ClientSize.Width - ModernTheme.DialogButtonSize.Width - 18, 124),
-                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = ModernTheme.AccentColor,
-                ForeColor = ModernTheme.DarkTextColor,
-                Cursor = Cursors.Hand,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Padding = ModernTheme.DialogPrimaryButtonTextPadding,
-                UseCompatibleTextRendering = true,
-                UseVisualStyleBackColor = false
-            };
-
-            buttonOk.FlatAppearance.BorderSize = 0;
-            buttonOk.FlatAppearance.MouseOverBackColor = ModernTheme.AccentHoverColor;
-            buttonOk.FlatAppearance.MouseDownBackColor = ModernTheme.ControlBackColor;
+            buttonOk = ModernTheme.CreateDialogPrimaryButton("buttonOk", "OK");
+            buttonOk.DialogResult = DialogResult.OK;
+            ModernTheme.PositionSingleDialogButton(this, buttonOk, true);
 
             Controls.Add(labelMessage);
             Controls.Add(buttonOk);
@@ -74,21 +76,46 @@ namespace EasyVersionBackup
             return dialog.ShowDialog(owner);
         }
 
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            ModernTheme.DrawResizeGrip(e.Graphics, ClientSize);
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WmNcHitTest)
+            {
+                base.WndProc(ref m);
+
+                Point cursorPosition = PointToClient(Cursor.Position);
+
+                if (ModernTheme.IsInResizeGripArea(ClientSize, cursorPosition))
+                {
+                    m.Result = HtBottomRight;
+                }
+
+                return;
+            }
+
+            base.WndProc(ref m);
+        }
+
         private void InitializeModernTitleBar()
         {
             Panel panelModernTitleBar = new Panel
             {
                 Name = "panelModernTitleBar",
                 Dock = DockStyle.Top,
-                Height = 32,
+                Height = ModernTheme.TitleBarHeight,
                 BackColor = ModernTheme.TitleBarBackColor
             };
 
             PictureBox pictureBoxModernTitleIcon = new PictureBox
             {
                 Name = "pictureBoxModernTitleIcon",
-                Location = new Point(8, 8),
-                Size = new Size(16, 16),
+                Location = new Point(ModernTheme.TitleBarIconLeft, ModernTheme.TitleBarIconTop),
+                Size = new Size(ModernTheme.TitleBarIconSize, ModernTheme.TitleBarIconSize),
                 SizeMode = PictureBoxSizeMode.StretchImage,
                 Image = Icon?.ToBitmap(),
                 BackColor = Color.Transparent
@@ -99,8 +126,8 @@ namespace EasyVersionBackup
                 Name = "labelModernTitle",
                 Text = Text,
                 AutoSize = false,
-                Location = new Point(30, 0),
-                Size = new Size(ClientSize.Width - 66, 32),
+                Location = new Point(ModernTheme.TitleBarTextLeft, 0),
+                Size = new Size(ClientSize.Width - 66, ModernTheme.TitleBarHeight),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = ModernTheme.TextColor,
@@ -108,7 +135,10 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Button buttonModernClose = CreateModernTitleBarButton("buttonModernClose", new Point(ClientSize.Width - 36, 0));
+            Button buttonModernClose = CreateModernTitleBarButton(
+                "buttonModernClose",
+                new Point(ClientSize.Width - ModernTheme.TitleBarButtonSize.Width, 0));
+
             buttonModernClose.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttonModernClose.MouseEnter += (sender, e) => buttonModernClose.BackColor = ModernTheme.CloseButtonHoverColor;
             buttonModernClose.MouseLeave += (sender, e) => buttonModernClose.BackColor = ModernTheme.TitleBarBackColor;
@@ -136,7 +166,7 @@ namespace EasyVersionBackup
             {
                 Name = name,
                 Text = string.Empty,
-                Size = new Size(36, 32),
+                Size = ModernTheme.TitleBarButtonSize,
                 Location = location,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = ModernTheme.TitleBarBackColor,
@@ -175,11 +205,8 @@ namespace EasyVersionBackup
                 return;
             }
 
-            const int wmNclbuttondown = 0xA1;
-            const int htCaption = 0x2;
-
             ReleaseCapture();
-            SendMessage(Handle, wmNclbuttondown, htCaption, 0);
+            SendMessage(Handle, WmNclButtonDown, HtCaption, 0);
         }
     }
 }

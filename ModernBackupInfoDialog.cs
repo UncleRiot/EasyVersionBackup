@@ -46,15 +46,15 @@ namespace EasyVersionBackup
             {
                 Name = "panelModernTitleBar",
                 Dock = DockStyle.Top,
-                Height = 32,
+                Height = ModernTheme.TitleBarHeight,
                 BackColor = ModernTheme.TitleBarBackColor
             };
 
             PictureBox pictureBoxModernTitleIcon = new PictureBox
             {
                 Name = "pictureBoxModernTitleIcon",
-                Location = new Point(8, 8),
-                Size = new Size(16, 16),
+                Location = new Point(ModernTheme.TitleBarIconLeft, ModernTheme.TitleBarIconTop),
+                Size = new Size(ModernTheme.TitleBarIconSize, ModernTheme.TitleBarIconSize),
                 SizeMode = PictureBoxSizeMode.StretchImage,
                 Image = Icon?.ToBitmap(),
                 BackColor = Color.Transparent
@@ -65,8 +65,8 @@ namespace EasyVersionBackup
                 Name = "labelModernTitle",
                 Text = Text,
                 AutoSize = false,
-                Location = new Point(30, 0),
-                Size = new Size(ClientSize.Width - 66, 32),
+                Location = new Point(ModernTheme.TitleBarTextLeft, 0),
+                Size = new Size(ClientSize.Width - 66, ModernTheme.TitleBarHeight),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = ModernTheme.TextColor,
@@ -74,7 +74,10 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Button buttonModernClose = CreateModernTitleBarButton("buttonModernClose", new Point(ClientSize.Width - 36, 0));
+            Button buttonModernClose = CreateModernTitleBarButton(
+                "buttonModernClose",
+                new Point(ClientSize.Width - ModernTheme.TitleBarButtonSize.Width, 0));
+
             buttonModernClose.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttonModernClose.MouseEnter += (sender, e) => buttonModernClose.BackColor = ModernTheme.CloseButtonHoverColor;
             buttonModernClose.MouseLeave += (sender, e) => buttonModernClose.BackColor = ModernTheme.TitleBarBackColor;
@@ -98,7 +101,7 @@ namespace EasyVersionBackup
             {
                 Name = name,
                 Text = string.Empty,
-                Size = new Size(36, 32),
+                Size = ModernTheme.TitleBarButtonSize,
                 Location = location,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = ModernTheme.TitleBarBackColor,

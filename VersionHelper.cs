@@ -10,34 +10,9 @@ namespace EasyVersionBackup
     {
         public static string GetSuggestedVersion(AppSettings settings, BackupPathPair pair)
         {
-            string pairKey = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
-            string lastUsedVersion = settings.LastUsedVersionsByPair.TryGetValue(pairKey, out string? lastUsed)
-                ? lastUsed
-                : string.Empty;
-
-            if (!string.IsNullOrWhiteSpace(lastUsedVersion))
-            {
-                string highestExistingVersionForLastUsedSchema = GetHighestExistingVersion(pair, lastUsedVersion);
-
-                string highestKnownVersionForLastUsedSchema = VersionPatternHelper.GetHighestCompatibleVersion(lastUsedVersion, new[]
-                {
-            highestExistingVersionForLastUsedSchema,
-            lastUsedVersion
-        });
-
-                if (string.IsNullOrWhiteSpace(highestKnownVersionForLastUsedSchema))
-                {
-                    return settings.AutoIncrementVersion
-                        ? VersionPatternHelper.IncrementVersion(lastUsedVersion)
-                        : lastUsedVersion;
-                }
-
-                return settings.AutoIncrementVersion
-                    ? VersionPatternHelper.IncrementVersion(highestKnownVersionForLastUsedSchema)
-                    : highestKnownVersionForLastUsedSchema;
-            }
-
-            string defaultVersioning = settings.DefaultVersioning?.Trim() ?? "none";
+            string defaultVersioning = !string.IsNullOrWhiteSpace(pair.Versioning)
+                ? pair.Versioning.Trim()
+                : settings.DefaultVersioning?.Trim() ?? "none";
 
             if (string.Equals(defaultVersioning, "none", StringComparison.OrdinalIgnoreCase))
             {
@@ -51,11 +26,22 @@ namespace EasyVersionBackup
                 return defaultVersion;
             }
 
+            string pairKey = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+            string lastUsedVersion = settings.LastUsedVersionsByPair.TryGetValue(pairKey, out string? lastUsed)
+                ? lastUsed
+                : string.Empty;
+
+            string compatibleLastUsedVersion = VersionPatternHelper.GetHighestCompatibleVersion(defaultVersion, new[]
+            {
+        lastUsedVersion
+    });
+
             string highestExistingVersion = GetHighestExistingVersion(pair, defaultVersion);
 
             string highestKnownVersion = VersionPatternHelper.GetHighestCompatibleVersion(defaultVersion, new[]
             {
         defaultVersion,
+        compatibleLastUsedVersion,
         highestExistingVersion
     });
 

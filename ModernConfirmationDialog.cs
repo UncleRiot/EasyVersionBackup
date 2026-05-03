@@ -1,4 +1,10 @@
-﻿using System;
+﻿// Design-Rule / UI consistency:
+// Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
+// Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
+// 03.05.2026 /dc
+
+
+using System;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -19,7 +25,7 @@ namespace EasyVersionBackup
             form.Text = title;
             form.StartPosition = FormStartPosition.CenterParent;
             form.FormBorderStyle = FormBorderStyle.None;
-            form.ClientSize = new Size(420, 170);
+            form.ClientSize = new Size(420, 200);
             form.BackColor = ModernTheme.WindowBackColor;
             form.Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
             form.ShowInTaskbar = false;
@@ -30,15 +36,15 @@ namespace EasyVersionBackup
             {
                 Name = "panelModernTitleBar",
                 Dock = DockStyle.Top,
-                Height = 32,
+                Height = ModernTheme.TitleBarHeight,
                 BackColor = ModernTheme.TitleBarBackColor
             };
 
             PictureBox pictureBoxModernTitleIcon = new PictureBox
             {
                 Name = "pictureBoxModernTitleIcon",
-                Location = new Point(8, 8),
-                Size = new Size(16, 16),
+                Location = new Point(ModernTheme.TitleBarIconLeft, ModernTheme.TitleBarIconTop),
+                Size = new Size(ModernTheme.TitleBarIconSize, ModernTheme.TitleBarIconSize),
                 SizeMode = PictureBoxSizeMode.StretchImage,
                 Image = owner.Icon?.ToBitmap(),
                 BackColor = Color.Transparent
@@ -49,8 +55,8 @@ namespace EasyVersionBackup
                 Name = "labelModernTitle",
                 Text = title,
                 AutoSize = false,
-                Location = new Point(30, 0),
-                Size = new Size(form.ClientSize.Width - 66, 32),
+                Location = new Point(ModernTheme.TitleBarTextLeft, 0),
+                Size = new Size(form.ClientSize.Width - 66, ModernTheme.TitleBarHeight),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = ModernTheme.TextColor,
@@ -58,7 +64,11 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Button buttonModernClose = CreateModernTitleBarButton(form, "buttonModernClose", new Point(form.ClientSize.Width - 36, 0));
+            Button buttonModernClose = CreateModernTitleBarButton(
+                form,
+                "buttonModernClose",
+                new Point(form.ClientSize.Width - ModernTheme.TitleBarButtonSize.Width, 0));
+
             buttonModernClose.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttonModernClose.MouseEnter += (sender, e) => buttonModernClose.BackColor = ModernTheme.CloseButtonHoverColor;
             buttonModernClose.MouseLeave += (sender, e) => buttonModernClose.BackColor = ModernTheme.TitleBarBackColor;
@@ -81,7 +91,7 @@ namespace EasyVersionBackup
                 Text = message,
                 AutoSize = false,
                 Location = new Point(18, 52),
-                Size = new Size(form.ClientSize.Width - 36, 52),
+                Size = new Size(form.ClientSize.Width - 36, 82),
                 ForeColor = ModernTheme.TextColor,
                 BackColor = Color.Transparent,
                 TextAlign = ContentAlignment.MiddleLeft
@@ -90,15 +100,15 @@ namespace EasyVersionBackup
             Button buttonYes = new Button
             {
                 Text = "Yes",
-                Size = new Size(75, 27),
-                Location = new Point(form.ClientSize.Width - 168, 121),
+                Size = ModernTheme.DialogButtonSize,
+                Location = new Point(form.ClientSize.Width - 168, 151),
                 DialogResult = DialogResult.Yes,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = ModernTheme.AccentColor,
                 ForeColor = ModernTheme.DarkTextColor,
                 Cursor = Cursors.Hand,
                 TextAlign = ContentAlignment.MiddleCenter, // Button-Text positioning
-                Padding = new Padding(0, 0, 0, 1), // Button-Text positioning
+                Padding = ModernTheme.DialogPrimaryButtonTextPadding, // Button-Text positioning
                 UseCompatibleTextRendering = true, // Button-Text positioning
                 UseVisualStyleBackColor = false
             };
@@ -110,15 +120,15 @@ namespace EasyVersionBackup
             Button buttonNo = new Button
             {
                 Text = "No",
-                Size = new Size(75, 27),
-                Location = new Point(form.ClientSize.Width - 87, 121),
+                Size = ModernTheme.DialogButtonSize,
+                Location = new Point(form.ClientSize.Width - 87, 151),
                 DialogResult = DialogResult.No,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = ModernTheme.ControlBackColor,
                 ForeColor = ModernTheme.TextColor,
                 Cursor = Cursors.Hand,
                 TextAlign = ContentAlignment.MiddleCenter, // Button-Text positioning
-                Padding = new Padding(0, 0, 0, 2), // Button-Text positioning
+                Padding = ModernTheme.DialogSecondaryButtonTextPadding, // Button-Text positioning
                 UseCompatibleTextRendering = true, // Button-Text positioning
                 UseVisualStyleBackColor = false
             };
@@ -145,7 +155,7 @@ namespace EasyVersionBackup
             {
                 Name = name,
                 Text = string.Empty,
-                Size = new Size(36, 32),
+                Size = ModernTheme.TitleBarButtonSize,
                 Location = location,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = ModernTheme.TitleBarBackColor,

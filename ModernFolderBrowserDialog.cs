@@ -1,4 +1,9 @@
-﻿using System;
+﻿// Design-Rule / UI consistency:
+// Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
+// Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
+// 03.05.2026 /dc
+
+using System;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -81,6 +86,57 @@ namespace EasyVersionBackup
             selectedPath = dialog.SelectedPath;
             return true;
         }
+        private void EnableFileNameSelection(string initialFileName)
+        {
+            Label labelFileName = new Label
+            {
+                Name = "labelFileName",
+                Text = "File name:",
+                AutoSize = false,
+                Location = new Point(190, ClientSize.Height - 73),
+                Size = new Size(80, 23),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = ModernTheme.TextColor,
+                BackColor = Color.Transparent
+            };
+
+            TextBox textBoxFileName = new TextBox
+            {
+                Name = "textBoxFileName",
+                Text = initialFileName,
+                Location = new Point(274, ClientSize.Height - 73),
+                Size = new Size(ClientSize.Width - 286, 23),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = ModernTheme.TitleBarBackColor,
+                ForeColor = ModernTheme.TextColor
+            };
+
+            listBoxDrives.Size = new Size(listBoxDrives.Width, listBoxDrives.Height - 32);
+            treeViewFolders.Size = new Size(treeViewFolders.Width, treeViewFolders.Height - 32);
+
+            Controls.Add(labelFileName);
+            Controls.Add(textBoxFileName);
+
+            LoadDrives();
+        }
+
+        public static bool ShowFile(Form owner, string title, string initialPath, string initialFileName, out string selectedFilePath)
+        {
+            using ModernFolderBrowserDialog dialog = new ModernFolderBrowserDialog(title, initialPath);
+
+            dialog.EnableFileNameSelection(initialFileName);
+
+            if (dialog.ShowDialog(owner) != DialogResult.OK)
+            {
+                selectedFilePath = string.Empty;
+                return false;
+            }
+
+            selectedFilePath = dialog.SelectedPath;
+            return true;
+        }
 
         private void InitializeModernTitleBar()
         {
@@ -88,15 +144,15 @@ namespace EasyVersionBackup
             {
                 Name = "panelModernTitleBar",
                 Dock = DockStyle.Top,
-                Height = 32,
+                Height = ModernTheme.TitleBarHeight,
                 BackColor = ModernTheme.TitleBarBackColor
             };
 
             PictureBox pictureBoxModernTitleIcon = new PictureBox
             {
                 Name = "pictureBoxModernTitleIcon",
-                Location = new Point(8, 8),
-                Size = new Size(16, 16),
+                Location = new Point(ModernTheme.TitleBarIconLeft, ModernTheme.TitleBarIconTop),
+                Size = new Size(ModernTheme.TitleBarIconSize, ModernTheme.TitleBarIconSize),
                 SizeMode = PictureBoxSizeMode.StretchImage,
                 Image = Icon?.ToBitmap(),
                 BackColor = Color.Transparent
@@ -107,8 +163,8 @@ namespace EasyVersionBackup
                 Name = "labelModernTitle",
                 Text = Text,
                 AutoSize = false,
-                Location = new Point(30, 0),
-                Size = new Size(ClientSize.Width - 66, 32),
+                Location = new Point(ModernTheme.TitleBarTextLeft, 0),
+                Size = new Size(ClientSize.Width - 66, ModernTheme.TitleBarHeight),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = ModernTheme.TextColor,
@@ -116,7 +172,10 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Button buttonModernClose = CreateModernTitleBarButton("buttonModernClose", new Point(ClientSize.Width - 36, 0));
+            Button buttonModernClose = CreateModernTitleBarButton(
+                "buttonModernClose",
+                new Point(ClientSize.Width - ModernTheme.TitleBarButtonSize.Width, 0));
+
             buttonModernClose.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttonModernClose.MouseEnter += (sender, e) => buttonModernClose.BackColor = ModernTheme.CloseButtonHoverColor;
             buttonModernClose.MouseLeave += (sender, e) => buttonModernClose.BackColor = ModernTheme.TitleBarBackColor;
@@ -140,7 +199,7 @@ namespace EasyVersionBackup
             {
                 Name = name,
                 Text = string.Empty,
-                Size = new Size(36, 32),
+                Size = ModernTheme.TitleBarButtonSize,
                 Location = location,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = ModernTheme.TitleBarBackColor,
@@ -398,6 +457,19 @@ namespace EasyVersionBackup
 
                     parentNode.Nodes.Add(childNode);
                 }
+
+                if (Controls["textBoxFileName"] is TextBox)
+                {
+                    foreach (string filePath in Directory.GetFiles(parentPath).OrderBy(path => path))
+                    {
+                        TreeNode fileNode = new TreeNode(Path.GetFileName(filePath))
+                        {
+                            Tag = filePath
+                        };
+
+                        parentNode.Nodes.Add(fileNode);
+                    }
+                }
             }
             catch
             {
@@ -408,7 +480,12 @@ namespace EasyVersionBackup
         {
             try
             {
-                return Directory.EnumerateDirectories(directoryPath).Any();
+                if (Directory.EnumerateDirectories(directoryPath).Any())
+                {
+                    return true;
+                }
+
+                return Controls["textBoxFileName"] is TextBox && Directory.EnumerateFiles(directoryPath).Any();
             }
             catch
             {
@@ -492,6 +569,23 @@ namespace EasyVersionBackup
         {
             string selectedPath = e.Node?.Tag?.ToString() ?? string.Empty;
 
+            if (Controls["textBoxFileName"] is TextBox textBoxFileName && File.Exists(selectedPath))
+            {
+                string? directoryName = Path.GetDirectoryName(selectedPath);
+
+                if (string.IsNullOrWhiteSpace(directoryName))
+                {
+                    buttonOk.Enabled = false;
+                    return;
+                }
+
+                textBoxSelectedPath.Text = directoryName;
+                textBoxFileName.Text = Path.GetFileName(selectedPath);
+                SelectedPath = directoryName;
+                buttonOk.Enabled = true;
+                return;
+            }
+
             textBoxSelectedPath.Text = selectedPath;
             SelectedPath = selectedPath;
             buttonOk.Enabled = Directory.Exists(selectedPath);
@@ -503,6 +597,19 @@ namespace EasyVersionBackup
             {
                 DialogResult = DialogResult.None;
                 return;
+            }
+
+            if (Controls["textBoxFileName"] is TextBox textBoxFileName)
+            {
+                string fileName = textBoxFileName.Text.Trim();
+
+                if (string.IsNullOrWhiteSpace(fileName) || fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                {
+                    DialogResult = DialogResult.None;
+                    return;
+                }
+
+                SelectedPath = Path.Combine(SelectedPath, fileName);
             }
 
             DialogResult = DialogResult.OK;

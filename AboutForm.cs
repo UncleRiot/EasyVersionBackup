@@ -68,15 +68,15 @@ namespace EasyVersionBackup
             {
                 Name = "panelModernTitleBar",
                 Dock = DockStyle.Top,
-                Height = 32,
+                Height = ModernTheme.TitleBarHeight,
                 BackColor = ModernTheme.TitleBarBackColor
             };
 
             PictureBox pictureBoxModernTitleIcon = new PictureBox
             {
                 Name = "pictureBoxModernTitleIcon",
-                Location = new Point(8, 8),
-                Size = new Size(16, 16),
+                Location = new Point(ModernTheme.TitleBarIconLeft, ModernTheme.TitleBarIconTop),
+                Size = new Size(ModernTheme.TitleBarIconSize, ModernTheme.TitleBarIconSize),
                 SizeMode = PictureBoxSizeMode.StretchImage,
                 Image = Icon?.ToBitmap(),
                 BackColor = Color.Transparent
@@ -87,15 +87,19 @@ namespace EasyVersionBackup
                 Name = "labelModernTitle",
                 Text = "About",
                 AutoSize = false,
-                Location = new Point(30, 0),
-                Size = new Size(ClientSize.Width - 66, 32),
+                Location = new Point(ModernTheme.TitleBarTextLeft, 0),
+                Size = new Size(ClientSize.Width - 66, ModernTheme.TitleBarHeight),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = ModernTheme.TextColor,
                 Font = new Font(ModernTheme.FontFamilyName, ModernTheme.TitleFontSize, FontStyle.Regular)
             };
 
-            Button buttonModernClose = CreateModernTitleBarButton("buttonModernClose", "Close", new Point(ClientSize.Width - 36, 0));
+            Button buttonModernClose = CreateModernTitleBarButton(
+                "buttonModernClose",
+                "Close",
+                new Point(ClientSize.Width - ModernTheme.TitleBarButtonSize.Width, 0));
+
             buttonModernClose.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttonModernClose.MouseEnter += (sender, e) => buttonModernClose.BackColor = ModernTheme.CloseButtonHoverColor;
             buttonModernClose.MouseLeave += (sender, e) => buttonModernClose.BackColor = ModernTheme.TitleBarBackColor;
@@ -139,18 +143,47 @@ namespace EasyVersionBackup
 
             Label labelVersion = new Label
             {
-                Text = "Version: 0.9.6",
+                Text = "Version: " + GetApplicationVersionText(),
                 AutoSize = true,
                 Location = new Point(130, 117),
                 ForeColor = ModernTheme.TextColor,
                 BackColor = Color.Transparent
             };
 
+            LinkLabel linkLabelUpdate = new LinkLabel
+            {
+                Text = "Can not connect to Github",
+                AutoSize = true,
+                Location = new Point(130, 142),
+                LinkColor = ModernTheme.AccentColor,
+                ActiveLinkColor = ModernTheme.AccentHoverColor,
+                VisitedLinkColor = ModernTheme.AccentColor,
+                DisabledLinkColor = ModernTheme.DisabledTextColor,
+                ForeColor = ModernTheme.TextColor,
+                BackColor = Color.Transparent
+            };
+
+            linkLabelUpdate.LinkClicked += (sender, e) =>
+            {
+                string downloadUrl = linkLabelUpdate.Tag?.ToString() ?? string.Empty;
+
+                if (string.IsNullOrWhiteSpace(downloadUrl))
+                {
+                    return;
+                }
+
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = downloadUrl,
+                    UseShellExecute = true
+                });
+            };
+
             LinkLabel linkLabelGithub = new LinkLabel
             {
                 Text = "https://github.com/UncleRiot/EasyVersionBackup",
                 AutoSize = true,
-                Location = new Point(130, 142),
+                Location = new Point(130, 167),
                 LinkColor = ModernTheme.AccentColor,
                 ActiveLinkColor = ModernTheme.AccentHoverColor,
                 VisitedLinkColor = ModernTheme.AccentColor,
@@ -171,7 +204,7 @@ namespace EasyVersionBackup
                 Text = "EasyVersionBackup is free to use." + Environment.NewLine +
                        "If this tool saves you time, you can support development here:",
                 AutoSize = false,
-                Location = new Point(20, 180),
+                Location = new Point(20, 205),
                 Size = new Size(430, 40),
                 ForeColor = ModernTheme.TextColor,
                 BackColor = Color.Transparent
@@ -182,7 +215,7 @@ namespace EasyVersionBackup
                 Name = "pictureBoxKoFi",
                 Image = CreateKoFiImage(),
                 Size = new Size(179, 42),
-                Location = new Point(20, 226),
+                Location = new Point(20, 251),
                 SizeMode = PictureBoxSizeMode.StretchImage,
                 BackColor = Color.Transparent,
                 Cursor = Cursors.Hand
@@ -222,6 +255,7 @@ namespace EasyVersionBackup
             Controls.Add(labelTitle);
             Controls.Add(labelCopyright);
             Controls.Add(labelVersion);
+            Controls.Add(linkLabelUpdate);
             Controls.Add(linkLabelGithub);
             Controls.Add(labelKoFiText);
             Controls.Add(pictureBoxKoFi);
@@ -230,17 +264,20 @@ namespace EasyVersionBackup
             panelModernTitleBar.BringToFront();
 
             AcceptButton = buttonOk;
+
+            UpdateGitHubStatusAsync(linkLabelUpdate);
         }
         private Image? CreateKoFiImage()
         {
-            using Stream? stream = typeof(AboutForm).Assembly.GetManifestResourceStream("EasyVersionBackup.Ressources.ko-fi.png");
+            using System.IO.Stream? stream = typeof(AboutForm).Assembly.GetManifestResourceStream("EasyVersionBackup.Ressources.ko-fi.png");
 
             if (stream == null)
             {
                 return null;
             }
 
-            return Image.FromStream(stream);
+            using Image sourceImage = Image.FromStream(stream);
+            return new Bitmap(sourceImage);
         }
 
         private Button CreateModernTitleBarButton(string name, string text, Point location)
@@ -250,7 +287,7 @@ namespace EasyVersionBackup
                 Name = name,
                 Text = string.Empty,
                 Tag = text,
-                Size = new Size(36, 32),
+                Size = ModernTheme.TitleBarButtonSize,
                 Location = location,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = ModernTheme.TitleBarBackColor,
@@ -297,6 +334,59 @@ namespace EasyVersionBackup
 
             ReleaseCapture();
             SendMessage(Handle, wmNclbuttondown, htCaption, 0);
+        }
+        private string GetApplicationVersionText()
+        {
+            System.Reflection.Assembly assembly = typeof(AboutForm).Assembly;
+
+            foreach (object attribute in assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false))
+            {
+                if (attribute is System.Reflection.AssemblyInformationalVersionAttribute informationalVersionAttribute &&
+                    !string.IsNullOrWhiteSpace(informationalVersionAttribute.InformationalVersion))
+                {
+                    return informationalVersionAttribute.InformationalVersion.Split('+')[0];
+                }
+            }
+
+            Version? version = assembly.GetName().Version;
+
+            if (version == null)
+            {
+                return "unknown";
+            }
+
+            return $"{version.Major}.{version.Minor}.{version.Build}";
+        }
+        private async void UpdateGitHubStatusAsync(LinkLabel linkLabelUpdate)
+        {
+            VersionHelperGitResult result = await VersionHelperGit.CheckForUpdateAsync(GetApplicationVersionText());
+
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            linkLabelUpdate.Tag = string.Empty;
+            linkLabelUpdate.Links.Clear();
+
+            if (!result.CanConnectToGitHub)
+            {
+                linkLabelUpdate.Text = "Can not connect to Github";
+                linkLabelUpdate.LinkBehavior = LinkBehavior.NeverUnderline;
+                return;
+            }
+
+            if (!result.UpdateAvailable)
+            {
+                linkLabelUpdate.Text = "No new updates";
+                linkLabelUpdate.LinkBehavior = LinkBehavior.NeverUnderline;
+                return;
+            }
+
+            linkLabelUpdate.Text = "Update available: " + result.LatestVersion;
+            linkLabelUpdate.Tag = result.DownloadUrl;
+            linkLabelUpdate.LinkBehavior = LinkBehavior.SystemDefault;
+            linkLabelUpdate.Links.Add(0, linkLabelUpdate.Text.Length);
         }
     }
 }
