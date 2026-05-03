@@ -126,19 +126,80 @@ namespace EasyVersionBackup
         {
             base.OnShown(e);
 
-            if (!_startMinimizedToSystray)
+            if (_startMinimizedToSystray && _settings.MinimizeToSystray)
+            {
+                StartMinimizedToSystray();
+            }
+
+            if (_settings.AutoUpdateCheck)
+            {
+                _ = CheckForUpdatesOnStartupAsync();
+            }
+        }
+        private async Task CheckForUpdatesOnStartupAsync()
+        {
+            VersionHelperGitResult result = await VersionHelperGit.CheckForUpdateAsync(GetApplicationVersionText());
+
+            if (IsDisposed)
             {
                 return;
             }
 
-            if (!_settings.MinimizeToSystray)
+            if (!result.CanConnectToGitHub)
             {
                 return;
             }
 
-            StartMinimizedToSystray();
+            if (!result.UpdateAvailable)
+            {
+                return;
+            }
+
+            DialogResult dialogResult = ModernConfirmationDialog.Show(
+                this,
+                "Update available",
+                "Update available: " + result.LatestVersion + Environment.NewLine + Environment.NewLine +
+                "Do you want to open the GitHub download page?");
+
+            if (dialogResult != DialogResult.Yes)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(result.DownloadUrl))
+            {
+                return;
+            }
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = result.DownloadUrl,
+                UseShellExecute = true
+            });
         }
 
+        private string GetApplicationVersionText()
+        {
+            System.Reflection.Assembly assembly = typeof(Form1).Assembly;
+
+            foreach (object attribute in assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false))
+            {
+                if (attribute is System.Reflection.AssemblyInformationalVersionAttribute informationalVersionAttribute &&
+                    !string.IsNullOrWhiteSpace(informationalVersionAttribute.InformationalVersion))
+                {
+                    return informationalVersionAttribute.InformationalVersion.Split('+')[0];
+                }
+            }
+
+            Version? version = assembly.GetName().Version;
+
+            if (version == null)
+            {
+                return "unknown";
+            }
+
+            return $"{version.Major}.{version.Minor}.{version.Build}";
+        }
         private void StartMinimizedToSystray()
         {
             RefreshNotifyIconText();
