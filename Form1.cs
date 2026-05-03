@@ -22,6 +22,8 @@ namespace EasyVersionBackup
         private DateTime _nextAutoBackupRun;
         private bool _isRefreshingConfiguredPaths;
         private readonly ToolTip _mainToolTip = new ToolTip();
+        private string _lastBackupDestinationFileName = string.Empty;
+        private readonly bool _startMinimizedToSystray;
 
         private Panel? _modernTitleBarPanel;
         private Label? _modernTitleLabel;
@@ -38,13 +40,25 @@ namespace EasyVersionBackup
 
 
 
-        public Form1()
+        public Form1(bool startMinimizedToSystray = false)
         {
+            _startMinimizedToSystray = startMinimizedToSystray;
+
             InitializeComponent();
 
             _baseWindowTitle = Text;
 
-            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            using Stream? iconStream = typeof(Form1).Assembly.GetManifestResourceStream("EasyVersionBackup.Ressources.favicon2.ico");
+
+            if (iconStream != null)
+            {
+                Icon = new Icon(iconStream);
+            }
+            else
+            {
+                Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            }
+
             notifyIconMain.Icon = Icon;
 
             // VISUAL IMPROVEMENTS
@@ -107,6 +121,31 @@ namespace EasyVersionBackup
             ApplyMainWindowHeightForThreeRows();
             RefreshConfiguredPaths();
             RestartAutoBackupCountdown();
+        }
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+
+            if (!_startMinimizedToSystray)
+            {
+                return;
+            }
+
+            if (!_settings.MinimizeToSystray)
+            {
+                return;
+            }
+
+            StartMinimizedToSystray();
+        }
+
+        private void StartMinimizedToSystray()
+        {
+            RefreshNotifyIconText();
+
+            ShowInTaskbar = false;
+            notifyIconMain.Visible = true;
+            Hide();
         }
         private void InitializeModernTitleBar()
         {
@@ -894,6 +933,7 @@ namespace EasyVersionBackup
             int skipped = 0;
             skippedFilePaths = new List<string>();
             destinationAction = BackupHelper.DestinationActionCreated;
+            _lastBackupDestinationFileName = string.Empty;
 
             string sourceName = new DirectoryInfo(pair.SourceDirectory).Name;
             string versionedName = VersionHelper.BuildVersionedName(sourceName, version);
@@ -934,6 +974,7 @@ namespace EasyVersionBackup
                 }
 
                 skipped += CreateZipFromDirectory(pair.SourceDirectory, zipPath, pair.ExcludedPaths, skippedFilePaths);
+                _lastBackupDestinationFileName = Path.GetFileName(zipPath);
                 return skipped;
             }
 
@@ -970,6 +1011,7 @@ namespace EasyVersionBackup
             }
 
             skipped += CopyDirectory(pair.SourceDirectory, destinationDirectory, pair.ExcludedPaths, skippedFilePaths);
+            _lastBackupDestinationFileName = Path.GetFileName(destinationDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
 
             return skipped;
         }
@@ -1391,6 +1433,11 @@ namespace EasyVersionBackup
 
             string text = $"Last Backup: {status.LastBackupDateTime}";
 
+            if (!string.IsNullOrWhiteSpace(status.LastBackupFileName))
+            {
+                text += $"{Environment.NewLine}File: {status.LastBackupFileName}";
+            }
+
             if (!string.IsNullOrWhiteSpace(status.LastBackupErrorMessage))
             {
                 if (status.LastBackupStatus == "Error")
@@ -1469,8 +1516,14 @@ namespace EasyVersionBackup
             {
                 LastBackupDateTime = DateTime.Now.ToString("dd.MM.yyyy, HH:mm"),
                 LastBackupStatus = status,
+                LastBackupFileName = status == "Error" ? string.Empty : _lastBackupDestinationFileName,
                 LastBackupErrorMessage = errorMessage
             };
+
+            if (status == "Error")
+            {
+                _lastBackupDestinationFileName = string.Empty;
+            }
         }
 
         private void InitializeBackupInfoColumn()

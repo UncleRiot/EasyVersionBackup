@@ -11,8 +11,9 @@ namespace EasyVersionBackup
         public string DefaultVersioning { get; set; } = "0.0.1";
         public bool AutoIncrementVersion { get; set; } = true;
         public bool MinimizeToSystray { get; set; } = false;
-        
+
         public bool AutoUpdateCheck { get; set; } = true;
+        public bool StartWithWindows { get; set; } = false;
         public bool IgnoreCopyErrors { get; set; } = false;
         public bool AutoPurgeEnabled { get; set; } = false;
         public string BackupDestinationConflictHandling { get; set; } = "Ask";
@@ -33,6 +34,7 @@ namespace EasyVersionBackup
     {
         public string LastBackupDateTime { get; set; } = string.Empty;
         public string LastBackupStatus { get; set; } = string.Empty;
+        public string LastBackupFileName { get; set; } = string.Empty;
         public string LastBackupErrorMessage { get; set; } = string.Empty;
     }
     public class BackupPathPair

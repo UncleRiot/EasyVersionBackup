@@ -3,7 +3,6 @@
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // 03.05.2026 /dc
 
-
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -34,6 +33,7 @@ namespace EasyVersionBackup
         private readonly CheckBox checkBoxAutoIncrementVersion;
         private readonly CheckBox checkBoxMinimizeToSystray;
         private readonly CheckBox checkBoxAutoUpdateCheck;
+        private readonly CheckBox checkBoxStartWithWindows;
         private readonly CheckBox checkBoxIgnoreCopyErrors;
         private readonly CheckBox checkBoxAutoPurgeEnabled;
         private readonly CheckBox checkBoxAutoBackupEnabled;
@@ -128,9 +128,10 @@ namespace EasyVersionBackup
             checkBoxAutoIncrementVersion = CreateCheckBox("checkBoxAutoIncrementVersion", 1);
             checkBoxMinimizeToSystray = CreateCheckBox("checkBoxMinimizeToSystray", 2);
             checkBoxAutoUpdateCheck = CreateCheckBox("checkBoxAutoUpdateCheck", 3);
+            checkBoxStartWithWindows = CreateCheckBox("checkBoxStartWithWindows", 4);
             checkBoxIgnoreCopyErrors = CreateCheckBox("checkBoxIgnoreCopyErrors", 0);
             checkBoxAutoBackupEnabled = CreateCheckBox("checkBoxAutoBackupEnabled", 1);
-            checkBoxAutoPurgeEnabled = CreateCheckBox("checkBoxAutoPurgeEnabled", 4);
+            checkBoxAutoPurgeEnabled = CreateCheckBox("checkBoxAutoPurgeEnabled", 5);
 
             textBoxAutoBackupInterval = new TextBox
             {
@@ -157,11 +158,12 @@ namespace EasyVersionBackup
             Label labelAutoIncrementVersion = CreateLabel("labelAutoIncrementVersion", "Auto increment", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(1)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelMinimizeToSystray = CreateLabel("labelMinimizeToSystray", "Minimize to Systray", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(2)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelAutoUpdateCheck = CreateLabel("labelAutoUpdateCheck", "Auto Update-Check", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(3)), new Size(ModernTheme.SettingsLabelWidth, 20));
+            Label labelStartWithWindows = CreateLabel("labelStartWithWindows", "Start with Windows", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(4)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelIgnoreCopyErrors = CreateLabel("labelIgnoreCopyErrors", "Ignore Copy-Errors", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(0)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelAutoBackupEnabled = CreateLabel("labelAutoBackupEnabled", "Backup Timer", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(1)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelBackupDestinationConflictHandling = CreateLabel("labelBackupDestinationConflictHandling", "Destination Conflict", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(2)), new Size(ModernTheme.SettingsLabelWidth, 20));
 
-            Label labelAutoPurgeEnabled = CreateLabel("labelAutoPurgeEnabled", "Retention", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(4)), new Size(ModernTheme.SettingsLabelWidth, 20));
+            Label labelAutoPurgeEnabled = CreateLabel("labelAutoPurgeEnabled", "Retention", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(5)), new Size(ModernTheme.SettingsLabelWidth, 20));
             labelAutoPurgeEnabled.ForeColor = ModernTheme.BackupInfoErrorColor;
 
             PictureBox pictureBoxDefaultVersioningHint = CreateSettingsHintIcon(
@@ -212,6 +214,7 @@ namespace EasyVersionBackup
             settingsToolTip.SetToolTip(checkBoxAutoIncrementVersion, "Automatically increment the suggested version");
             settingsToolTip.SetToolTip(checkBoxMinimizeToSystray, "Hide the window in the system tray when minimized");
             settingsToolTip.SetToolTip(checkBoxAutoUpdateCheck, "Automatically check GitHub for new versions");
+            settingsToolTip.SetToolTip(checkBoxStartWithWindows, "Start EasyVersionBackup when Windows starts");
             settingsToolTip.SetToolTip(checkBoxIgnoreCopyErrors, "Skip files that cannot be copied");
             settingsToolTip.SetToolTip(checkBoxAutoBackupEnabled, "Run backups automatically / timer based");
             settingsToolTip.SetToolTip(textBoxAutoBackupInterval, "Time between automatic backups");
@@ -233,6 +236,8 @@ namespace EasyVersionBackup
             tabPageGeneral.Controls.Add(checkBoxMinimizeToSystray);
             tabPageGeneral.Controls.Add(labelAutoUpdateCheck);
             tabPageGeneral.Controls.Add(checkBoxAutoUpdateCheck);
+            tabPageGeneral.Controls.Add(labelStartWithWindows);
+            tabPageGeneral.Controls.Add(checkBoxStartWithWindows);
             tabPageGeneral.Controls.Add(labelAutoPurgeEnabled);
             tabPageGeneral.Controls.Add(checkBoxAutoPurgeEnabled);
             tabPageGeneral.Controls.Add(pictureBoxAutoPurgeHint);
@@ -250,6 +255,9 @@ namespace EasyVersionBackup
             Panel tabPageTools = CreateTabPage("tabPageTools");
             tabPageTools.Controls.Add(buttonExportSettings);
             tabPageTools.Controls.Add(buttonImportSettings);
+
+            ApplyDynamicSettingsLayout(tabPageGeneral);
+            ApplyDynamicSettingsLayout(tabPageBackup);
 
             AddSettingsTab("General", tabPageGeneral);
             AddSettingsTab("Backup", tabPageBackup);
@@ -281,6 +289,65 @@ namespace EasyVersionBackup
             AcceptButton = buttonOk;
             CancelButton = buttonCancel;
         }
+
+        private void ApplyDynamicSettingsLayout(Panel tabPage)
+        {
+            int controlLeft = GetDynamicSettingsControlLeft(tabPage);
+            int inputLeft = controlLeft + (ModernTheme.SettingsInputLeft - ModernTheme.SettingsControlLeft);
+
+            foreach (Control control in tabPage.Controls)
+            {
+                if (control is Label label && label.Name.StartsWith("label", StringComparison.OrdinalIgnoreCase))
+                {
+                    Size textSize = TextRenderer.MeasureText(label.Text, label.Font);
+                    label.Width = textSize.Width + 8;
+                }
+            }
+
+            foreach (Control control in tabPage.Controls)
+            {
+                if (control is CheckBox || control is ComboBox)
+                {
+                    control.Left = controlLeft;
+                }
+                else if (control is TextBox)
+                {
+                    control.Left = inputLeft;
+                }
+            }
+
+            RepositionSettingsHint(tabPage, "pictureBoxDefaultVersioningHint", comboBoxDefaultVersioning);
+            RepositionSettingsHint(tabPage, "pictureBoxAutoBackupTimerHint", textBoxAutoBackupInterval);
+            RepositionSettingsHint(tabPage, "pictureBoxAutoPurgeHint", checkBoxAutoPurgeEnabled);
+        }
+
+        private int GetDynamicSettingsControlLeft(Panel tabPage)
+        {
+            int maxLabelRight = ModernTheme.SettingsLabelLeft + ModernTheme.SettingsLabelWidth;
+
+            foreach (Control control in tabPage.Controls)
+            {
+                if (control is Label label && label.Name.StartsWith("label", StringComparison.OrdinalIgnoreCase))
+                {
+                    Size textSize = TextRenderer.MeasureText(label.Text, label.Font);
+                    maxLabelRight = Math.Max(maxLabelRight, label.Left + textSize.Width + 8);
+                }
+            }
+
+            return maxLabelRight + ModernTheme.SettingsHintSpacing + 18;
+        }
+
+        private void RepositionSettingsHint(Panel tabPage, string hintName, Control ownerControl)
+        {
+            if (tabPage.Controls[hintName] is not PictureBox hintIcon)
+            {
+                return;
+            }
+
+            hintIcon.Left = ownerControl.Right + ModernTheme.SettingsHintSpacing;
+            hintIcon.Top = ownerControl.Top + (ownerControl.Height - hintIcon.Height) / 2;
+        }
+
         private Button CreateToolButton(string name, string text, Point location)
         {
             Button button = new Button
@@ -305,6 +372,7 @@ namespace EasyVersionBackup
 
             return button;
         }
+
         private void buttonExportSettings_Click(object? sender, EventArgs e)
         {
             if (!TryBuildSettingsFromUi(out AppSettings settings))
@@ -377,6 +445,7 @@ namespace EasyVersionBackup
                 "Settings imported successfully." + Environment.NewLine + Environment.NewLine +
                 "Click OK to apply them.");
         }
+
         private void AddSettingsTab(string text, Panel tabPage)
         {
             int left = tabButtons.Count == 0
@@ -552,6 +621,7 @@ namespace EasyVersionBackup
             checkBoxAutoIncrementVersion.Checked = settings.AutoIncrementVersion;
             checkBoxMinimizeToSystray.Checked = settings.MinimizeToSystray;
             checkBoxAutoUpdateCheck.Checked = settings.AutoUpdateCheck;
+            checkBoxStartWithWindows.Checked = settings.StartWithWindows;
             checkBoxIgnoreCopyErrors.Checked = settings.IgnoreCopyErrors;
             checkBoxAutoPurgeEnabled.Checked = settings.AutoPurgeEnabled;
             checkBoxAutoBackupEnabled.Checked = settings.AutoBackupEnabled;
@@ -571,6 +641,7 @@ namespace EasyVersionBackup
             settings.AutoIncrementVersion = checkBoxAutoIncrementVersion.Checked;
             settings.MinimizeToSystray = checkBoxMinimizeToSystray.Checked;
             settings.AutoUpdateCheck = checkBoxAutoUpdateCheck.Checked;
+            settings.StartWithWindows = checkBoxStartWithWindows.Checked;
             settings.IgnoreCopyErrors = checkBoxIgnoreCopyErrors.Checked;
             settings.AutoPurgeEnabled = checkBoxAutoPurgeEnabled.Checked;
             settings.BackupDestinationConflictHandling = BackupHelper.NormalizeDestinationConflictHandling(comboBoxBackupDestinationConflictHandling.Text);
@@ -580,6 +651,7 @@ namespace EasyVersionBackup
 
             return settings;
         }
+
         private void checkBoxAutoPurgeEnabled_CheckedChanged(object? sender, EventArgs e)
         {
             if (_isApplyingSettingsToUi)
@@ -597,12 +669,14 @@ namespace EasyVersionBackup
                 checkBoxAutoPurgeEnabled.Checked = false;
             }
         }
+
         private bool ShowAutoPurgeSafetyConfirmation()
         {
             using AutoPurgeSafetyConfirmationDialog form = new AutoPurgeSafetyConfirmationDialog(this);
 
             return form.ShowDialog(this) == DialogResult.Yes;
         }
+
         private sealed class AutoPurgeSafetyConfirmationDialog : Form
         {
             private const int WmNclButtonDown = 0xA1;
@@ -729,12 +803,13 @@ namespace EasyVersionBackup
                 SendMessage(Handle, WmNclButtonDown, HtCaption, 0);
             }
 
-            [System.Runtime.InteropServices.DllImport("user32.dll")]
+            [DllImport("user32.dll")]
             private static extern bool ReleaseCapture();
 
-            [System.Runtime.InteropServices.DllImport("user32.dll")]
+            [DllImport("user32.dll")]
             private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
         }
+
         private void UpdateAutoBackupControls()
         {
             textBoxAutoBackupInterval.Enabled = checkBoxAutoBackupEnabled.Checked;
@@ -772,9 +847,55 @@ namespace EasyVersionBackup
                 return;
             }
 
+            if (!TryApplyStartWithWindowsSetting(settings.StartWithWindows, out string errorMessage))
+            {
+                ModernMessageDialog.Show(
+                    this,
+                    "Error",
+                    "Start with Windows could not be updated:" + Environment.NewLine + Environment.NewLine +
+                    errorMessage);
+
+                return;
+            }
+
             ResultSettings = settings;
             DialogResult = DialogResult.OK;
             Close();
+        }
+
+        private bool TryApplyStartWithWindowsSetting(bool startWithWindows, out string errorMessage)
+        {
+            const string runKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+            const string applicationName = "EasyVersionBackup";
+
+            errorMessage = string.Empty;
+
+            try
+            {
+                using Microsoft.Win32.RegistryKey? registryKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(runKeyPath);
+
+                if (registryKey == null)
+                {
+                    errorMessage = "Windows startup registry key could not be opened.";
+                    return false;
+                }
+
+                if (startWithWindows)
+                {
+                    registryKey.SetValue(applicationName, "\"" + Application.ExecutablePath + "\" --start-minimized");
+                }
+                else
+                {
+                    registryKey.DeleteValue(applicationName, false);
+                }
+
+                return true;
+            }
+            catch (Exception exception)
+            {
+                errorMessage = exception.Message;
+                return false;
+            }
         }
 
         private void checkBoxAutoBackupEnabled_CheckedChanged(object? sender, EventArgs e)
@@ -873,6 +994,7 @@ namespace EasyVersionBackup
                 AutoIncrementVersion = settings.AutoIncrementVersion,
                 MinimizeToSystray = settings.MinimizeToSystray,
                 AutoUpdateCheck = settings.AutoUpdateCheck,
+                StartWithWindows = settings.StartWithWindows,
                 IgnoreCopyErrors = settings.IgnoreCopyErrors,
                 AutoPurgeEnabled = settings.AutoPurgeEnabled,
                 BackupDestinationConflictHandling = settings.BackupDestinationConflictHandling,
