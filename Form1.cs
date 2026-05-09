@@ -85,6 +85,9 @@ namespace EasyVersionBackup
             dataGridViewConfiguredPaths.BackgroundColor = ModernTheme.WindowBackColor;
             dataGridViewConfiguredPaths.GridColor = ModernTheme.ControlBackColor;
             dataGridViewConfiguredPaths.EnableHeadersVisualStyles = false;
+            dataGridViewConfiguredPaths.ShowCellToolTips = true;
+            dataGridViewConfiguredPaths.SelectionMode = DataGridViewSelectionMode.CellSelect;
+            dataGridViewConfiguredPaths.ClipboardCopyMode = DataGridViewClipboardCopyMode.EnableWithoutHeaderText;
             dataGridViewConfiguredPaths.ColumnHeadersDefaultCellStyle.BackColor = ModernTheme.ControlBackColor;
             dataGridViewConfiguredPaths.ColumnHeadersDefaultCellStyle.ForeColor = ModernTheme.TextColor;
             dataGridViewConfiguredPaths.ColumnHeadersDefaultCellStyle.Font = new Font(ModernTheme.FontFamilyName, ModernTheme.HeaderFontSize, FontStyle.Bold);
@@ -112,6 +115,7 @@ namespace EasyVersionBackup
 
             dataGridViewConfiguredPaths.CellContentClick += dataGridViewConfiguredPaths_CellContentClick;
             dataGridViewConfiguredPaths.CellPainting += dataGridViewConfiguredPaths_CellPainting;
+            dataGridViewConfiguredPaths.CellToolTipTextNeeded += dataGridViewConfiguredPaths_CellToolTipTextNeeded;
 
             _autoBackupCountdownTimer.Interval = TitleRefreshIntervalMilliseconds;
             _autoBackupCountdownTimer.Tick += autoBackupCountdownTimer_Tick;
@@ -121,6 +125,56 @@ namespace EasyVersionBackup
             ApplyMainWindowHeightForThreeRows();
             RefreshConfiguredPaths();
             RestartAutoBackupCountdown();
+        }
+        private void dataGridViewConfiguredPaths_CellToolTipTextNeeded(object? sender, DataGridViewCellToolTipTextNeededEventArgs e)
+        {
+            if (e.ColumnIndex < 0)
+            {
+                return;
+            }
+
+            e.ToolTipText = GetConfiguredPathActionColumnToolTipText(e.ColumnIndex);
+        }
+        private string GetConfiguredPathActionColumnToolTipText(int columnIndex)
+        {
+            string columnName = dataGridViewConfiguredPaths.Columns[columnIndex].Name;
+
+            if (columnName == "ColumnConfiguredSourceBrowse")
+            {
+                return "Browse source directory";
+            }
+
+            if (columnName == "ColumnConfiguredSourceSettings")
+            {
+                return "Backup pair settings";
+            }
+
+            if (columnName == "ColumnConfiguredSourceExclusions")
+            {
+                return "Edit excluded source paths";
+            }
+
+            if (columnName == "ColumnConfiguredTargetBrowse")
+            {
+                return "Browse target directory";
+            }
+
+            return string.Empty;
+        }
+        private void dataGridViewConfiguredPaths_CellMouseLeave(object? sender, DataGridViewCellEventArgs e)
+        {
+            _mainToolTip.SetToolTip(dataGridViewConfiguredPaths, string.Empty);
+        }
+        private void dataGridViewConfiguredPaths_CellMouseEnter(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.ColumnIndex < 0)
+            {
+                _mainToolTip.SetToolTip(dataGridViewConfiguredPaths, string.Empty);
+                return;
+            }
+
+            string toolTipText = GetConfiguredPathActionColumnToolTipText(e.ColumnIndex);
+            _mainToolTip.SetToolTip(dataGridViewConfiguredPaths, toolTipText);
         }
         protected override void OnShown(EventArgs e)
         {
@@ -307,6 +361,12 @@ namespace EasyVersionBackup
             }
 
             Point cursorPosition = PointToClient(Cursor.Position);
+            Control? controlAtCursor = GetChildAtPoint(cursorPosition);
+
+            if (controlAtCursor is Button)
+            {
+                return;
+            }
 
             bool isLeft = cursorPosition.X <= resizeBorderSize;
             bool isRight = cursorPosition.X >= ClientSize.Width - resizeBorderSize;
@@ -766,7 +826,11 @@ namespace EasyVersionBackup
                     row.Cells["ColumnConfiguredIsEnabled"].Value = pair.IsEnabled;
                     row.Cells["ColumnConfiguredAutoBackupTimer"].Value = string.Empty;
                     row.Cells["ColumnConfiguredSourceDirectory"].Value = pair.SourceDirectory;
+                    row.Cells["ColumnConfiguredSourceBrowse"].ToolTipText = "Browse source directory";
+                    row.Cells["ColumnConfiguredSourceSettings"].ToolTipText = "Backup pair settings";
+                    row.Cells["ColumnConfiguredSourceExclusions"].ToolTipText = "Edit excluded source paths";
                     row.Cells["ColumnConfiguredTargetDirectory"].Value = pair.TargetDirectory;
+                    row.Cells["ColumnConfiguredTargetBrowse"].ToolTipText = "Browse target directory";
                     row.Cells["ColumnConfiguredBackupInfo"].Value = GetBackupInfoIcon(pair);
                     row.Cells["ColumnConfiguredBackupInfo"].ToolTipText = GetBackupInfoToolTipText(pair);
 
@@ -1860,6 +1924,14 @@ namespace EasyVersionBackup
                 return;
             }
 
+            if (e.RowIndex == -1 && columnName == "ColumnConfiguredSourceExclusions")
+            {
+                e.Paint(e.CellBounds, DataGridViewPaintParts.All & ~DataGridViewPaintParts.ContentForeground);
+                DrawConfiguredFilterIcon(e.Graphics, e.CellBounds, false, ModernTheme.TextColor);
+                e.Handled = true;
+                return;
+            }
+
             if (e.RowIndex < 0)
             {
                 return;
@@ -1898,6 +1970,7 @@ namespace EasyVersionBackup
 
             e.Handled = true;
         }
+        
         private void DrawConfiguredSettingsIcon(Graphics graphics, Rectangle cellBounds, Color outlineColor, float penWidth)
         {
             ModernTheme.DrawSettingsIcon(graphics, cellBounds, outlineColor, penWidth);
