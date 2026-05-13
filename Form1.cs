@@ -1,4 +1,4 @@
-// Design-Rule / UI consistency:
+﻿// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // 03.05.2026 /dc
@@ -2102,8 +2102,28 @@ namespace EasyVersionBackup
 
         private void ShowBackupInfoDialog(BackupPathPair pair)
         {
-            using ModernBackupInfoDialog dialog = new ModernBackupInfoDialog(this, GetBackupInfoToolTipText(pair));
+            string key = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+            string lastBackupFileName = _settings.BackupStatusesByPair.TryGetValue(key, out BackupPathStatus? status)
+                ? status.LastBackupFileName
+                : string.Empty;
+
+            List<BackupLogEntry> logEntries = BackupLogger.ReadBackupPairEntries(
+                pair.SourceDirectory,
+                pair.TargetDirectory,
+                lastBackupFileName,
+                500);
+
+            using ModernBackupInfoDialog dialog = new ModernBackupInfoDialog(
+                this,
+                GetBackupInfoToolTipText(pair),
+                logEntries,
+                new Size(_settings.BackupInfoDialogWidth, _settings.BackupInfoDialogHeight));
+
             dialog.ShowDialog(this);
+
+            _settings.BackupInfoDialogWidth = dialog.DialogSize.Width;
+            _settings.BackupInfoDialogHeight = dialog.DialogSize.Height;
+            SaveSettings();
         }
         private void dataGridViewConfiguredPaths_CellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
         {

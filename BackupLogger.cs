@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 
@@ -80,6 +81,11 @@ namespace EasyVersionBackup
             {
                 WriteRawLine(message);
             }
+        }
+
+        public static string GetCurrentLogFilePath()
+        {
+            return Path.Combine(GetLogDirectory(), $"EasyVersionBackup_{DateTime.Now:yyyy-MM-dd}.log");
         }
 
         public static List<BackupLogEntry> ReadBackupPairEntries(string sourceDirectory, string targetDirectory, string lastBackupFileName, int maxEntries)
@@ -171,7 +177,13 @@ namespace EasyVersionBackup
 
             string[] parts = line.Split(new[] { " | " }, 2, StringSplitOptions.None);
 
-            if (parts.Length != 2 || !DateTime.TryParse(parts[0], out DateTime timestamp))
+            if (parts.Length != 2 ||
+                !DateTime.TryParseExact(
+                    parts[0],
+                    "yyyy-MM-dd HH:mm:ss.fff",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out DateTime timestamp))
             {
                 return false;
             }
@@ -215,8 +227,23 @@ namespace EasyVersionBackup
 
         private static bool ContainsText(string text, string value)
         {
-            return !string.IsNullOrWhiteSpace(value) &&
-                   text.Contains(value, StringComparison.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            string normalizedText = NormalizeForSearch(text);
+            string normalizedValue = NormalizeForSearch(value);
+
+            return normalizedText.Contains(normalizedValue, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeForSearch(string value)
+        {
+            return value
+                .Trim()
+                .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
+                .TrimEnd(Path.DirectorySeparatorChar);
         }
 
         private static void WriteRawLine(string message)
@@ -228,7 +255,7 @@ namespace EasyVersionBackup
                     string logDirectory = GetLogDirectory();
                     Directory.CreateDirectory(logDirectory);
 
-                    string logFilePath = Path.Combine(logDirectory, $"EasyVersionBackup_{DateTime.Now:yyyy-MM-dd}.log");
+                    string logFilePath = GetCurrentLogFilePath();
                     string logLine = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | {message}{Environment.NewLine}";
 
                     File.AppendAllText(logFilePath, logLine);

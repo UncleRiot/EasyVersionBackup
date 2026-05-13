@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -10,6 +10,7 @@ namespace EasyVersionBackup
     {
         private readonly Label labelBackupInfo = new Label();
         private readonly DataGridView dataGridViewBackupLog = new DataGridView();
+        private readonly Label labelLogFilePath = new Label();
         private readonly Button buttonOk = new Button();
         private readonly ModernTheme.ModernScrollBar verticalScrollBarBackupLog;
         private readonly ModernTheme.ModernScrollBar horizontalScrollBarBackupLog;
@@ -68,12 +69,14 @@ namespace EasyVersionBackup
             InitializeModernTitleBar();
             InitializeBackupInfoLabel(backupInfoText);
             InitializeBackupLogGrid(logEntries);
+            InitializeLogFilePathLabel();
             InitializeDialogButtons();
 
             Controls.Add(labelBackupInfo);
             Controls.Add(dataGridViewBackupLog);
             Controls.Add(verticalScrollBarBackupLog);
             Controls.Add(horizontalScrollBarBackupLog);
+            Controls.Add(labelLogFilePath);
             Controls.Add(buttonOk);
 
             verticalScrollBarBackupLog.ScrollValueChanged += verticalScrollBarBackupLog_ScrollValueChanged;
@@ -323,6 +326,16 @@ namespace EasyVersionBackup
             return ModernTheme.BackupInfoDefaultColor;
         }
 
+        private void InitializeLogFilePathLabel()
+        {
+            labelLogFilePath.AutoSize = false;
+            labelLogFilePath.BackColor = Color.Transparent;
+            labelLogFilePath.ForeColor = ModernTheme.TextColor;
+            labelLogFilePath.TextAlign = ContentAlignment.MiddleLeft;
+            labelLogFilePath.Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
+            labelLogFilePath.Text = BackupLogger.GetCurrentLogFilePath();
+        }
+
         private void InitializeDialogButtons()
         {
             buttonOk.Text = "OK";
@@ -352,8 +365,13 @@ namespace EasyVersionBackup
 
             ModernTheme.PositionSingleDialogButton(this, buttonOk, true);
 
+            labelLogFilePath.Location = new Point(margin, buttonOk.Top);
+            labelLogFilePath.Size = new Size(
+                Math.Max(0, buttonOk.Left - margin - ModernTheme.BackupInfoDialogSpacing),
+                buttonOk.Height);
+
             int gridTop = labelBackupInfo.Bottom + ModernTheme.BackupInfoDialogSpacing;
-            int gridBottom = buttonOk.Top - ModernTheme.BackupInfoDialogSpacing;
+            int gridBottom = labelLogFilePath.Top - ModernTheme.BackupInfoDialogSpacing;
             int gridWidth = Math.Max(
                 ModernTheme.BackupInfoDialogTextColumnMinimumWidth,
                 ClientSize.Width - (margin * 2) - scrollBarSize);
