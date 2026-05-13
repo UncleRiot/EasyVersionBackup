@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Text.Json;
 
@@ -6,8 +6,11 @@ namespace EasyVersionBackup
 {
     public static class SettingsStorage
     {
+        private static readonly string SettingsDirectoryPath =
+            Path.Combine(AppContext.BaseDirectory, "Settings");
+
         private static readonly string SettingsFilePath =
-            Path.Combine(AppContext.BaseDirectory, "EasyVersionBackup.settings.json");
+            Path.Combine(SettingsDirectoryPath, "EasyVersionBackup.settings.json");
 
         public static AppSettings Load()
         {
@@ -58,6 +61,21 @@ namespace EasyVersionBackup
             {
                 settings.BackupStatusesByPair = new System.Collections.Generic.Dictionary<string, BackupPathStatus>();
             }
+
+            if (settings.Tags == null)
+            {
+                settings.Tags = new System.Collections.Generic.List<string>();
+            }
+
+            if (settings.BackupVersionDialogWidth <= 0)
+            {
+                settings.BackupVersionDialogWidth = 560;
+            }
+
+            if (settings.BackupVersionDialogHeight <= 0)
+            {
+                settings.BackupVersionDialogHeight = 330;
+            }
         }
         public static bool TryImportFromFile(string filePath, out AppSettings importedSettings, out string errorMessage)
         {
@@ -107,6 +125,8 @@ namespace EasyVersionBackup
         {
             EnsureSettingsInitialized(settings);
 
+            Directory.CreateDirectory(SettingsDirectoryPath);
+
             JsonSerializerOptions options = new JsonSerializerOptions
             {
                 WriteIndented = true
@@ -128,7 +148,8 @@ namespace EasyVersionBackup
                 ZipDestinationFiles = true,
                 DefaultVersioning = "0.0.1",
                 AutoIncrementVersion = true,
-                MinimizeToSystray = false
+                MinimizeToSystray = false,
+                Tags = new System.Collections.Generic.List<string>()
             };
         }
     }

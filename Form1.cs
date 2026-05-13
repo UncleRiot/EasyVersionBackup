@@ -24,6 +24,14 @@ namespace EasyVersionBackup
         private readonly ToolTip _mainToolTip = new ToolTip();
         private string _lastBackupDestinationFileName = string.Empty;
         private readonly bool _startMinimizedToSystray;
+        private readonly ModernTheme.ModernScrollBar _configuredPathsVerticalScrollBar = new ModernTheme.ModernScrollBar
+        {
+            Name = "configuredPathsVerticalScrollBar",
+            Orientation = Orientation.Vertical,
+            Visible = false
+        };
+        private bool _isUpdatingConfiguredPathsScrollBar;
+        private bool _isApplyingWindowSettings;
 
         private Panel? _modernTitleBarPanel;
         private Label? _modernTitleLabel;
@@ -113,16 +121,29 @@ namespace EasyVersionBackup
             InitializeBackupInfoColumn();
             InitializeConfiguredPathActionColumns();
 
+            dataGridViewConfiguredPaths.ScrollBars = ScrollBars.None;
             dataGridViewConfiguredPaths.CellContentClick += dataGridViewConfiguredPaths_CellContentClick;
             dataGridViewConfiguredPaths.CellPainting += dataGridViewConfiguredPaths_CellPainting;
             dataGridViewConfiguredPaths.CellToolTipTextNeeded += dataGridViewConfiguredPaths_CellToolTipTextNeeded;
+            InitializeConfiguredPathsScrollBar();
 
             _autoBackupCountdownTimer.Interval = TitleRefreshIntervalMilliseconds;
             _autoBackupCountdownTimer.Tick += autoBackupCountdownTimer_Tick;
 
             LoadSettings();
-            ApplyWindowSettings();
-            ApplyMainWindowHeightForThreeRows();
+
+            _isApplyingWindowSettings = true;
+
+            try
+            {
+                ApplyMainWindowHeightForThreeRows();
+                ApplyWindowSettings();
+            }
+            finally
+            {
+                _isApplyingWindowSettings = false;
+            }
+
             RefreshConfiguredPaths();
             RestartAutoBackupCountdown();
         }
@@ -653,6 +674,7 @@ namespace EasyVersionBackup
                 RetentionKeepDaysEnabled = false,
                 RetentionKeepDaysCount = 14,
                 RetentionMode = BackupHelper.RetentionModeAny,
+                RetentionExcludedTags = new List<string>(),
                 ExcludedPaths = new List<string>()
             };
 
@@ -783,13 +805,43 @@ namespace EasyVersionBackup
             int gridHeight = dataGridViewConfiguredPaths.ColumnHeadersHeight + (dataGridViewConfiguredPaths.RowTemplate.Height * 3) + 2;
             int clientHeight = dataGridViewConfiguredPaths.Top + gridHeight + 12;
 
-            ClientSize = new Size(ClientSize.Width, clientHeight);
             MinimumSize = SizeFromClientSize(new Size(500, clientHeight));
+
+            if (_settings.MainWindowWidth <= 0 || _settings.MainWindowHeight <= 0)
+            {
+                ClientSize = new Size(ClientSize.Width, clientHeight);
+                return;
+            }
+
+            if (Width < MinimumSize.Width || Height < MinimumSize.Height)
+            {
+                Size = new Size(
+                    Math.Max(Width, MinimumSize.Width),
+                    Math.Max(Height, MinimumSize.Height));
+            }
         }
 
         private void SaveWindowSettings()
         {
+            if (_isApplyingWindowSettings || WindowState == FormWindowState.Minimized)
+            {
+                return;
+            }
+
             Rectangle bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+
+            if (bounds.Width <= 0 || bounds.Height <= 0)
+            {
+                return;
+            }
+
+            if (_settings.MainWindowWidth == bounds.Width &&
+                _settings.MainWindowHeight == bounds.Height &&
+                _settings.MainWindowLeft == bounds.Left &&
+                _settings.MainWindowTop == bounds.Top)
+            {
+                return;
+            }
 
             _settings.MainWindowWidth = bounds.Width;
             _settings.MainWindowHeight = bounds.Height;
@@ -844,7 +896,119 @@ namespace EasyVersionBackup
             finally
             {
                 _isRefreshingConfiguredPaths = false;
+                UpdateConfiguredPathsScrollBar();
             }
+        }
+
+        private void InitializeConfiguredPathsScrollBar()
+        {
+            _configuredPathsVerticalScrollBar.ScrollValueChanged += configuredPathsVerticalScrollBar_ScrollValueChanged;
+
+            dataGridViewConfiguredPaths.Scroll += dataGridViewConfiguredPaths_Scroll;
+            dataGridViewConfiguredPaths.RowsAdded += dataGridViewConfiguredPaths_ContentChanged;
+            dataGridViewConfiguredPaths.RowsRemoved += dataGridViewConfiguredPaths_ContentChanged;
+            dataGridViewConfiguredPaths.Resize += dataGridViewConfiguredPaths_ContentChanged;
+            dataGridViewConfiguredPaths.MouseWheel += dataGridViewConfiguredPaths_MouseWheel;
+
+            Controls.Add(_configuredPathsVerticalScrollBar);
+            _configuredPathsVerticalScrollBar.BringToFront();
+
+            UpdateConfiguredPathsScrollBarBounds();
+        }
+
+        private void UpdateConfiguredPathsScrollBarBounds()
+        {
+            int scrollBarSize = ModernTheme.DataGridViewScrollBarSize;
+            int rightMargin = 12;
+            int bottomMargin = 12;
+            int gridRight = ClientSize.Width - rightMargin - scrollBarSize;
+            int gridBottom = ClientSize.Height - bottomMargin;
+
+            dataGridViewConfiguredPaths.Size = new Size(
+                Math.Max(100, gridRight - dataGridViewConfiguredPaths.Left),
+                Math.Max(60, gridBottom - dataGridViewConfiguredPaths.Top));
+
+            _configuredPathsVerticalScrollBar.Location = new Point(dataGridViewConfiguredPaths.Right, dataGridViewConfiguredPaths.Top);
+            _configuredPathsVerticalScrollBar.Size = new Size(scrollBarSize, dataGridViewConfiguredPaths.Height);
+            _configuredPathsVerticalScrollBar.BringToFront();
+
+            UpdateConfiguredPathsScrollBar();
+        }
+
+        private void UpdateConfiguredPathsScrollBar()
+        {
+            if (_isUpdatingConfiguredPathsScrollBar)
+            {
+                return;
+            }
+
+            _isUpdatingConfiguredPathsScrollBar = true;
+
+            try
+            {
+                int visibleRowCount = Math.Max(1, dataGridViewConfiguredPaths.DisplayedRowCount(false));
+                int maximumFirstDisplayedRowIndex = Math.Max(0, dataGridViewConfiguredPaths.Rows.Count - visibleRowCount);
+                int firstDisplayedRowIndex = GetConfiguredPathsFirstDisplayedScrollingRowIndex();
+
+                _configuredPathsVerticalScrollBar.Minimum = 0;
+                _configuredPathsVerticalScrollBar.Maximum = maximumFirstDisplayedRowIndex;
+                _configuredPathsVerticalScrollBar.LargeChange = visibleRowCount;
+                _configuredPathsVerticalScrollBar.Visible = maximumFirstDisplayedRowIndex > 0;
+                _configuredPathsVerticalScrollBar.Value = Math.Min(maximumFirstDisplayedRowIndex, Math.Max(0, firstDisplayedRowIndex));
+                _configuredPathsVerticalScrollBar.Invalidate();
+            }
+            finally
+            {
+                _isUpdatingConfiguredPathsScrollBar = false;
+            }
+        }
+
+        private int GetConfiguredPathsFirstDisplayedScrollingRowIndex()
+        {
+            try
+            {
+                return dataGridViewConfiguredPaths.FirstDisplayedScrollingRowIndex;
+            }
+            catch (InvalidOperationException)
+            {
+                return 0;
+            }
+        }
+
+        private void configuredPathsVerticalScrollBar_ScrollValueChanged(object? sender, EventArgs e)
+        {
+            if (_isUpdatingConfiguredPathsScrollBar || dataGridViewConfiguredPaths.Rows.Count == 0)
+            {
+                return;
+            }
+
+            try
+            {
+                dataGridViewConfiguredPaths.FirstDisplayedScrollingRowIndex = Math.Min(_configuredPathsVerticalScrollBar.Value, dataGridViewConfiguredPaths.Rows.Count - 1);
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        private void dataGridViewConfiguredPaths_Scroll(object? sender, ScrollEventArgs e)
+        {
+            UpdateConfiguredPathsScrollBar();
+        }
+
+        private void dataGridViewConfiguredPaths_ContentChanged(object? sender, EventArgs e)
+        {
+            UpdateConfiguredPathsScrollBar();
+        }
+
+        private void dataGridViewConfiguredPaths_MouseWheel(object? sender, MouseEventArgs e)
+        {
+            if (!_configuredPathsVerticalScrollBar.Visible)
+            {
+                return;
+            }
+
+            _configuredPathsVerticalScrollBar.Value += e.Delta > 0 ? -1 : 1;
         }
 
         private void exitToolStripMenuItem_Click(object? sender, EventArgs e)
@@ -909,6 +1073,9 @@ namespace EasyVersionBackup
             Dictionary<BackupPathPair, string> versionsByPair = validPairs
                 .ToDictionary(pair => pair, pair => VersionHelper.GetSuggestedVersion(_settings, pair));
 
+            Dictionary<BackupPathPair, string> tagsByPair = validPairs
+                .ToDictionary(pair => pair, pair => string.Empty);
+
             if (dialogPairs.Count > 0)
             {
                 List<BackupVersionItem> versionItems = dialogPairs
@@ -917,13 +1084,27 @@ namespace EasyVersionBackup
                         SourceDirectory = pair.SourceDirectory,
                         TargetDirectory = pair.TargetDirectory,
                         SourceName = new DirectoryInfo(pair.SourceDirectory).Name,
-                        Version = versionsByPair[pair]
+                        Version = versionsByPair[pair],
+                        Tag = tagsByPair[pair]
                     })
                     .ToList();
 
-                using VersionInputForm versionForm = new VersionInputForm(versionItems, _settings.IgnoreCopyErrors);
+                using VersionInputForm versionForm = new VersionInputForm(
+                    versionItems,
+                    _settings.IgnoreCopyErrors,
+                    (_settings.Tags ?? new List<string>()),
+                    new Size(_settings.BackupVersionDialogWidth, _settings.BackupVersionDialogHeight));
 
-                if (versionForm.ShowDialog(this) != DialogResult.OK)
+                DialogResult versionDialogResult = versionForm.ShowDialog(this);
+
+                if (versionForm.DialogSize.Width > 0 && versionForm.DialogSize.Height > 0)
+                {
+                    _settings.BackupVersionDialogWidth = versionForm.DialogSize.Width;
+                    _settings.BackupVersionDialogHeight = versionForm.DialogSize.Height;
+                    SaveSettings();
+                }
+
+                if (versionDialogResult != DialogResult.OK)
                 {
                     return;
                 }
@@ -933,6 +1114,7 @@ namespace EasyVersionBackup
                 for (int i = 0; i < dialogPairs.Count; i++)
                 {
                     versionsByPair[dialogPairs[i]] = versionForm.ResultItems[i].Version;
+                    tagsByPair[dialogPairs[i]] = versionForm.ResultItems[i].Tag;
                 }
             }
 
@@ -946,7 +1128,7 @@ namespace EasyVersionBackup
                 {
                     _ignoreAllFileErrors = pair.IgnoreCopyErrors;
 
-                    int skippedForPair = ExecuteBackup(pair, versionsByPair[pair], out List<string> skippedFilePaths, out string destinationAction);
+                    int skippedForPair = ExecuteBackup(pair, versionsByPair[pair], tagsByPair[pair], out List<string> skippedFilePaths, out string destinationAction);
                     int purgedForPair = _settings.AutoPurgeEnabled
                         ? BackupHelper.ApplyRetention(pair, _settings.ZipDestinationFiles, out List<string> purgedPaths)
                         : BackupHelper.ApplyRetentionDisabled(out purgedPaths);
@@ -1053,7 +1235,7 @@ namespace EasyVersionBackup
             }
         }
 
-        private int ExecuteBackup(BackupPathPair pair, string version, out List<string> skippedFilePaths, out string destinationAction)
+        private int ExecuteBackup(BackupPathPair pair, string version, string tag, out List<string> skippedFilePaths, out string destinationAction)
         {
             int skipped = 0;
             skippedFilePaths = new List<string>();
@@ -1062,6 +1244,12 @@ namespace EasyVersionBackup
 
             string sourceName = new DirectoryInfo(pair.SourceDirectory).Name;
             string versionedName = VersionHelper.BuildVersionedName(sourceName, version);
+
+            if (!string.IsNullOrWhiteSpace(tag))
+            {
+                versionedName += "_" + tag.Trim();
+            }
+
             string conflictHandling = BackupHelper.NormalizeDestinationConflictHandling(_settings.BackupDestinationConflictHandling);
 
             if (_settings.ZipDestinationFiles)
@@ -1093,6 +1281,11 @@ namespace EasyVersionBackup
                     }
                     else
                     {
+                        if (BackupHelper.IsProtectedByRetentionExcludedTag(zipPath, pair))
+                        {
+                            throw new OperationCanceledException(zipPath);
+                        }
+
                         File.Delete(zipPath);
                         destinationAction = BackupHelper.DestinationActionOverwritten;
                     }
@@ -1130,6 +1323,11 @@ namespace EasyVersionBackup
                 }
                 else
                 {
+                    if (BackupHelper.IsProtectedByRetentionExcludedTag(destinationDirectory, pair))
+                    {
+                        throw new OperationCanceledException(destinationDirectory);
+                    }
+
                     Directory.Delete(destinationDirectory, true);
                     destinationAction = BackupHelper.DestinationActionOverwritten;
                 }
@@ -1140,7 +1338,6 @@ namespace EasyVersionBackup
 
             return skipped;
         }
-
         private int CopyDirectory(string sourceDirectory, string destinationDirectory, List<string> excludedPaths, List<string> skippedFilePaths)
         {
             int skipped = 0;
@@ -1149,8 +1346,11 @@ namespace EasyVersionBackup
 
             foreach (string directoryPath in BackupHelper.GetIncludedDirectories(sourceDirectory, excludedPaths))
             {
-                string relativePath = Path.GetRelativePath(sourceDirectory, directoryPath);
-                string targetDirectoryPath = Path.Combine(destinationDirectory, relativePath);
+                string relativeDirectoryPath = Path.GetRelativePath(sourceDirectory, directoryPath);
+                string targetDirectoryPath = relativeDirectoryPath == "."
+                    ? destinationDirectory
+                    : Path.Combine(destinationDirectory, relativeDirectoryPath);
+
                 Directory.CreateDirectory(targetDirectoryPath);
 
                 foreach (string filePath in Directory.GetFiles(directoryPath, "*", SearchOption.TopDirectoryOnly))
@@ -1167,10 +1367,8 @@ namespace EasyVersionBackup
                     {
                         try
                         {
-                            using FileStream sourceStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                            using FileStream targetStream = new FileStream(targetFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
-
-                            sourceStream.CopyTo(targetStream);
+                            Directory.CreateDirectory(Path.GetDirectoryName(targetFilePath) ?? destinationDirectory);
+                            File.Copy(filePath, targetFilePath, true);
                             break;
                         }
                         catch (Exception exception)
@@ -1212,7 +1410,6 @@ namespace EasyVersionBackup
 
             return skipped;
         }
-
         private int CreateZipFromDirectory(string sourceDirectory, string zipPath, List<string> excludedPaths, List<string> skippedFilePaths)
         {
             int skipped = 0;
@@ -1370,7 +1567,7 @@ namespace EasyVersionBackup
 
                 try
                 {
-                    int skippedForPair = ExecuteBackup(pair, automaticVersion, out List<string> skippedFilePaths, out string destinationAction);
+                    int skippedForPair = ExecuteBackup(pair, automaticVersion, string.Empty, out List<string> skippedFilePaths, out string destinationAction);
                     int purgedForPair = _settings.AutoPurgeEnabled
                         ? BackupHelper.ApplyRetention(pair, _settings.ZipDestinationFiles, out List<string> purgedPaths)
                         : BackupHelper.ApplyRetentionDisabled(out purgedPaths);
@@ -1851,7 +2048,7 @@ namespace EasyVersionBackup
                     ? _settings.DefaultVersioning
                     : pair.Versioning;
 
-                using BackupPairSettingsDialog dialog = new BackupPairSettingsDialog(this, pair, _settings.DefaultVersioning, _settings.ZipDestinationFiles && _settings.AutoPurgeEnabled);
+                using BackupPairSettingsDialog dialog = new BackupPairSettingsDialog(this, pair, _settings.DefaultVersioning, _settings.ZipDestinationFiles && _settings.AutoPurgeEnabled, _settings.Tags);
 
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                 {
@@ -1871,6 +2068,7 @@ namespace EasyVersionBackup
                     pair.RetentionKeepDaysEnabled = dialog.ResultRetentionKeepDaysEnabled;
                     pair.RetentionKeepDaysCount = dialog.ResultRetentionKeepDaysCount;
                     pair.RetentionMode = dialog.ResultRetentionMode;
+                    pair.RetentionExcludedTags = new List<string>(dialog.ResultRetentionExcludedTags);
 
                     SaveSettings();
                 }
@@ -2125,6 +2323,11 @@ namespace EasyVersionBackup
         }
         private void Form1_Resize(object sender, EventArgs e)
         {
+            if (WindowState == FormWindowState.Normal)
+            {
+                UpdateConfiguredPathsScrollBarBounds();
+            }
+
             if (!_settings.MinimizeToSystray)
             {
                 return;

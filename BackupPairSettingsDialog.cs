@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -27,6 +27,8 @@ namespace EasyVersionBackup
         private readonly CheckBox checkBoxKeepDays;
         private readonly TextBox textBoxKeepDays;
         private readonly ComboBox comboBoxRetentionMode;
+        private readonly Label labelRetentionExclusions;
+        private readonly CheckedListBox checkedListBoxRetentionExclusions;
         private readonly Button buttonOk;
         private readonly Button buttonCancel;
 
@@ -39,8 +41,9 @@ namespace EasyVersionBackup
         public bool ResultRetentionKeepDaysEnabled { get; private set; }
         public int ResultRetentionKeepDaysCount { get; private set; }
         public string ResultRetentionMode { get; private set; }
+        public System.Collections.Generic.List<string> ResultRetentionExcludedTags { get; private set; }
 
-        public BackupPairSettingsDialog(Form owner, BackupPathPair pair, string defaultVersioning, bool zipRetentionAvailable)
+        public BackupPairSettingsDialog(Form owner, BackupPathPair pair, string defaultVersioning, bool zipRetentionAvailable, System.Collections.Generic.List<string> availableTags)
         {
             ResultVersioning = string.IsNullOrWhiteSpace(pair.Versioning)
                 ? defaultVersioning
@@ -53,6 +56,9 @@ namespace EasyVersionBackup
             ResultRetentionKeepDaysEnabled = zipRetentionAvailable && pair.RetentionKeepDaysEnabled;
             ResultRetentionKeepDaysCount = pair.RetentionKeepDaysCount <= 0 ? 14 : pair.RetentionKeepDaysCount;
             ResultRetentionMode = BackupHelper.NormalizeRetentionMode(pair.RetentionMode);
+            ResultRetentionExcludedTags = pair.RetentionExcludedTags != null
+                ? new System.Collections.Generic.List<string>(pair.RetentionExcludedTags)
+                : new System.Collections.Generic.List<string>();
 
             Color retentionTextColor = zipRetentionAvailable
                 ? ModernTheme.TextColor
@@ -65,8 +71,8 @@ namespace EasyVersionBackup
             Icon = owner.Icon;
             Text = "Backup Pair Settings";
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(420, 355);
-            MinimumSize = new Size(420, 355);
+            ClientSize = new Size(420, 445);
+            MinimumSize = new Size(420, 445);
             FormBorderStyle = FormBorderStyle.None;
             BackColor = ModernTheme.WindowBackColor;
             Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
@@ -233,6 +239,42 @@ namespace EasyVersionBackup
                 ModernTheme.ApplyInactiveComboBoxStyle(comboBoxRetentionMode);
             }
 
+            labelRetentionExclusions = CreateLabel("labelRetentionExclusions", "Retention exclusions", 7);
+            labelRetentionExclusions.ForeColor = retentionTextColor;
+
+            checkedListBoxRetentionExclusions = new CheckedListBox
+            {
+                Name = "checkedListBoxRetentionExclusions",
+                Location = new Point(ModernTheme.SettingsControlLeft, GetDialogRowTop(7)),
+                Size = new Size(ModernTheme.SettingsComboBoxWidth, 74),
+                CheckOnClick = true,
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = retentionBackColor,
+                ForeColor = retentionTextColor,
+                Enabled = zipRetentionAvailable
+            };
+
+            if (availableTags != null)
+            {
+                foreach (string availableTag in availableTags)
+                {
+                    if (string.IsNullOrWhiteSpace(availableTag))
+                    {
+                        continue;
+                    }
+
+                    string tag = availableTag.Trim();
+
+                    if (CheckedListBoxContains(checkedListBoxRetentionExclusions, tag))
+                    {
+                        continue;
+                    }
+
+                    bool isChecked = ContainsIgnoreCase(ResultRetentionExcludedTags, tag);
+                    checkedListBoxRetentionExclusions.Items.Add(tag, isChecked);
+                }
+            }
+
             buttonOk = ModernTheme.CreateDialogPrimaryButton("buttonOk", "OK");
             buttonCancel = ModernTheme.CreateDialogSecondaryButton("buttonCancel", "Cancel", DialogResult.Cancel);
             ModernTheme.PositionDialogButtons(this, buttonOk, buttonCancel, true);
@@ -265,6 +307,8 @@ namespace EasyVersionBackup
             Controls.Add(labelKeepDaysUnit);
             Controls.Add(labelRetentionMode);
             Controls.Add(comboBoxRetentionMode);
+            Controls.Add(labelRetentionExclusions);
+            Controls.Add(checkedListBoxRetentionExclusions);
             Controls.Add(buttonOk);
             Controls.Add(buttonCancel);
 
@@ -316,6 +360,32 @@ namespace EasyVersionBackup
                 ForeColor = ModernTheme.TextColor,
                 BorderStyle = BorderStyle.FixedSingle
             };
+        }
+
+        private bool CheckedListBoxContains(CheckedListBox checkedListBox, string value)
+        {
+            foreach (object item in checkedListBox.Items)
+            {
+                if (string.Equals(item.ToString(), value, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool ContainsIgnoreCase(System.Collections.Generic.List<string> values, string value)
+        {
+            foreach (string currentValue in values)
+            {
+                if (string.Equals(currentValue, value, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -379,6 +449,18 @@ namespace EasyVersionBackup
             ResultRetentionMode = comboBoxRetentionMode.SelectedIndex == 1
                 ? BackupHelper.RetentionModeAll
                 : BackupHelper.RetentionModeAny;
+
+            ResultRetentionExcludedTags = new System.Collections.Generic.List<string>();
+
+            foreach (object checkedItem in checkedListBoxRetentionExclusions.CheckedItems)
+            {
+                string? tag = checkedItem.ToString();
+
+                if (!string.IsNullOrWhiteSpace(tag) && !ContainsIgnoreCase(ResultRetentionExcludedTags, tag.Trim()))
+                {
+                    ResultRetentionExcludedTags.Add(tag.Trim());
+                }
+            }
 
             DialogResult = DialogResult.OK;
             Close();

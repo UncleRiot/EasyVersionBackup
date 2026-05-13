@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -30,6 +31,7 @@ namespace EasyVersionBackup
 
         private readonly ComboBox comboBoxDefaultVersioning;
         private readonly ComboBox comboBoxBackupDestinationConflictHandling;
+        private readonly ComboBox comboBoxLogLevel;
         private readonly CheckBox checkBoxAutoIncrementVersion;
         private readonly CheckBox checkBoxMinimizeToSystray;
         private readonly CheckBox checkBoxAutoUpdateCheck;
@@ -38,6 +40,14 @@ namespace EasyVersionBackup
         private readonly CheckBox checkBoxAutoPurgeEnabled;
         private readonly CheckBox checkBoxAutoBackupEnabled;
         private readonly TextBox textBoxAutoBackupInterval;
+        private readonly TextBox textBoxTag;
+        private readonly Panel panelTagsList;
+        private readonly ModernTheme.ModernScrollBar scrollBarTags;
+        private readonly Button buttonAddTag;
+        private readonly Button buttonRemoveTag;
+        private readonly List<string> tags = new List<string>();
+        private int selectedTagIndex = -1;
+        private int tagListFirstVisibleIndex;
         private bool _isApplyingSettingsToUi;
 
         private readonly List<Button> tabButtons = new List<Button>();
@@ -154,6 +164,49 @@ namespace EasyVersionBackup
                 ForeColor = ModernTheme.TextColor
             };
 
+            comboBoxLogLevel = new ComboBox
+            {
+                Name = "comboBoxLogLevel",
+                Location = new Point(ModernTheme.SettingsControlLeft, ModernTheme.SettingsRowTop(0)),
+                Size = new Size(180, ModernTheme.SettingsControlHeight),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = ModernTheme.TitleBarBackColor,
+                ForeColor = ModernTheme.TextColor
+            };
+
+            buttonAddTag = CreateSmallToolButton("buttonAddTag", "+", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsRowTop(0)));
+            buttonRemoveTag = CreateSmallToolButton("buttonRemoveTag", "-", new Point(buttonAddTag.Right + ModernTheme.ToolbarButtonSpacing, buttonAddTag.Top));
+
+            textBoxTag = new TextBox
+            {
+                Name = "textBoxTag",
+                Location = new Point(buttonRemoveTag.Right + ModernTheme.ToolbarButtonSpacing, buttonAddTag.Top + 3),
+                Size = new Size(260, ModernTheme.SettingsControlHeight),
+                BackColor = ModernTheme.TitleBarBackColor,
+                ForeColor = ModernTheme.TextColor,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+
+            panelTagsList = new Panel
+            {
+                Name = "panelTagsList",
+                Location = new Point(ModernTheme.SettingsLabelLeft, textBoxTag.Bottom + 10),
+                Size = new Size(360, 170),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left,
+                BackColor = ModernTheme.TitleBarBackColor,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+
+            scrollBarTags = new ModernTheme.ModernScrollBar
+            {
+                Name = "scrollBarTags",
+                Orientation = Orientation.Vertical,
+                Location = new Point(panelTagsList.Right, panelTagsList.Top),
+                Size = new Size(ModernTheme.DataGridViewScrollBarSize, panelTagsList.Height),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left
+            };
+
             Label labelDefaultVersioning = CreateLabel("labelDefaultVersioning", "Default Versioning", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(0)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelAutoIncrementVersion = CreateLabel("labelAutoIncrementVersion", "Auto increment", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(1)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelMinimizeToSystray = CreateLabel("labelMinimizeToSystray", "Minimize to Systray", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(2)), new Size(ModernTheme.SettingsLabelWidth, 20));
@@ -162,6 +215,7 @@ namespace EasyVersionBackup
             Label labelIgnoreCopyErrors = CreateLabel("labelIgnoreCopyErrors", "Ignore Copy-Errors", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(0)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelAutoBackupEnabled = CreateLabel("labelAutoBackupEnabled", "Backup Timer", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(1)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelBackupDestinationConflictHandling = CreateLabel("labelBackupDestinationConflictHandling", "Destination Conflict", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(2)), new Size(ModernTheme.SettingsLabelWidth, 20));
+            Label labelLogLevel = CreateLabel("labelLogLevel", "Log level", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(0)), new Size(ModernTheme.SettingsLabelWidth, 20));
 
             Label labelAutoPurgeEnabled = CreateLabel("labelAutoPurgeEnabled", "Retention", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(5)), new Size(ModernTheme.SettingsLabelWidth, 20));
             labelAutoPurgeEnabled.ForeColor = ModernTheme.BackupInfoErrorColor;
@@ -219,9 +273,21 @@ namespace EasyVersionBackup
             settingsToolTip.SetToolTip(checkBoxAutoBackupEnabled, "Run backups automatically / timer based");
             settingsToolTip.SetToolTip(textBoxAutoBackupInterval, "Time between automatic backups");
             settingsToolTip.SetToolTip(comboBoxBackupDestinationConflictHandling, "Default action when the backup destination already exists");
+            settingsToolTip.SetToolTip(comboBoxLogLevel, "Minimal = smallest log, Normal = useful decisions, Verbose = every file entry");
             settingsToolTip.SetToolTip(checkBoxAutoPurgeEnabled, "Experimental feature. Permanently deletes old ZIP backups. Use at your own risk.");
             settingsToolTip.SetToolTip(buttonExportSettings, "Export current settings to " + ToolsHelper.SettingsFileName);
             settingsToolTip.SetToolTip(buttonImportSettings, "Import settings from " + ToolsHelper.SettingsFileName);
+            settingsToolTip.SetToolTip(textBoxTag, "New backup tag");
+            settingsToolTip.SetToolTip(buttonAddTag, "Add tag");
+            settingsToolTip.SetToolTip(buttonRemoveTag, "Remove selected tag");
+
+            buttonAddTag.Click += buttonAddTag_Click;
+            buttonRemoveTag.Click += buttonRemoveTag_Click;
+            panelTagsList.Paint += panelTagsList_Paint;
+            panelTagsList.MouseDown += panelTagsList_MouseDown;
+            panelTagsList.MouseWheel += panelTagsList_MouseWheel;
+            panelTagsList.Resize += panelTagsList_Resize;
+            scrollBarTags.ScrollValueChanged += scrollBarTags_ScrollValueChanged;
 
             checkBoxAutoBackupEnabled.CheckedChanged += checkBoxAutoBackupEnabled_CheckedChanged;
             checkBoxAutoPurgeEnabled.CheckedChanged += checkBoxAutoPurgeEnabled_CheckedChanged;
@@ -252,15 +318,29 @@ namespace EasyVersionBackup
             tabPageBackup.Controls.Add(labelBackupDestinationConflictHandling);
             tabPageBackup.Controls.Add(comboBoxBackupDestinationConflictHandling);
 
+            Panel tabPageTags = CreateTabPage("tabPageTags");
+            tabPageTags.Controls.Add(buttonAddTag);
+            tabPageTags.Controls.Add(buttonRemoveTag);
+            tabPageTags.Controls.Add(textBoxTag);
+            tabPageTags.Controls.Add(panelTagsList);
+            tabPageTags.Controls.Add(scrollBarTags);
+
+            Panel tabPageLog = CreateTabPage("tabPageLog");
+            tabPageLog.Controls.Add(labelLogLevel);
+            tabPageLog.Controls.Add(comboBoxLogLevel);
+
             Panel tabPageTools = CreateTabPage("tabPageTools");
             tabPageTools.Controls.Add(buttonExportSettings);
             tabPageTools.Controls.Add(buttonImportSettings);
 
             ApplyDynamicSettingsLayout(tabPageGeneral);
             ApplyDynamicSettingsLayout(tabPageBackup);
+            ApplyDynamicSettingsLayout(tabPageLog);
 
             AddSettingsTab("General", tabPageGeneral);
             AddSettingsTab("Backup", tabPageBackup);
+            AddSettingsTab("Tags", tabPageTags);
+            AddSettingsTab("Log", tabPageLog);
             AddSettingsTab("Tools", tabPageTools);
 
             buttonOk = ModernTheme.CreateDialogPrimaryButton("buttonOk", "OK");
@@ -362,6 +442,34 @@ namespace EasyVersionBackup
                 Cursor = Cursors.Hand,
                 TextAlign = ContentAlignment.MiddleCenter,
                 Padding = ModernTheme.DefaultButtonTextPadding,
+                UseVisualStyleBackColor = false
+            };
+
+            button.FlatAppearance.BorderColor = ModernTheme.AccentColor;
+            button.FlatAppearance.BorderSize = 1;
+            button.FlatAppearance.MouseOverBackColor = ModernTheme.ControlHoverBackColor;
+            button.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
+
+            return button;
+        }
+
+
+        private Button CreateSmallToolButton(string name, string text, Point location)
+        {
+            Button button = new Button
+            {
+                Name = name,
+                Text = text,
+                Location = location,
+                Size = ModernTheme.ToolbarButtonSize,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = ModernTheme.ControlBackColor,
+                ForeColor = ModernTheme.TextColor,
+                Cursor = Cursors.Hand,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Padding = text == "+"
+                    ? ModernTheme.ToolbarPlusButtonTextPadding
+                    : ModernTheme.ToolbarMinusButtonTextPadding,
                 UseVisualStyleBackColor = false
             };
 
@@ -618,6 +726,12 @@ namespace EasyVersionBackup
 
             comboBoxBackupDestinationConflictHandling.Text = BackupHelper.NormalizeDestinationConflictHandling(settings.BackupDestinationConflictHandling);
 
+            comboBoxLogLevel.Items.Clear();
+            comboBoxLogLevel.Items.Add(BackupLogger.LogLevelMinimal);
+            comboBoxLogLevel.Items.Add(BackupLogger.LogLevelNormal);
+            comboBoxLogLevel.Items.Add(BackupLogger.LogLevelVerbose);
+            comboBoxLogLevel.Text = BackupLogger.NormalizeLogLevel(settings.LogLevel);
+
             checkBoxAutoIncrementVersion.Checked = settings.AutoIncrementVersion;
             checkBoxMinimizeToSystray.Checked = settings.MinimizeToSystray;
             checkBoxAutoUpdateCheck.Checked = settings.AutoUpdateCheck;
@@ -626,6 +740,19 @@ namespace EasyVersionBackup
             checkBoxAutoPurgeEnabled.Checked = settings.AutoPurgeEnabled;
             checkBoxAutoBackupEnabled.Checked = settings.AutoBackupEnabled;
             textBoxAutoBackupInterval.Text = FormatAutoBackupIntervalText(GetAutoBackupIntervalSeconds(settings));
+
+            tags.Clear();
+
+            tags.AddRange((settings.Tags ?? new List<string>())
+                .Where(tag => !string.IsNullOrWhiteSpace(tag))
+                .Select(tag => tag.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase));
+
+            selectedTagIndex = -1;
+            tagListFirstVisibleIndex = 0;
+            textBoxTag.Clear();
+            UpdateTagsListUi();
 
             _isApplyingSettingsToUi = false;
 
@@ -645,9 +772,16 @@ namespace EasyVersionBackup
             settings.IgnoreCopyErrors = checkBoxIgnoreCopyErrors.Checked;
             settings.AutoPurgeEnabled = checkBoxAutoPurgeEnabled.Checked;
             settings.BackupDestinationConflictHandling = BackupHelper.NormalizeDestinationConflictHandling(comboBoxBackupDestinationConflictHandling.Text);
+            settings.LogLevel = BackupLogger.NormalizeLogLevel(comboBoxLogLevel.Text);
             settings.AutoBackupEnabled = checkBoxAutoBackupEnabled.Checked;
             settings.AutoBackupIntervalSeconds = autoBackupIntervalSeconds;
             settings.AutoBackupIntervalMinutes = Math.Max(1, (int)Math.Ceiling(autoBackupIntervalSeconds / 60.0));
+            settings.Tags = tags
+                .Where(tag => !string.IsNullOrWhiteSpace(tag))
+                .Select(tag => tag.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
             return settings;
         }
@@ -836,8 +970,207 @@ namespace EasyVersionBackup
                 return false;
             }
 
+            foreach (string tag in tags)
+            {
+                if (string.IsNullOrWhiteSpace(tag) || !VersionPatternHelper.IsValidVersionValue(tag))
+                {
+                    ModernMessageDialog.Show(this, "Error", "Tags must be usable as part of a file name.");
+                    return false;
+                }
+            }
+
             settings = ReadSettingsFromUi();
             return true;
+        }
+
+        private void buttonAddTag_Click(object? sender, EventArgs e)
+        {
+            string tag = textBoxTag.Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(tag))
+            {
+                return;
+            }
+
+            if (!VersionPatternHelper.IsValidVersionValue(tag))
+            {
+                ModernMessageDialog.Show(this, "Error", "Tag must be usable as part of a file name.");
+                return;
+            }
+
+            foreach (string existingTag in tags)
+            {
+                if (string.Equals(existingTag, tag, StringComparison.OrdinalIgnoreCase))
+                {
+                    textBoxTag.Clear();
+                    return;
+                }
+            }
+
+            tags.Add(tag);
+            tags.Sort(StringComparer.OrdinalIgnoreCase);
+            selectedTagIndex = tags.FindIndex(existingTag => string.Equals(existingTag, tag, StringComparison.OrdinalIgnoreCase));
+            EnsureSelectedTagVisible();
+            textBoxTag.Clear();
+            UpdateTagsListUi();
+        }
+
+        private void buttonRemoveTag_Click(object? sender, EventArgs e)
+        {
+            if (selectedTagIndex < 0 || selectedTagIndex >= tags.Count)
+            {
+                return;
+            }
+
+            tags.RemoveAt(selectedTagIndex);
+
+            if (selectedTagIndex >= tags.Count)
+            {
+                selectedTagIndex = tags.Count - 1;
+            }
+
+            if (tags.Count == 0)
+            {
+                selectedTagIndex = -1;
+                tagListFirstVisibleIndex = 0;
+            }
+
+            EnsureSelectedTagVisible();
+            UpdateTagsListUi();
+        }
+
+        private void panelTagsList_Paint(object? sender, PaintEventArgs e)
+        {
+            e.Graphics.Clear(ModernTheme.TitleBarBackColor);
+
+            using Pen borderPen = new Pen(ModernTheme.WindowBorderColor);
+            e.Graphics.DrawRectangle(borderPen, 0, 0, panelTagsList.Width - 1, panelTagsList.Height - 1);
+
+            int visibleCount = GetVisibleTagCount();
+            int rowLeft = 1;
+            int rowWidth = Math.Max(0, panelTagsList.ClientSize.Width - 2);
+            int rowTop = 1;
+
+            for (int visibleIndex = 0; visibleIndex < visibleCount; visibleIndex++)
+            {
+                int tagIndex = tagListFirstVisibleIndex + visibleIndex;
+
+                if (tagIndex >= tags.Count)
+                {
+                    break;
+                }
+
+                Rectangle rowBounds = new Rectangle(rowLeft, rowTop + visibleIndex * ModernTheme.SettingsControlHeight, rowWidth, ModernTheme.SettingsControlHeight);
+                bool isSelected = tagIndex == selectedTagIndex;
+
+                using SolidBrush rowBrush = new SolidBrush(isSelected ? ModernTheme.AccentColor : ModernTheme.TitleBarBackColor);
+                e.Graphics.FillRectangle(rowBrush, rowBounds);
+
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    tags[tagIndex],
+                    Font,
+                    new Rectangle(rowBounds.Left + 4, rowBounds.Top, rowBounds.Width - 8, rowBounds.Height),
+                    isSelected ? ModernTheme.DarkTextColor : ModernTheme.TextColor,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            }
+        }
+
+        private void panelTagsList_MouseDown(object? sender, MouseEventArgs e)
+        {
+            panelTagsList.Focus();
+
+            if (e.Button != MouseButtons.Left)
+            {
+                return;
+            }
+
+            int clickedIndex = tagListFirstVisibleIndex + Math.Max(0, (e.Y - 1) / ModernTheme.SettingsControlHeight);
+
+            if (clickedIndex < 0 || clickedIndex >= tags.Count)
+            {
+                return;
+            }
+
+            selectedTagIndex = clickedIndex;
+            UpdateTagsListUi();
+        }
+
+        private void panelTagsList_MouseWheel(object? sender, MouseEventArgs e)
+        {
+            if (!scrollBarTags.Visible)
+            {
+                return;
+            }
+
+            scrollBarTags.Value += e.Delta > 0 ? -1 : 1;
+        }
+
+        private void panelTagsList_Resize(object? sender, EventArgs e)
+        {
+            UpdateTagsListUi();
+        }
+
+        private void scrollBarTags_ScrollValueChanged(object? sender, EventArgs e)
+        {
+            tagListFirstVisibleIndex = scrollBarTags.Value;
+            panelTagsList.Invalidate();
+        }
+
+        private void UpdateTagsListUi()
+        {
+            int visibleCount = GetVisibleTagCount();
+            int maximumFirstVisibleIndex = Math.Max(0, tags.Count - visibleCount);
+
+            if (tagListFirstVisibleIndex > maximumFirstVisibleIndex)
+            {
+                tagListFirstVisibleIndex = maximumFirstVisibleIndex;
+            }
+
+            if (tagListFirstVisibleIndex < 0)
+            {
+                tagListFirstVisibleIndex = 0;
+            }
+
+            scrollBarTags.Minimum = 0;
+            scrollBarTags.Maximum = maximumFirstVisibleIndex;
+            scrollBarTags.LargeChange = Math.Max(1, visibleCount);
+            scrollBarTags.Visible = maximumFirstVisibleIndex > 0;
+
+            if (scrollBarTags.Value != tagListFirstVisibleIndex)
+            {
+                scrollBarTags.Value = tagListFirstVisibleIndex;
+            }
+            else
+            {
+                scrollBarTags.Invalidate();
+            }
+
+            panelTagsList.Invalidate();
+        }
+
+        private int GetVisibleTagCount()
+        {
+            return Math.Max(1, (panelTagsList.ClientSize.Height - 2) / ModernTheme.SettingsControlHeight);
+        }
+
+        private void EnsureSelectedTagVisible()
+        {
+            if (selectedTagIndex < 0)
+            {
+                return;
+            }
+
+            int visibleCount = GetVisibleTagCount();
+
+            if (selectedTagIndex < tagListFirstVisibleIndex)
+            {
+                tagListFirstVisibleIndex = selectedTagIndex;
+            }
+            else if (selectedTagIndex >= tagListFirstVisibleIndex + visibleCount)
+            {
+                tagListFirstVisibleIndex = selectedTagIndex - visibleCount + 1;
+            }
         }
 
         private void buttonOk_Click(object? sender, EventArgs e)
@@ -998,6 +1331,7 @@ namespace EasyVersionBackup
                 IgnoreCopyErrors = settings.IgnoreCopyErrors,
                 AutoPurgeEnabled = settings.AutoPurgeEnabled,
                 BackupDestinationConflictHandling = settings.BackupDestinationConflictHandling,
+                LogLevel = BackupLogger.NormalizeLogLevel(settings.LogLevel),
                 AutoBackupEnabled = settings.AutoBackupEnabled,
                 AutoBackupIntervalMinutes = settings.AutoBackupIntervalMinutes,
                 AutoBackupIntervalSeconds = settings.AutoBackupIntervalSeconds,
@@ -1011,7 +1345,12 @@ namespace EasyVersionBackup
                 MainWindowWidth = settings.MainWindowWidth,
                 MainWindowHeight = settings.MainWindowHeight,
                 MainWindowLeft = settings.MainWindowLeft,
-                MainWindowTop = settings.MainWindowTop
+                MainWindowTop = settings.MainWindowTop,
+                Tags = settings.Tags != null
+                    ? new List<string>(settings.Tags)
+                    : new List<string>(),
+                BackupVersionDialogWidth = settings.BackupVersionDialogWidth,
+                BackupVersionDialogHeight = settings.BackupVersionDialogHeight
             };
 
             foreach (BackupPathPair pair in settings.BackupPathPairs)
@@ -1029,6 +1368,9 @@ namespace EasyVersionBackup
                     RetentionKeepDaysEnabled = pair.RetentionKeepDaysEnabled,
                     RetentionKeepDaysCount = pair.RetentionKeepDaysCount,
                     RetentionMode = pair.RetentionMode,
+                    RetentionExcludedTags = pair.RetentionExcludedTags != null
+                        ? new List<string>(pair.RetentionExcludedTags)
+                        : new List<string>(),
                     ExcludedPaths = new List<string>(pair.ExcludedPaths)
                 });
             }

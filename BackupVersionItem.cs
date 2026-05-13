@@ -6,5 +6,6 @@
         public string TargetDirectory { get; set; } = string.Empty;
         public string SourceName { get; set; } = string.Empty;
         public string Version { get; set; } = string.Empty;
+        public string Tag { get; set; } = string.Empty;
     }
 }

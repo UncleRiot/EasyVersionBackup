@@ -1,9 +1,10 @@
-﻿// Design-Rule / UI standards:
+// Design-Rule / UI standards:
 // This file defines the shared visual values for the application.
 // Forms should reuse these values to keep layout, spacing, colors, sizes, and fonts consistent.
 // 03.05.2026 /dc
 
 
+using System;
 using System.Drawing;
 
 namespace EasyVersionBackup
@@ -54,6 +55,21 @@ namespace EasyVersionBackup
         public const int TitleBarIconTop = 8;
         public const int TitleBarTextLeft = 30;
         // title bar settings end
+
+        // backup info dialog layout settings start
+        public static readonly Size BackupInfoDialogDefaultSize = new Size(760, 430);
+        public static readonly Size BackupInfoDialogMinimumClientSize = new Size(620, 330);
+        public const int BackupInfoDialogMargin = 12;
+        public const int BackupInfoDialogInfoTop = 44;
+        public const int BackupInfoDialogInfoHeight = 54;
+        public const int BackupInfoDialogSpacing = 8;
+        public const int BackupInfoDialogButtonBottomMargin = 12;
+        public const int BackupInfoDialogResizeGripReservedWidth = 22;
+        public const int BackupInfoDialogStatusColumnWidth = 56;
+        public const int BackupInfoDialogDateColumnWidth = 145;
+        public const int BackupInfoDialogTextColumnMinimumWidth = 260;
+        public const int BackupInfoDialogMinimumGridHeight = 120;
+        // backup info dialog layout settings end
 
         // settings layout settings start
         public const int SettingsLabelLeft = 26;
@@ -181,6 +197,160 @@ namespace EasyVersionBackup
             comboBox.BackColor = DisabledControlBackColor;
             comboBox.ForeColor = DisabledTextColor;
         }
+
+        // themed scroll bar start
+        public static readonly Color DataGridViewScrollBarTrackColor = WindowBackColor;
+        public static readonly Color DataGridViewScrollBarThumbColor = ControlBackColor;
+        public const int DataGridViewScrollBarSize = 14;
+        public const int DataGridViewScrollBarMinimumThumbSize = 24;
+
+        public sealed class ModernScrollBar : System.Windows.Forms.Control
+        {
+            private bool _isDragging;
+            private int _dragOffset;
+            private int _value;
+
+            public event EventHandler? ScrollValueChanged;
+
+            public System.Windows.Forms.Orientation Orientation { get; set; }
+
+            public int Minimum { get; set; }
+
+            public int Maximum { get; set; }
+
+            public int LargeChange { get; set; } = 1;
+
+            public int Value
+            {
+                get => _value;
+                set
+                {
+                    int normalizedValue = Math.Max(Minimum, Math.Min(Maximum, value));
+
+                    if (_value == normalizedValue)
+                    {
+                        return;
+                    }
+
+                    _value = normalizedValue;
+                    Invalidate();
+                    ScrollValueChanged?.Invoke(this, EventArgs.Empty);
+                }
+            }
+
+            public ModernScrollBar()
+            {
+                SetStyle(
+                    System.Windows.Forms.ControlStyles.AllPaintingInWmPaint |
+                    System.Windows.Forms.ControlStyles.UserPaint |
+                    System.Windows.Forms.ControlStyles.OptimizedDoubleBuffer |
+                    System.Windows.Forms.ControlStyles.ResizeRedraw,
+                    true);
+
+                BackColor = DataGridViewScrollBarTrackColor;
+                ForeColor = DataGridViewScrollBarThumbColor;
+                Cursor = System.Windows.Forms.Cursors.Hand;
+            }
+
+            protected override void OnPaint(System.Windows.Forms.PaintEventArgs e)
+            {
+                base.OnPaint(e);
+
+                using SolidBrush trackBrush = new SolidBrush(DataGridViewScrollBarTrackColor);
+                e.Graphics.FillRectangle(trackBrush, ClientRectangle);
+
+                if (Maximum <= Minimum)
+                {
+                    return;
+                }
+
+                using SolidBrush thumbBrush = new SolidBrush(DataGridViewScrollBarThumbColor);
+                e.Graphics.FillRectangle(thumbBrush, GetThumbRectangle());
+            }
+
+            protected override void OnMouseDown(System.Windows.Forms.MouseEventArgs e)
+            {
+                base.OnMouseDown(e);
+
+                if (e.Button != System.Windows.Forms.MouseButtons.Left || Maximum <= Minimum)
+                {
+                    return;
+                }
+
+                Rectangle thumbRectangle = GetThumbRectangle();
+                int mousePosition = Orientation == System.Windows.Forms.Orientation.Vertical ? e.Y : e.X;
+
+                if (thumbRectangle.Contains(e.Location))
+                {
+                    _isDragging = true;
+                    _dragOffset = mousePosition - (Orientation == System.Windows.Forms.Orientation.Vertical ? thumbRectangle.Top : thumbRectangle.Left);
+                    Capture = true;
+                    return;
+                }
+
+                Value += mousePosition < (Orientation == System.Windows.Forms.Orientation.Vertical ? thumbRectangle.Top : thumbRectangle.Left)
+                    ? -LargeChange
+                    : LargeChange;
+            }
+
+            protected override void OnMouseMove(System.Windows.Forms.MouseEventArgs e)
+            {
+                base.OnMouseMove(e);
+
+                if (!_isDragging || Maximum <= Minimum)
+                {
+                    return;
+                }
+
+                int length = Orientation == System.Windows.Forms.Orientation.Vertical ? Height : Width;
+                Rectangle thumbRectangle = GetThumbRectangle();
+                int availableTrack = Math.Max(1, length - (Orientation == System.Windows.Forms.Orientation.Vertical ? thumbRectangle.Height : thumbRectangle.Width));
+                int mousePosition = Orientation == System.Windows.Forms.Orientation.Vertical ? e.Y : e.X;
+                int thumbStart = Math.Max(0, Math.Min(availableTrack, mousePosition - _dragOffset));
+
+                Value = Minimum + (int)Math.Round((double)thumbStart / availableTrack * (Maximum - Minimum));
+            }
+
+            protected override void OnMouseUp(System.Windows.Forms.MouseEventArgs e)
+            {
+                base.OnMouseUp(e);
+
+                _isDragging = false;
+                Capture = false;
+            }
+
+            protected override void OnMouseWheel(System.Windows.Forms.MouseEventArgs e)
+            {
+                base.OnMouseWheel(e);
+
+                if (Maximum <= Minimum)
+                {
+                    return;
+                }
+
+                Value += e.Delta > 0 ? -1 : 1;
+            }
+
+            private Rectangle GetThumbRectangle()
+            {
+                int length = Orientation == System.Windows.Forms.Orientation.Vertical ? Height : Width;
+                int thickness = Orientation == System.Windows.Forms.Orientation.Vertical ? Width : Height;
+                int range = Math.Max(1, Maximum - Minimum + 1);
+                int largeChange = Math.Max(1, LargeChange);
+                int thumbLength = Math.Max(DataGridViewScrollBarMinimumThumbSize, length * largeChange / (range + largeChange));
+                thumbLength = Math.Min(length, thumbLength);
+                int availableTrack = Math.Max(1, length - thumbLength);
+                int thumbStart = Maximum <= Minimum
+                    ? 0
+                    : (int)Math.Round((double)(Value - Minimum) / (Maximum - Minimum) * availableTrack);
+
+                return Orientation == System.Windows.Forms.Orientation.Vertical
+                    ? new Rectangle(0, thumbStart, thickness, thumbLength)
+                    : new Rectangle(thumbStart, 0, thumbLength, thickness);
+            }
+        }
+        // themed scroll bar end
+
         // shared icon drawing start
         public static void DrawSettingsIcon(Graphics graphics, Rectangle bounds, Color outlineColor, float penWidth)
         {
@@ -238,6 +408,23 @@ namespace EasyVersionBackup
 
             graphics.SmoothingMode = previousSmoothingMode;
         }
+        public static void DrawBackupInfoStatusIcon(Graphics graphics, Rectangle bounds, Color color)
+        {
+            System.Drawing.Drawing2D.SmoothingMode previousSmoothingMode = graphics.SmoothingMode;
+            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            using SolidBrush circleBrush = new SolidBrush(color);
+            graphics.FillEllipse(circleBrush, bounds);
+
+            using SolidBrush iconBrush = new SolidBrush(BackupInfoTextColor);
+
+            int centerX = bounds.Left + bounds.Width / 2;
+            graphics.FillEllipse(iconBrush, centerX - 1, bounds.Top + 3, 2, 2);
+            graphics.FillRectangle(iconBrush, centerX - 1, bounds.Top + 7, 2, bounds.Height - 10);
+
+            graphics.SmoothingMode = previousSmoothingMode;
+        }
+
         // shared icon drawing end
 
         // dialog button factory start

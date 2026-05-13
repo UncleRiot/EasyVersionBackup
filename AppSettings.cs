@@ -1,4 +1,4 @@
-﻿
+
 
 
 using System.Collections.Generic;
@@ -28,6 +28,12 @@ namespace EasyVersionBackup
         public int MainWindowHeight { get; set; } = 207;
         public int MainWindowLeft { get; set; } = -1;
         public int MainWindowTop { get; set; } = -1;
+        public List<string> Tags { get; set; } = new List<string>();
+        public int BackupVersionDialogWidth { get; set; } = 560;
+        public int BackupVersionDialogHeight { get; set; } = 330;
+        public int BackupInfoDialogWidth { get; set; } = 760;
+        public int BackupInfoDialogHeight { get; set; } = 430;
+        public string LogLevel { get; set; } = "Normal";
     }
 
     public class BackupPathStatus
@@ -50,6 +56,7 @@ namespace EasyVersionBackup
         public bool RetentionKeepDaysEnabled { get; set; } = false;
         public int RetentionKeepDaysCount { get; set; } = 14;
         public string RetentionMode { get; set; } = "Any";
+        public List<string> RetentionExcludedTags { get; set; } = new List<string>();
         public List<string> ExcludedPaths { get; set; } = new List<string>();
     }
 }

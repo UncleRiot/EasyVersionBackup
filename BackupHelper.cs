@@ -255,23 +255,29 @@ namespace EasyVersionBackup
         {
             purgedPaths = new List<string>();
 
+            BackupLogger.WriteLine($"RETENTION SETTINGS | source={pair.SourceDirectory} | target={pair.TargetDirectory} | zip={zipDestinationFiles} | keepLast={(pair.RetentionKeepLastEnabled ? pair.RetentionKeepLastCount.ToString() : "off")} | keepDays={(pair.RetentionKeepDaysEnabled ? pair.RetentionKeepDaysCount.ToString() : "off")} | mode={FormatRetentionModeForLog(NormalizeRetentionMode(pair.RetentionMode))} | exclusions={FormatRetentionExcludedTags(pair)}");
+
             if (!zipDestinationFiles)
             {
+                BackupLogger.WriteLine("RETENTION SKIP | reason=zip backup disabled");
                 return 0;
             }
 
             if (!pair.RetentionKeepLastEnabled && !pair.RetentionKeepDaysEnabled)
             {
+                BackupLogger.WriteLine("RETENTION SKIP | reason=retention disabled for backup pair");
                 return 0;
             }
 
             if (string.IsNullOrWhiteSpace(pair.SourceDirectory) || string.IsNullOrWhiteSpace(pair.TargetDirectory))
             {
+                BackupLogger.WriteLine("RETENTION SKIP | reason=source or target directory missing");
                 return 0;
             }
 
             if (!Directory.Exists(pair.TargetDirectory))
             {
+                BackupLogger.WriteLine($"RETENTION SKIP | reason=target directory not found | target={pair.TargetDirectory}");
                 return 0;
             }
 
@@ -279,29 +285,43 @@ namespace EasyVersionBackup
 
             if (string.IsNullOrWhiteSpace(sourceName))
             {
+                BackupLogger.WriteLine("RETENTION SKIP | reason=source name empty");
                 return 0;
             }
 
-            List<FileInfo> backupFiles = GetRetentionZipBackupItems(pair.TargetDirectory, sourceName);
-
-            if (backupFiles.Count == 0)
-            {
-                return 0;
-            }
-
-            backupFiles = backupFiles
+            List<FileInfo> backupFiles = GetRetentionZipBackupItems(pair.TargetDirectory, sourceName)
                 .OrderByDescending(file => file.LastWriteTimeUtc)
                 .ToList();
 
+            if (backupFiles.Count == 0)
+            {
+                BackupLogger.WriteLine("RETENTION SKIP | reason=no matching backup files found");
+                return 0;
+            }
+
             DateTime deleteBeforeUtc = DateTime.UtcNow.AddDays(-Math.Max(1, pair.RetentionKeepDaysCount));
             string retentionMode = NormalizeRetentionMode(pair.RetentionMode);
+            int newestRelevantBackupNumber = 0;
+            int keptByExcludedTag = 0;
+            int keptByNewestBackups = 0;
+            int keptByDays = 0;
+            int keptByOtherRule = 0;
 
-            for (int index = 0; index < backupFiles.Count; index++)
+            foreach (FileInfo file in backupFiles)
             {
-                FileInfo file = backupFiles[index];
+                string? excludedTag = GetRetentionExcludedTag(file.FullName, pair);
+
+                if (!string.IsNullOrWhiteSpace(excludedTag))
+                {
+                    keptByExcludedTag++;
+                    BackupLogger.WriteNormalLine($"RETENTION KEEP | {file.Name} | reason=excluded tag {excludedTag}");
+                    continue;
+                }
+
+                newestRelevantBackupNumber++;
 
                 bool deleteByLast = pair.RetentionKeepLastEnabled &&
-                    index >= Math.Max(1, pair.RetentionKeepLastCount);
+                    newestRelevantBackupNumber > Math.Max(1, pair.RetentionKeepLastCount);
 
                 bool deleteByDays = pair.RetentionKeepDaysEnabled &&
                     file.LastWriteTimeUtc < deleteBeforeUtc;
@@ -321,15 +341,119 @@ namespace EasyVersionBackup
 
                 if (!shouldDelete)
                 {
+                    if (pair.RetentionKeepLastEnabled && !deleteByLast)
+                    {
+                        keptByNewestBackups++;
+                    }
+                    else if (pair.RetentionKeepDaysEnabled && !deleteByDays)
+                    {
+                        keptByDays++;
+                    }
+                    else
+                    {
+                        keptByOtherRule++;
+                    }
+
+                    BackupLogger.WriteVerboseLine($"RETENTION KEEP | {file.Name} | reason={BuildRetentionKeepReason(pair, retentionMode, file.LastWriteTimeUtc, deleteByLast, deleteByDays)}");
                     continue;
                 }
 
                 string fullName = file.FullName;
+                string deleteReason = BuildRetentionDeleteReason(pair, retentionMode, file.LastWriteTimeUtc, deleteByLast, deleteByDays);
+
                 file.Delete();
                 purgedPaths.Add(fullName);
+
+                BackupLogger.WriteLine($"RETENTION DELETE | {file.Name} | reason={deleteReason}");
             }
 
+            BackupLogger.WriteLine($"RETENTION SUMMARY | checked={backupFiles.Count} | kept={backupFiles.Count - purgedPaths.Count} | deleted={purgedPaths.Count} | protected={keptByExcludedTag} | withinNewestBackups={keptByNewestBackups} | withinDays={keptByDays} | otherKeeps={keptByOtherRule}");
+
             return purgedPaths.Count;
+        }
+
+        public static bool IsProtectedByRetentionExcludedTag(string path, BackupPathPair pair)
+        {
+            return !string.IsNullOrWhiteSpace(GetRetentionExcludedTag(path, pair));
+        }
+
+        public static string? GetRetentionExcludedTag(string path, BackupPathPair pair)
+        {
+            if (pair.RetentionExcludedTags == null || pair.RetentionExcludedTags.Count == 0)
+            {
+                return null;
+            }
+
+            string name = Path.GetFileNameWithoutExtension(path);
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                name = Path.GetFileName(path);
+            }
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return null;
+            }
+
+            string sourceName = string.IsNullOrWhiteSpace(pair.SourceDirectory)
+                ? string.Empty
+                : new DirectoryInfo(pair.SourceDirectory).Name;
+
+            string searchableName = name;
+
+            if (!string.IsNullOrWhiteSpace(sourceName))
+            {
+                if (string.Equals(searchableName, sourceName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+
+                string sourcePrefix = sourceName + "_";
+
+                if (searchableName.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    searchableName = searchableName.Substring(sourcePrefix.Length);
+                }
+            }
+
+            foreach (string tag in pair.RetentionExcludedTags)
+            {
+                if (string.IsNullOrWhiteSpace(tag))
+                {
+                    continue;
+                }
+
+                string normalizedTag = tag.Trim();
+
+                if (IsRetentionExcludedTagInBackupName(searchableName, normalizedTag))
+                {
+                    return normalizedTag;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool IsRetentionExcludedTagInBackupName(string backupNameWithoutSourceName, string tag)
+        {
+            if (string.IsNullOrWhiteSpace(backupNameWithoutSourceName) || string.IsNullOrWhiteSpace(tag))
+            {
+                return false;
+            }
+
+            string[] nameParts = backupNameWithoutSourceName
+                .Split(new[] { '_' }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (string namePart in nameParts)
+            {
+                if (string.Equals(namePart.Trim(), tag.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static List<FileInfo> GetRetentionZipBackupItems(string targetDirectory, string sourceName)
@@ -388,6 +512,7 @@ namespace EasyVersionBackup
         }
         public static int ApplyRetentionDisabled(out List<string> purgedPaths)
         {
+            BackupLogger.WriteLine("RETENTION SETTINGS | enabled=false");
             purgedPaths = new List<string>();
             return 0;
         }
@@ -419,6 +544,77 @@ namespace EasyVersionBackup
             }
 
             return false;
+        }
+
+
+        private static string FormatRetentionExcludedTags(BackupPathPair pair)
+        {
+            if (pair.RetentionExcludedTags == null || pair.RetentionExcludedTags.Count == 0)
+            {
+                return "none";
+            }
+
+            return string.Join(", ", pair.RetentionExcludedTags
+                .Where(tag => !string.IsNullOrWhiteSpace(tag))
+                .Select(tag => tag.Trim()));
+        }
+
+        private static string FormatRetentionModeForLog(string retentionMode)
+        {
+            if (string.Equals(retentionMode, RetentionModeAll, StringComparison.OrdinalIgnoreCase))
+            {
+                return "AND";
+            }
+
+            if (string.Equals(retentionMode, RetentionModeAny, StringComparison.OrdinalIgnoreCase))
+            {
+                return "OR";
+            }
+
+            return retentionMode;
+        }
+
+        private static string BuildRetentionKeepReason(BackupPathPair pair, string retentionMode, DateTime lastWriteTimeUtc, bool deleteByLast, bool deleteByDays)
+        {
+            if (pair.RetentionKeepLastEnabled && !deleteByLast)
+            {
+                return $"within newest {Math.Max(1, pair.RetentionKeepLastCount)} backups";
+            }
+
+            if (pair.RetentionKeepDaysEnabled && !deleteByDays)
+            {
+                return $"only {GetFileAgeDays(lastWriteTimeUtc)} days old, keepDays={Math.Max(1, pair.RetentionKeepDaysCount)}";
+            }
+
+            if (pair.RetentionKeepLastEnabled && pair.RetentionKeepDaysEnabled && retentionMode == RetentionModeAll)
+            {
+                return $"mode=AND requires older than {Math.Max(1, pair.RetentionKeepDaysCount)} days and outside newest {Math.Max(1, pair.RetentionKeepLastCount)} backups";
+            }
+
+            return "retention rule not matched";
+        }
+
+        private static string BuildRetentionDeleteReason(BackupPathPair pair, string retentionMode, DateTime lastWriteTimeUtc, bool deleteByLast, bool deleteByDays)
+        {
+            List<string> reasons = new List<string>();
+
+            if (deleteByDays)
+            {
+                reasons.Add($"older than {Math.Max(1, pair.RetentionKeepDaysCount)} days");
+            }
+
+            if (deleteByLast)
+            {
+                reasons.Add($"outside newest {Math.Max(1, pair.RetentionKeepLastCount)} backups");
+            }
+
+            string separator = retentionMode == RetentionModeAll ? " AND " : " OR ";
+            return string.Join(separator, reasons);
+        }
+
+        private static int GetFileAgeDays(DateTime lastWriteTimeUtc)
+        {
+            return Math.Max(0, (int)Math.Floor((DateTime.UtcNow - lastWriteTimeUtc).TotalDays));
         }
 
         public static string FormatRetentionSummary(int purgedCount)

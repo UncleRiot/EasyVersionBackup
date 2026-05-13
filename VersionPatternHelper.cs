@@ -103,8 +103,8 @@ namespace EasyVersionBackup
 
         private static bool IsCompatibleVersion(string baseVersion, string version)
         {
-            Match baseMatch = Regex.Match(baseVersion, @"^(?<prefix>[A-Za-z]*)(?<numbers>\d+(\.\d+)*)$");
-            Match versionMatch = Regex.Match(version, @"^(?<prefix>[A-Za-z]*)(?<numbers>\d+(\.\d+)*)$");
+            Match baseMatch = Regex.Match(baseVersion, @"^(?<prefix>.*?)(?<number>\d+)$");
+            Match versionMatch = Regex.Match(version, @"^(?<prefix>.*?)(?<number>\d+)$");
 
             if (!baseMatch.Success || !versionMatch.Success)
             {
@@ -116,28 +116,30 @@ namespace EasyVersionBackup
 
         private static bool IsVersionGreater(string left, string right)
         {
-            int[] leftParts = ParseVersionNumbers(left);
-            int[] rightParts = ParseVersionNumbers(right);
+            Match leftMatch = Regex.Match(left, @"^(?<prefix>.*?)(?<number>\d+)$");
+            Match rightMatch = Regex.Match(right, @"^(?<prefix>.*?)(?<number>\d+)$");
 
-            int maxLength = Math.Max(leftParts.Length, rightParts.Length);
-
-            for (int i = 0; i < maxLength; i++)
+            if (!leftMatch.Success || !rightMatch.Success)
             {
-                int leftValue = i < leftParts.Length ? leftParts[i] : 0;
-                int rightValue = i < rightParts.Length ? rightParts[i] : 0;
-
-                if (leftValue > rightValue)
-                {
-                    return true;
-                }
-
-                if (leftValue < rightValue)
-                {
-                    return false;
-                }
+                return false;
             }
 
-            return false;
+            if (!string.Equals(leftMatch.Groups["prefix"].Value, rightMatch.Groups["prefix"].Value, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (!long.TryParse(leftMatch.Groups["number"].Value, out long leftNumber))
+            {
+                return false;
+            }
+
+            if (!long.TryParse(rightMatch.Groups["number"].Value, out long rightNumber))
+            {
+                return false;
+            }
+
+            return leftNumber > rightNumber;
         }
 
         private static int[] ParseVersionNumbers(string version)

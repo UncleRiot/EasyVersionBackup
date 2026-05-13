@@ -60,7 +60,34 @@ namespace EasyVersionBackup
 
         public static string IncrementVersion(string version)
         {
-            return VersionPatternHelper.IncrementVersion(version);
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                return "0.0.1";
+            }
+
+            string trimmedVersion = version.Trim();
+            Match match = Regex.Match(trimmedVersion, @"^(?<prefix>.*?)(?<number>\d+)$");
+
+            if (!match.Success)
+            {
+                return trimmedVersion;
+            }
+
+            string prefix = match.Groups["prefix"].Value;
+            string numberText = match.Groups["number"].Value;
+
+            if (!long.TryParse(numberText, out long number))
+            {
+                return trimmedVersion;
+            }
+
+            number++;
+
+            string incrementedNumber = numberText.Length > 1
+                ? number.ToString("D" + numberText.Length)
+                : number.ToString();
+
+            return prefix + incrementedNumber;
         }
 
         public static bool IsValidVersion(string version)
