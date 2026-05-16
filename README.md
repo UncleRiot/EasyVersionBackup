@@ -32,24 +32,48 @@ If this tool saves you time, you can support development here:
 > [!IMPORTANT]
 > If Windows SmartScreen blocks the app, right-click the EXE → **Properties** → check **Unblock** → **Apply** → **OK**, then start it again.
 >
-> VirusTotal scan: https://www.virustotal.com/gui/file/f6b9a2e7084680248d013ac2d0de8cd8c88d7aece87dee745a26e25aee0967d6?nocache=1
+> VirusTotal scan: [https://www.virustotal.com/gui/file/f6b9a2e7084680248d013ac2d0de8cd8c88d7aece87dee745a26e25aee0967d6?nocache=1](https://www.virustotal.com/gui/file/4a8a5f940efd69f19dc4cb00eab5841c687e8cefff3e9b5c22b2bca593eeae03?nocache=1)
 
 <br>
 
 ---
 
 <br>
-
-<img width="727" height="218" alt="grafik" src="https://github.com/user-attachments/assets/4b827037-f26e-4e53-9d47-404fe333df29" />
+<img width="806" height="262" alt="grafik" src="https://github.com/user-attachments/assets/b09bffdb-9053-456b-8596-d1ca3fd8e6ba" />
 <br>
 
-<img width="897" height="216" alt="grafik" src="https://github.com/user-attachments/assets/dd844861-df25-4a0a-9148-cde807acad93" />
+<br>
+<img width="417" height="446" alt="grafik" src="https://github.com/user-attachments/assets/6f5feaea-6cf6-45f4-bc0b-8e354f53cbba" />
 <br>
 
-<img width="380" height="234" alt="grafik" src="https://github.com/user-attachments/assets/8c26e197-b003-46bb-a26e-1c189f953b53" />
+<br>
+<img width="523" height="190" alt="grafik" src="https://github.com/user-attachments/assets/5a92894d-5d78-4d0f-a877-355fb9efddd2" />
 <br>
 
-<img width="520" height="352" alt="grafik" src="https://github.com/user-attachments/assets/0243527c-1cd0-49f1-b722-d8dce06e7a6b" />
+<br>
+<img width="1232" height="358" alt="grafik"  src="https://github.com/user-attachments/assets/387485ed-64b3-43f4-a9be-f33864569674" />
+<br>
+
+<br>
+<img width="501" height="300" alt="grafik" src="https://github.com/user-attachments/assets/d10fa442-f473-41ec-b1b6-d947ea1e5624" />
+<br>
+
+<br>
+<img width="507" height="236" alt="grafik"src="https://github.com/user-attachments/assets/80810de1-43a3-431f-b2c8-2a82b75e1682" />
+<br>
+
+<br>
+<img width="497" height="320" alt="grafik"  src="https://github.com/user-attachments/assets/6a0f8e1f-7582-42b8-aacf-82d454b6e2a7" />
+<br>
+
+<br>
+<img width="499" height="169" alt="grafik"  src="https://github.com/user-attachments/assets/a4b50590-0f0a-43f6-8243-d30cb866a259" />
+<br>
+
+<br>
+<img width="504" height="172" alt="grafik" src="https://github.com/user-attachments/assets/20bbdb84-0a3e-479e-8633-7dffccc1ddd4" />
+<br>
+
 
 <br>
 <br>
