@@ -19,7 +19,7 @@ namespace EasyVersionBackup
         private AppSettings _settings = new AppSettings();
         private bool _ignoreAllFileErrors;
         private readonly System.Windows.Forms.Timer _autoBackupCountdownTimer = new System.Windows.Forms.Timer();
-        private DateTime _nextAutoBackupRun;
+        private readonly Dictionary<string, DateTime> _nextAutoBackupRunsByPair = new Dictionary<string, DateTime>();
         private bool _isRefreshingConfiguredPaths;
         private readonly ToolTip _mainToolTip = new ToolTip();
         private string _lastBackupDestinationFileName = string.Empty;
@@ -122,9 +122,15 @@ namespace EasyVersionBackup
             InitializeConfiguredPathActionColumns();
 
             dataGridViewConfiguredPaths.ScrollBars = ScrollBars.None;
+            dataGridViewConfiguredPaths.AllowDrop = true;
             dataGridViewConfiguredPaths.CellContentClick += dataGridViewConfiguredPaths_CellContentClick;
             dataGridViewConfiguredPaths.CellPainting += dataGridViewConfiguredPaths_CellPainting;
             dataGridViewConfiguredPaths.CellToolTipTextNeeded += dataGridViewConfiguredPaths_CellToolTipTextNeeded;
+            dataGridViewConfiguredPaths.MouseDown += dataGridViewConfiguredPaths_MouseDown;
+            dataGridViewConfiguredPaths.MouseMove += dataGridViewConfiguredPaths_MouseMove;
+            dataGridViewConfiguredPaths.MouseUp += dataGridViewConfiguredPaths_MouseUp;
+            dataGridViewConfiguredPaths.DragOver += dataGridViewConfiguredPaths_DragOver;
+            dataGridViewConfiguredPaths.DragDrop += dataGridViewConfiguredPaths_DragDrop;
             InitializeConfiguredPathsScrollBar();
 
             _autoBackupCountdownTimer.Interval = TitleRefreshIntervalMilliseconds;
@@ -515,7 +521,8 @@ namespace EasyVersionBackup
             dataGridViewConfiguredPaths.Location = new Point(12, 88);
             dataGridViewConfiguredPaths.Size = new Size(ClientSize.Width - 24, ClientSize.Height - dataGridViewConfiguredPaths.Top - 12);
 
-            buttonBackup.Location = new Point(ClientSize.Width - buttonBackup.Width - 12, toolbarTop + 3);
+            buttonBackup.Size = new Size(buttonBackup.Width, buttonSize);
+            buttonBackup.Location = new Point(ClientSize.Width - buttonBackup.Width - 12 - ModernTheme.DataGridViewScrollBarSize, toolbarTop);
             buttonBackup.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _mainToolTip.SetToolTip(buttonBackup, "Start backup");
 
@@ -529,6 +536,14 @@ namespace EasyVersionBackup
 
             Button buttonRemoveConfiguredPath = CreateToolbarButton("buttonRemoveConfiguredPath", "−", string.Empty, "Remove selected backup path", new Point(left, toolbarTop));
             buttonRemoveConfiguredPath.Click += buttonRemoveConfiguredPath_Click;
+            left += buttonSize + buttonSpacing;
+
+            Button buttonMoveConfiguredPathUp = CreateToolbarButton("buttonMoveConfiguredPathUp", "↑", string.Empty, "Move selected backup path up", new Point(left, toolbarTop));
+            buttonMoveConfiguredPathUp.Click += buttonMoveConfiguredPathUp_Click;
+            left += buttonSize + buttonSpacing;
+
+            Button buttonMoveConfiguredPathDown = CreateToolbarButton("buttonMoveConfiguredPathDown", "↓", string.Empty, "Move selected backup path down", new Point(left, toolbarTop));
+            buttonMoveConfiguredPathDown.Click += buttonMoveConfiguredPathDown_Click;
             left += buttonSize + buttonSpacing;
 
             Button buttonModernSettings = CreateToolbarButton("buttonModernSettings", string.Empty, "Settings", "Settings", new Point(left, toolbarTop));
@@ -552,12 +567,16 @@ namespace EasyVersionBackup
             Controls.Add(buttonExit);
             Controls.Add(buttonAddConfiguredPath);
             Controls.Add(buttonRemoveConfiguredPath);
+            Controls.Add(buttonMoveConfiguredPathUp);
+            Controls.Add(buttonMoveConfiguredPathDown);
             Controls.Add(buttonModernSettings);
             Controls.Add(buttonAbout);
 
             buttonExit.BringToFront();
             buttonAddConfiguredPath.BringToFront();
             buttonRemoveConfiguredPath.BringToFront();
+            buttonMoveConfiguredPathUp.BringToFront();
+            buttonMoveConfiguredPathDown.BringToFront();
             buttonModernSettings.BringToFront();
             buttonAbout.BringToFront();
             buttonBackup.BringToFront();
@@ -566,6 +585,140 @@ namespace EasyVersionBackup
             {
                 _modernTitleBarPanel.BringToFront();
             }
+        }
+        private void MoveConfiguredPathRow(int sourceRowIndex, int targetRowIndex)
+        {
+            if (sourceRowIndex == targetRowIndex)
+            {
+                return;
+            }
+
+            if (sourceRowIndex < 0 || sourceRowIndex >= _settings.BackupPathPairs.Count)
+            {
+                return;
+            }
+
+            if (targetRowIndex < 0 || targetRowIndex >= _settings.BackupPathPairs.Count)
+            {
+                return;
+            }
+
+            dataGridViewConfiguredPaths.EndEdit();
+            SyncEnabledPairsFromGrid();
+
+            BackupPathPair pair = _settings.BackupPathPairs[sourceRowIndex];
+
+            _settings.BackupPathPairs.RemoveAt(sourceRowIndex);
+            _settings.BackupPathPairs.Insert(targetRowIndex, pair);
+
+            SaveSettings();
+            RefreshConfiguredPaths();
+
+            if (targetRowIndex >= 0 && targetRowIndex < dataGridViewConfiguredPaths.Rows.Count)
+            {
+                dataGridViewConfiguredPaths.ClearSelection();
+                dataGridViewConfiguredPaths.Rows[targetRowIndex].Selected = true;
+                dataGridViewConfiguredPaths.CurrentCell = dataGridViewConfiguredPaths.Rows[targetRowIndex].Cells["ColumnConfiguredSourceDirectory"];
+            }
+        }
+        private void dataGridViewConfiguredPaths_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left)
+            {
+                return;
+            }
+
+            if (dataGridViewConfiguredPaths.Tag is not Tuple<int, Point> dragInfo)
+            {
+                return;
+            }
+
+            Rectangle dragRectangle = new Rectangle(
+                dragInfo.Item2.X - SystemInformation.DragSize.Width / 2,
+                dragInfo.Item2.Y - SystemInformation.DragSize.Height / 2,
+                SystemInformation.DragSize.Width,
+                SystemInformation.DragSize.Height);
+
+            if (dragRectangle.Contains(e.Location))
+            {
+                return;
+            }
+
+            dataGridViewConfiguredPaths.DoDragDrop(dragInfo.Item1, DragDropEffects.Move);
+        }
+        private void dataGridViewConfiguredPaths_MouseUp(object? sender, MouseEventArgs e)
+        {
+            dataGridViewConfiguredPaths.Tag = null;
+        }
+        private void dataGridViewConfiguredPaths_DragOver(object? sender, DragEventArgs e)
+        {
+            if (!e.Data.GetDataPresent(typeof(int)))
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
+            Point clientPoint = dataGridViewConfiguredPaths.PointToClient(new Point(e.X, e.Y));
+            DataGridView.HitTestInfo hitTestInfo = dataGridViewConfiguredPaths.HitTest(clientPoint.X, clientPoint.Y);
+
+            e.Effect = hitTestInfo.RowIndex >= 0 && hitTestInfo.RowIndex < _settings.BackupPathPairs.Count
+                ? DragDropEffects.Move
+                : DragDropEffects.None;
+        }
+        private void dataGridViewConfiguredPaths_DragDrop(object? sender, DragEventArgs e)
+        {
+            if (!e.Data.GetDataPresent(typeof(int)))
+            {
+                return;
+            }
+
+            int sourceRowIndex = (int)e.Data.GetData(typeof(int))!;
+            Point clientPoint = dataGridViewConfiguredPaths.PointToClient(new Point(e.X, e.Y));
+            DataGridView.HitTestInfo hitTestInfo = dataGridViewConfiguredPaths.HitTest(clientPoint.X, clientPoint.Y);
+
+            if (hitTestInfo.RowIndex < 0 || hitTestInfo.RowIndex >= _settings.BackupPathPairs.Count)
+            {
+                return;
+            }
+
+            MoveConfiguredPathRow(sourceRowIndex, hitTestInfo.RowIndex);
+            dataGridViewConfiguredPaths.Tag = null;
+        }
+        private void dataGridViewConfiguredPaths_MouseDown(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left)
+            {
+                dataGridViewConfiguredPaths.Tag = null;
+                return;
+            }
+
+            DataGridView.HitTestInfo hitTestInfo = dataGridViewConfiguredPaths.HitTest(e.X, e.Y);
+
+            if (hitTestInfo.RowIndex < 0 || hitTestInfo.RowIndex >= _settings.BackupPathPairs.Count)
+            {
+                dataGridViewConfiguredPaths.Tag = null;
+                return;
+            }
+
+            dataGridViewConfiguredPaths.Tag = Tuple.Create(hitTestInfo.RowIndex, new Point(e.X, e.Y));
+        }
+        private void buttonMoveConfiguredPathDown_Click(object? sender, EventArgs e)
+        {
+            if (dataGridViewConfiguredPaths.CurrentRow == null)
+            {
+                return;
+            }
+
+            MoveConfiguredPathRow(dataGridViewConfiguredPaths.CurrentRow.Index, dataGridViewConfiguredPaths.CurrentRow.Index + 1);
+        }
+        private void buttonMoveConfiguredPathUp_Click(object? sender, EventArgs e)
+        {
+            if (dataGridViewConfiguredPaths.CurrentRow == null)
+            {
+                return;
+            }
+
+            MoveConfiguredPathRow(dataGridViewConfiguredPaths.CurrentRow.Index, dataGridViewConfiguredPaths.CurrentRow.Index - 1);
         }
         private Button CreateToolbarButton(string name, string text, string iconType, string toolTipText, Point location)
         {
@@ -928,8 +1081,20 @@ namespace EasyVersionBackup
                 Math.Max(100, gridRight - dataGridViewConfiguredPaths.Left),
                 Math.Max(60, gridBottom - dataGridViewConfiguredPaths.Top));
 
+            int visibleTableHeight = dataGridViewConfiguredPaths.ColumnHeadersHeight;
+
+            foreach (DataGridViewRow row in dataGridViewConfiguredPaths.Rows)
+            {
+                if (row.Visible)
+                {
+                    visibleTableHeight += row.Height;
+                }
+            }
+
+            visibleTableHeight = Math.Min(dataGridViewConfiguredPaths.Height, Math.Max(dataGridViewConfiguredPaths.ColumnHeadersHeight, visibleTableHeight));
+
             _configuredPathsVerticalScrollBar.Location = new Point(dataGridViewConfiguredPaths.Right, dataGridViewConfiguredPaths.Top);
-            _configuredPathsVerticalScrollBar.Size = new Size(scrollBarSize, dataGridViewConfiguredPaths.Height);
+            _configuredPathsVerticalScrollBar.Size = new Size(scrollBarSize, visibleTableHeight);
             _configuredPathsVerticalScrollBar.BringToFront();
 
             UpdateConfiguredPathsScrollBar();
@@ -946,14 +1111,15 @@ namespace EasyVersionBackup
 
             try
             {
+                int rowCount = dataGridViewConfiguredPaths.Rows.Count;
                 int visibleRowCount = Math.Max(1, dataGridViewConfiguredPaths.DisplayedRowCount(false));
-                int maximumFirstDisplayedRowIndex = Math.Max(0, dataGridViewConfiguredPaths.Rows.Count - visibleRowCount);
+                int maximumFirstDisplayedRowIndex = Math.Max(0, rowCount - visibleRowCount);
                 int firstDisplayedRowIndex = GetConfiguredPathsFirstDisplayedScrollingRowIndex();
 
                 _configuredPathsVerticalScrollBar.Minimum = 0;
                 _configuredPathsVerticalScrollBar.Maximum = maximumFirstDisplayedRowIndex;
                 _configuredPathsVerticalScrollBar.LargeChange = visibleRowCount;
-                _configuredPathsVerticalScrollBar.Visible = maximumFirstDisplayedRowIndex > 0;
+                _configuredPathsVerticalScrollBar.Visible = true;
                 _configuredPathsVerticalScrollBar.Value = Math.Min(maximumFirstDisplayedRowIndex, Math.Max(0, firstDisplayedRowIndex));
                 _configuredPathsVerticalScrollBar.Invalidate();
             }
@@ -1013,8 +1179,12 @@ namespace EasyVersionBackup
 
         private void exitToolStripMenuItem_Click(object? sender, EventArgs e)
         {
+            bool closeToSystray = _settings.CloseToSystray;
+
             notifyIconMain.Visible = false;
+            _settings.CloseToSystray = false;
             Close();
+            _settings.CloseToSystray = closeToSystray;
         }
 
         private void generalToolStripMenuItem_Click(object? sender, EventArgs e)
@@ -1113,9 +1283,25 @@ namespace EasyVersionBackup
 
                 for (int i = 0; i < dialogPairs.Count; i++)
                 {
-                    versionsByPair[dialogPairs[i]] = versionForm.ResultItems[i].Version;
-                    tagsByPair[dialogPairs[i]] = versionForm.ResultItems[i].Tag;
+                    BackupPathPair dialogPair = dialogPairs[i];
+                    string resultVersion = versionForm.ResultItems[i].Version;
+                    string newPairVersioning = string.IsNullOrWhiteSpace(resultVersion)
+                        ? "none"
+                        : resultVersion;
+
+                    if (!string.Equals(dialogPair.Versioning, newPairVersioning, StringComparison.OrdinalIgnoreCase))
+                    {
+                        string pairKey = SettingsStorage.CreatePairKey(dialogPair.SourceDirectory, dialogPair.TargetDirectory);
+                        _settings.LastUsedVersionsByPair.Remove(pairKey);
+                        dialogPair.Versioning = newPairVersioning;
+                    }
+
+                    versionsByPair[dialogPair] = resultVersion;
+                    tagsByPair[dialogPair] = versionForm.ResultItems[i].Tag;
                 }
+
+                SaveSettings();
+                RestartAutoBackupCountdown();
             }
 
             int skippedFiles = 0;
@@ -1129,9 +1315,28 @@ namespace EasyVersionBackup
                     _ignoreAllFileErrors = pair.IgnoreCopyErrors;
 
                     int skippedForPair = ExecuteBackup(pair, versionsByPair[pair], tagsByPair[pair], out List<string> skippedFilePaths, out string destinationAction);
-                    int purgedForPair = _settings.AutoPurgeEnabled
-                        ? BackupHelper.ApplyRetention(pair, _settings.ZipDestinationFiles, out List<string> purgedPaths)
-                        : BackupHelper.ApplyRetentionDisabled(out purgedPaths);
+
+                    int purgedForPair;
+                    List<string> purgedPaths;
+
+                    if (ShouldRunRetentionForPair(pair))
+                    {
+                        List<string> purgePreviewPaths = BackupHelper.GetRetentionPurgePreviewPaths(pair, _settings.ZipDestinationFiles);
+                        DialogResult retentionDialogResult = TryConfirmRetentionWarningDialogue(pair, purgePreviewPaths);
+
+                        if (retentionDialogResult == DialogResult.Cancel)
+                        {
+                            return;
+                        }
+
+                        purgedForPair = retentionDialogResult == DialogResult.Yes
+                            ? BackupHelper.ApplyRetention(pair, _settings.ZipDestinationFiles, out purgedPaths)
+                            : BackupHelper.ApplyRetentionDisabled(out purgedPaths);
+                    }
+                    else
+                    {
+                        purgedForPair = BackupHelper.ApplyRetentionDisabled(out purgedPaths);
+                    }
 
                     skippedFiles += skippedForPair;
                     purgedBackups += purgedForPair;
@@ -1518,11 +1723,11 @@ namespace EasyVersionBackup
             return FileErrorAction.Abort;
         }
 
-        private void ExecuteAutomaticBackup()
+        private void ExecuteAutomaticBackup(List<BackupPathPair> automaticBackupPairs)
         {
             _ignoreAllFileErrors = true;
 
-            List<BackupPathPair> validPairs = _settings.BackupPathPairs
+            List<BackupPathPair> validPairs = automaticBackupPairs
                 .Where(p => p.IsEnabled && !string.IsNullOrWhiteSpace(p.SourceDirectory) && !string.IsNullOrWhiteSpace(p.TargetDirectory))
                 .ToList();
 
@@ -1568,9 +1773,28 @@ namespace EasyVersionBackup
                 try
                 {
                     int skippedForPair = ExecuteBackup(pair, automaticVersion, string.Empty, out List<string> skippedFilePaths, out string destinationAction);
-                    int purgedForPair = _settings.AutoPurgeEnabled
-                        ? BackupHelper.ApplyRetention(pair, _settings.ZipDestinationFiles, out List<string> purgedPaths)
-                        : BackupHelper.ApplyRetentionDisabled(out purgedPaths);
+
+                    int purgedForPair;
+                    List<string> purgedPaths;
+
+                    if (ShouldRunRetentionForPair(pair))
+                    {
+                        List<string> purgePreviewPaths = BackupHelper.GetRetentionPurgePreviewPaths(pair, _settings.ZipDestinationFiles);
+                        DialogResult retentionDialogResult = TryConfirmRetentionWarningDialogue(pair, purgePreviewPaths);
+
+                        if (retentionDialogResult == DialogResult.Cancel)
+                        {
+                            return;
+                        }
+
+                        purgedForPair = retentionDialogResult == DialogResult.Yes
+                            ? BackupHelper.ApplyRetention(pair, _settings.ZipDestinationFiles, out purgedPaths)
+                            : BackupHelper.ApplyRetentionDisabled(out purgedPaths);
+                    }
+                    else
+                    {
+                        purgedForPair = BackupHelper.ApplyRetentionDisabled(out purgedPaths);
+                    }
 
                     skippedFiles += skippedForPair;
                     purgedBackups += purgedForPair;
@@ -1620,31 +1844,83 @@ namespace EasyVersionBackup
             RefreshWindowTitleCountdown();
             RefreshNotifyIconText();
 
-            if (DateTime.Now < _nextAutoBackupRun)
+            if (!_settings.AutoBackupEnabled)
             {
                 return;
             }
 
-            ExecuteAutomaticBackup();
+            DateTime now = DateTime.Now;
 
-            _nextAutoBackupRun = DateTime.Now.AddSeconds(GetAutoBackupIntervalSeconds());
+            List<BackupPathPair> duePairs = _settings.BackupPathPairs
+                .Where(pair => pair.IsEnabled &&
+                    !string.IsNullOrWhiteSpace(pair.SourceDirectory) &&
+                    !string.IsNullOrWhiteSpace(pair.TargetDirectory))
+                .Where(pair =>
+                {
+                    string pairKey = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+
+                    if (!_nextAutoBackupRunsByPair.TryGetValue(pairKey, out DateTime nextRun))
+                    {
+                        _nextAutoBackupRunsByPair[pairKey] = now.AddSeconds(GetAutoBackupIntervalSeconds(pair));
+                        return false;
+                    }
+
+                    return now >= nextRun;
+                })
+                .ToList();
+
+            if (duePairs.Count == 0)
+            {
+                return;
+            }
+
+            ExecuteAutomaticBackup(duePairs);
+
+            DateTime nextBaseTime = DateTime.Now;
+
+            foreach (BackupPathPair pair in duePairs)
+            {
+                string pairKey = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+                _nextAutoBackupRunsByPair[pairKey] = nextBaseTime.AddSeconds(GetAutoBackupIntervalSeconds(pair));
+            }
+
             RefreshAutoBackupTimerColumn();
             RefreshWindowTitleCountdown();
             RefreshNotifyIconText();
         }
         private void RefreshAutoBackupTimerColumn()
         {
+            DateTime now = DateTime.Now;
+
             for (int i = 0; i < dataGridViewConfiguredPaths.Rows.Count && i < _settings.BackupPathPairs.Count; i++)
             {
                 DataGridViewRow row = dataGridViewConfiguredPaths.Rows[i];
+                BackupPathPair pair = _settings.BackupPathPairs[i];
 
-                if (!_settings.AutoBackupEnabled || !_settings.BackupPathPairs[i].IsEnabled)
+                if (pair.AutoBackupIntervalSeconds > 0)
+                {
+                    row.Cells["ColumnConfiguredAutoBackupTimer"].Value = FormatAutoBackupInterval(TimeSpan.FromSeconds(pair.AutoBackupIntervalSeconds));
+                    continue;
+                }
+
+                if (!_settings.AutoBackupEnabled ||
+                    !pair.IsEnabled ||
+                    string.IsNullOrWhiteSpace(pair.SourceDirectory) ||
+                    string.IsNullOrWhiteSpace(pair.TargetDirectory))
                 {
                     row.Cells["ColumnConfiguredAutoBackupTimer"].Value = string.Empty;
                     continue;
                 }
 
-                TimeSpan remaining = _nextAutoBackupRun - DateTime.Now;
+                string pairKey = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+
+                if (!_nextAutoBackupRunsByPair.TryGetValue(pairKey, out DateTime nextRun))
+                {
+                    nextRun = now.AddSeconds(GetAutoBackupIntervalSeconds(pair));
+                    _nextAutoBackupRunsByPair[pairKey] = nextRun;
+                }
+
+                TimeSpan remaining = nextRun - now;
 
                 if (remaining < TimeSpan.Zero)
                 {
@@ -1656,7 +1932,7 @@ namespace EasyVersionBackup
         }
         private void RefreshWindowTitleCountdown()
         {
-            if (!_settings.AutoBackupEnabled || !_settings.BackupPathPairs.Any(p => p.IsEnabled))
+            if (!_settings.AutoBackupEnabled || !TryGetNextAutoBackupRun(out DateTime nextAutoBackupRun))
             {
                 Text = _baseWindowTitle;
 
@@ -1668,7 +1944,7 @@ namespace EasyVersionBackup
                 return;
             }
 
-            TimeSpan remaining = _nextAutoBackupRun - DateTime.Now;
+            TimeSpan remaining = nextAutoBackupRun - DateTime.Now;
 
             if (remaining < TimeSpan.Zero)
             {
@@ -1713,11 +1989,51 @@ namespace EasyVersionBackup
 
             return Math.Max(1, _settings.AutoBackupIntervalMinutes) * 60;
         }
+
+        private int GetAutoBackupIntervalSeconds(BackupPathPair pair)
+        {
+            if (pair.AutoBackupIntervalSeconds > 0)
+            {
+                return pair.AutoBackupIntervalSeconds;
+            }
+
+            return GetAutoBackupIntervalSeconds();
+        }
+
+        private bool TryGetNextAutoBackupRun(out DateTime nextAutoBackupRun)
+        {
+            nextAutoBackupRun = DateTime.MaxValue;
+
+            foreach (BackupPathPair pair in _settings.BackupPathPairs)
+            {
+                if (!pair.IsEnabled ||
+                    string.IsNullOrWhiteSpace(pair.SourceDirectory) ||
+                    string.IsNullOrWhiteSpace(pair.TargetDirectory))
+                {
+                    continue;
+                }
+
+                string pairKey = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+
+                if (!_nextAutoBackupRunsByPair.TryGetValue(pairKey, out DateTime pairNextRun))
+                {
+                    continue;
+                }
+
+                if (pairNextRun < nextAutoBackupRun)
+                {
+                    nextAutoBackupRun = pairNextRun;
+                }
+            }
+
+            return nextAutoBackupRun != DateTime.MaxValue;
+        }
         private void RestartAutoBackupCountdown()
         {
             _autoBackupCountdownTimer.Stop();
+            _nextAutoBackupRunsByPair.Clear();
 
-            if (!_settings.AutoBackupEnabled || !_settings.BackupPathPairs.Any(p => p.IsEnabled))
+            if (!_settings.AutoBackupEnabled)
             {
                 RefreshAutoBackupTimerColumn();
                 RefreshWindowTitleCountdown();
@@ -1725,11 +2041,29 @@ namespace EasyVersionBackup
                 return;
             }
 
-            _nextAutoBackupRun = DateTime.Now.AddSeconds(GetAutoBackupIntervalSeconds());
+            DateTime now = DateTime.Now;
+
+            foreach (BackupPathPair pair in _settings.BackupPathPairs)
+            {
+                if (!pair.IsEnabled ||
+                    string.IsNullOrWhiteSpace(pair.SourceDirectory) ||
+                    string.IsNullOrWhiteSpace(pair.TargetDirectory))
+                {
+                    continue;
+                }
+
+                string pairKey = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+                _nextAutoBackupRunsByPair[pairKey] = now.AddSeconds(GetAutoBackupIntervalSeconds(pair));
+            }
+
             RefreshAutoBackupTimerColumn();
             RefreshWindowTitleCountdown();
             RefreshNotifyIconText();
-            _autoBackupCountdownTimer.Start();
+
+            if (_nextAutoBackupRunsByPair.Count > 0)
+            {
+                _autoBackupCountdownTimer.Start();
+            }
         }
 
 
@@ -2063,6 +2397,7 @@ namespace EasyVersionBackup
                     pair.Versioning = newVersioning;
                     pair.IgnoreCopyErrors = dialog.ResultIgnoreCopyErrors;
                     pair.SkipDialogs = dialog.ResultSkipDialogs;
+                    pair.AutoBackupIntervalSeconds = dialog.ResultAutoBackupIntervalSeconds;
                     pair.RetentionKeepLastEnabled = dialog.ResultRetentionKeepLastEnabled;
                     pair.RetentionKeepLastCount = dialog.ResultRetentionKeepLastCount;
                     pair.RetentionKeepDaysEnabled = dialog.ResultRetentionKeepDaysEnabled;
@@ -2071,6 +2406,7 @@ namespace EasyVersionBackup
                     pair.RetentionExcludedTags = new List<string>(dialog.ResultRetentionExcludedTags);
 
                     SaveSettings();
+                    RestartAutoBackupCountdown();
                 }
             }
 
@@ -2294,8 +2630,304 @@ namespace EasyVersionBackup
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
+            if (_settings.CloseToSystray && e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                SaveWindowSettings();
+                RefreshNotifyIconText();
+
+                Hide();
+                ShowInTaskbar = false;
+                notifyIconMain.Visible = true;
+
+                return;
+            }
+
             notifyIconMain.Visible = false;
             SaveWindowSettings();
+        }
+
+        private bool ShouldRunRetentionForPair(BackupPathPair pair)
+        {
+            return _settings.AutoPurgeEnabled &&
+                (pair.RetentionKeepLastEnabled || pair.RetentionKeepDaysEnabled);
+        }
+
+        private DialogResult TryConfirmRetentionWarningDialogue(BackupPathPair pair, List<string> purgePreviewPaths)
+        {
+            if (!_settings.ShowRetentionWarningDialogue)
+            {
+                return DialogResult.Yes;
+            }
+
+            if (purgePreviewPaths.Count == 0)
+            {
+                return DialogResult.Yes;
+            }
+
+            DialogResult result = ShowRetentionPurgeConfirmation(
+                "Retention warning",
+                purgePreviewPaths
+                    .Select(FormatRetentionPurgePreviewPath)
+                    .ToList());
+
+            if (result == DialogResult.Yes)
+            {
+                return DialogResult.Yes;
+            }
+
+            if (result == DialogResult.No)
+            {
+                BackupLogger.WriteLine($"RETENTION SKIP | reason=user continued without purging | source={pair.SourceDirectory} | target={pair.TargetDirectory}");
+                return DialogResult.No;
+            }
+
+            BackupLogger.WriteLine($"RETENTION SKIP | reason=user canceled warning dialogue | source={pair.SourceDirectory} | target={pair.TargetDirectory}");
+            return DialogResult.Cancel;
+        }
+
+        private DialogResult ShowRetentionPurgeConfirmation(string title, List<string> purgePreviewLines)
+        {
+            using Form form = new Form();
+
+            form.Text = title;
+            form.StartPosition = FormStartPosition.CenterParent;
+            form.FormBorderStyle = FormBorderStyle.None;
+            form.ClientSize = new Size(760, 520);
+            form.BackColor = ModernTheme.WindowBackColor;
+            form.Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
+            form.ShowInTaskbar = false;
+            form.Icon = Icon;
+            ModernWindowFrame.Apply(form);
+
+            Panel panelModernTitleBar = new Panel
+            {
+                Name = "panelModernTitleBar",
+                Dock = DockStyle.Top,
+                Height = ModernTheme.TitleBarHeight,
+                BackColor = ModernTheme.TitleBarBackColor
+            };
+
+            PictureBox pictureBoxModernTitleIcon = new PictureBox
+            {
+                Name = "pictureBoxModernTitleIcon",
+                Location = new Point(ModernTheme.TitleBarIconLeft, ModernTheme.TitleBarIconTop),
+                Size = new Size(ModernTheme.TitleBarIconSize, ModernTheme.TitleBarIconSize),
+                SizeMode = PictureBoxSizeMode.StretchImage,
+                Image = Icon?.ToBitmap(),
+                BackColor = Color.Transparent
+            };
+
+            Label labelModernTitle = new Label
+            {
+                Name = "labelModernTitle",
+                Text = title,
+                AutoSize = false,
+                Location = new Point(ModernTheme.TitleBarTextLeft, 0),
+                Size = new Size(form.ClientSize.Width - 66, ModernTheme.TitleBarHeight),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = ModernTheme.TextColor,
+                Font = new Font(ModernTheme.FontFamilyName, ModernTheme.TitleFontSize, FontStyle.Regular),
+                BackColor = Color.Transparent
+            };
+
+            Button buttonModernClose = new Button
+            {
+                Name = "buttonModernClose",
+                Text = string.Empty,
+                Size = ModernTheme.TitleBarButtonSize,
+                Location = new Point(form.ClientSize.Width - ModernTheme.TitleBarButtonSize.Width, 0),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = ModernTheme.TitleBarBackColor,
+                ForeColor = ModernTheme.TextColor,
+                Cursor = Cursors.Hand,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Padding = Padding.Empty,
+                UseVisualStyleBackColor = false
+            };
+
+            buttonModernClose.FlatAppearance.BorderSize = 0;
+            buttonModernClose.FlatAppearance.MouseOverBackColor = ModernTheme.CloseButtonHoverColor;
+            buttonModernClose.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
+
+            buttonModernClose.Paint += (sender, e) =>
+            {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+                using Pen pen = new Pen(ModernTheme.TextColor, 1.4F)
+                {
+                    StartCap = System.Drawing.Drawing2D.LineCap.Square,
+                    EndCap = System.Drawing.Drawing2D.LineCap.Square
+                };
+
+                e.Graphics.DrawLine(pen, 13, 11, 23, 21);
+                e.Graphics.DrawLine(pen, 23, 11, 13, 21);
+            };
+
+            buttonModernClose.Click += (sender, e) =>
+            {
+                form.DialogResult = DialogResult.Cancel;
+                form.Close();
+            };
+
+            panelModernTitleBar.MouseDown += (sender, e) =>
+            {
+                if (e.Button != MouseButtons.Left)
+                {
+                    return;
+                }
+
+                const int wmNclbuttondown = 0xA1;
+                const int htCaption = 0x2;
+
+                ReleaseCapture();
+                SendMessage(form.Handle, wmNclbuttondown, htCaption, 0);
+            };
+
+            pictureBoxModernTitleIcon.MouseDown += (sender, e) =>
+            {
+                if (e.Button != MouseButtons.Left)
+                {
+                    return;
+                }
+
+                const int wmNclbuttondown = 0xA1;
+                const int htCaption = 0x2;
+
+                ReleaseCapture();
+                SendMessage(form.Handle, wmNclbuttondown, htCaption, 0);
+            };
+
+            labelModernTitle.MouseDown += (sender, e) =>
+            {
+                if (e.Button != MouseButtons.Left)
+                {
+                    return;
+                }
+
+                const int wmNclbuttondown = 0xA1;
+                const int htCaption = 0x2;
+
+                ReleaseCapture();
+                SendMessage(form.Handle, wmNclbuttondown, htCaption, 0);
+            };
+
+            panelModernTitleBar.Controls.Add(pictureBoxModernTitleIcon);
+            panelModernTitleBar.Controls.Add(labelModernTitle);
+            panelModernTitleBar.Controls.Add(buttonModernClose);
+
+            Label labelMessage = new Label
+            {
+                Text = "Retention will permanently delete these ZIP backups:",
+                AutoSize = false,
+                Location = new Point(18, 52),
+                Size = new Size(form.ClientSize.Width - 36, 28),
+                ForeColor = ModernTheme.TextColor,
+                BackColor = Color.Transparent,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            TextBox textBoxPurgePreview = new TextBox
+            {
+                Name = "textBoxPurgePreview",
+                Text = string.Join(Environment.NewLine, purgePreviewLines),
+                Location = new Point(18, 86),
+                Size = new Size(form.ClientSize.Width - 36, 350),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Multiline = true,
+                ReadOnly = true,
+                WordWrap = false,
+                ScrollBars = ScrollBars.Both,
+                BackColor = ModernTheme.ControlBackColor,
+                ForeColor = ModernTheme.TextColor,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+
+            Button buttonCancel = new Button
+            {
+                Text = "Cancel",
+                Size = new Size(100, 28),
+                Location = new Point(form.ClientSize.Width - 454, 470),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+                DialogResult = DialogResult.Cancel,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = ModernTheme.ControlBackColor,
+                ForeColor = ModernTheme.TextColor,
+                Cursor = Cursors.Hand,
+                TextAlign = ContentAlignment.MiddleCenter,
+                UseCompatibleTextRendering = true,
+                UseVisualStyleBackColor = false
+            };
+
+            buttonCancel.FlatAppearance.BorderColor = ModernTheme.AccentColor;
+            buttonCancel.FlatAppearance.BorderSize = 1;
+            buttonCancel.FlatAppearance.MouseOverBackColor = ModernTheme.ControlHoverBackColor;
+            buttonCancel.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
+
+            Button buttonContinueWithoutPurging = new Button
+            {
+                Text = "Continue (without purging)",
+                Size = new Size(190, 28),
+                Location = new Point(form.ClientSize.Width - 348, 470),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+                DialogResult = DialogResult.No,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = ModernTheme.ControlBackColor,
+                ForeColor = ModernTheme.TextColor,
+                Cursor = Cursors.Hand,
+                TextAlign = ContentAlignment.MiddleCenter,
+                UseCompatibleTextRendering = true,
+                UseVisualStyleBackColor = false
+            };
+
+            buttonContinueWithoutPurging.FlatAppearance.BorderColor = ModernTheme.AccentColor;
+            buttonContinueWithoutPurging.FlatAppearance.BorderSize = 1;
+            buttonContinueWithoutPurging.FlatAppearance.MouseOverBackColor = ModernTheme.ControlHoverBackColor;
+            buttonContinueWithoutPurging.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
+
+            Button buttonContinuePurge = new Button
+            {
+                Text = "Continue (purge)",
+                Size = new Size(146, 28),
+                Location = new Point(form.ClientSize.Width - 152, 470),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+                DialogResult = DialogResult.Yes,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = ModernTheme.AccentColor,
+                ForeColor = ModernTheme.DarkTextColor,
+                Cursor = Cursors.Hand,
+                TextAlign = ContentAlignment.MiddleCenter,
+                UseCompatibleTextRendering = true,
+                UseVisualStyleBackColor = false
+            };
+
+            buttonContinuePurge.FlatAppearance.BorderSize = 0;
+            buttonContinuePurge.FlatAppearance.MouseOverBackColor = ModernTheme.AccentHoverColor;
+            buttonContinuePurge.FlatAppearance.MouseDownBackColor = ModernTheme.ControlBackColor;
+
+            form.Controls.Add(panelModernTitleBar);
+            form.Controls.Add(labelMessage);
+            form.Controls.Add(textBoxPurgePreview);
+            form.Controls.Add(buttonCancel);
+            form.Controls.Add(buttonContinueWithoutPurging);
+            form.Controls.Add(buttonContinuePurge);
+
+            form.AcceptButton = buttonContinuePurge;
+            form.CancelButton = buttonCancel;
+
+            return form.ShowDialog(this);
+        }
+
+        private string FormatRetentionPurgePreviewPath(string purgePreviewPath)
+        {
+            if (File.Exists(purgePreviewPath))
+            {
+                return $"{purgePreviewPath} ({File.GetLastWriteTime(purgePreviewPath):yyyy-MM-dd HH:mm:ss})";
+            }
+
+            return $"{purgePreviewPath} (file not found)";
         }
 
         private void Form1_Move(object sender, EventArgs e)
@@ -2326,20 +2958,20 @@ namespace EasyVersionBackup
         }
         private void RefreshNotifyIconText()
         {
-            if (!_settings.AutoBackupEnabled || !_settings.BackupPathPairs.Any(p => p.IsEnabled))
+            if (!_settings.AutoBackupEnabled || !TryGetNextAutoBackupRun(out DateTime nextAutoBackupRun))
             {
                 notifyIconMain.Text = "No backup scheduled";
                 return;
             }
 
-            TimeSpan remaining = _nextAutoBackupRun - DateTime.Now;
+            TimeSpan remaining = nextAutoBackupRun - DateTime.Now;
 
             if (remaining < TimeSpan.Zero)
             {
                 remaining = TimeSpan.Zero;
             }
 
-            notifyIconMain.Text = $"Next backup in {FormatNotifyIconRemainingText(remaining)} ({_nextAutoBackupRun:HH:mm})";
+            notifyIconMain.Text = $"Next backup in {FormatNotifyIconRemainingText(remaining)} ({nextAutoBackupRun:HH:mm})";
         }
         private void Form1_Resize(object sender, EventArgs e)
         {
@@ -2432,8 +3064,12 @@ namespace EasyVersionBackup
 
         private void toolStripMenuItemExitTray_Click(object sender, EventArgs e)
         {
+            bool closeToSystray = _settings.CloseToSystray;
+
             notifyIconMain.Visible = false;
+            _settings.CloseToSystray = false;
             Close();
+            _settings.CloseToSystray = closeToSystray;
         }
 
         private void RestoreFromSystray()

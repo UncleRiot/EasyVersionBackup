@@ -34,10 +34,12 @@ namespace EasyVersionBackup
         private readonly ComboBox comboBoxLogLevel;
         private readonly CheckBox checkBoxAutoIncrementVersion;
         private readonly CheckBox checkBoxMinimizeToSystray;
+        private readonly CheckBox checkBoxCloseToSystray;
         private readonly CheckBox checkBoxAutoUpdateCheck;
         private readonly CheckBox checkBoxStartWithWindows;
         private readonly CheckBox checkBoxIgnoreCopyErrors;
         private readonly CheckBox checkBoxAutoPurgeEnabled;
+        private readonly CheckBox checkBoxShowRetentionWarningDialogue;
         private readonly CheckBox checkBoxAutoBackupEnabled;
         private readonly TextBox textBoxAutoBackupInterval;
         private readonly TextBox textBoxTag;
@@ -137,11 +139,13 @@ namespace EasyVersionBackup
 
             checkBoxAutoIncrementVersion = CreateCheckBox("checkBoxAutoIncrementVersion", 1);
             checkBoxMinimizeToSystray = CreateCheckBox("checkBoxMinimizeToSystray", 2);
-            checkBoxAutoUpdateCheck = CreateCheckBox("checkBoxAutoUpdateCheck", 3);
-            checkBoxStartWithWindows = CreateCheckBox("checkBoxStartWithWindows", 4);
+            checkBoxCloseToSystray = CreateCheckBox("checkBoxCloseToSystray", 3);
+            checkBoxAutoUpdateCheck = CreateCheckBox("checkBoxAutoUpdateCheck", 4);
+            checkBoxStartWithWindows = CreateCheckBox("checkBoxStartWithWindows", 5);
             checkBoxIgnoreCopyErrors = CreateCheckBox("checkBoxIgnoreCopyErrors", 0);
             checkBoxAutoBackupEnabled = CreateCheckBox("checkBoxAutoBackupEnabled", 1);
-            checkBoxAutoPurgeEnabled = CreateCheckBox("checkBoxAutoPurgeEnabled", 5);
+            checkBoxAutoPurgeEnabled = CreateCheckBox("checkBoxAutoPurgeEnabled", 6);
+            checkBoxShowRetentionWarningDialogue = CreateCheckBox("checkBoxShowRetentionWarningDialogue", 7);
 
             textBoxAutoBackupInterval = new TextBox
             {
@@ -210,15 +214,17 @@ namespace EasyVersionBackup
             Label labelDefaultVersioning = CreateLabel("labelDefaultVersioning", "Default Versioning", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(0)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelAutoIncrementVersion = CreateLabel("labelAutoIncrementVersion", "Auto increment", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(1)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelMinimizeToSystray = CreateLabel("labelMinimizeToSystray", "Minimize to Systray", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(2)), new Size(ModernTheme.SettingsLabelWidth, 20));
-            Label labelAutoUpdateCheck = CreateLabel("labelAutoUpdateCheck", "Auto Update-Check", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(3)), new Size(ModernTheme.SettingsLabelWidth, 20));
-            Label labelStartWithWindows = CreateLabel("labelStartWithWindows", "Start with Windows", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(4)), new Size(ModernTheme.SettingsLabelWidth, 20));
+            Label labelCloseToSystray = CreateLabel("labelCloseToSystray", "Close to Systray", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(3)), new Size(ModernTheme.SettingsLabelWidth, 20));
+            Label labelAutoUpdateCheck = CreateLabel("labelAutoUpdateCheck", "Auto Update-Check", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(4)), new Size(ModernTheme.SettingsLabelWidth, 20));
+            Label labelStartWithWindows = CreateLabel("labelStartWithWindows", "Start with Windows", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(5)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelIgnoreCopyErrors = CreateLabel("labelIgnoreCopyErrors", "Ignore Copy-Errors", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(0)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelAutoBackupEnabled = CreateLabel("labelAutoBackupEnabled", "Backup Timer", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(1)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelBackupDestinationConflictHandling = CreateLabel("labelBackupDestinationConflictHandling", "Destination Conflict", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(2)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelLogLevel = CreateLabel("labelLogLevel", "Log level", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(0)), new Size(ModernTheme.SettingsLabelWidth, 20));
 
-            Label labelAutoPurgeEnabled = CreateLabel("labelAutoPurgeEnabled", "Retention", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(5)), new Size(ModernTheme.SettingsLabelWidth, 20));
+            Label labelAutoPurgeEnabled = CreateLabel("labelAutoPurgeEnabled", "Retention", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(6)), new Size(ModernTheme.SettingsLabelWidth, 20));
             labelAutoPurgeEnabled.ForeColor = ModernTheme.BackupInfoErrorColor;
+            Label labelShowRetentionWarningDialogue = CreateLabel("labelShowRetentionWarningDialogue", "Show warning dialogue", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(7)), new Size(ModernTheme.SettingsLabelWidth, 20));
 
             PictureBox pictureBoxDefaultVersioningHint = CreateSettingsHintIcon(
                 "pictureBoxDefaultVersioningHint",
@@ -267,6 +273,7 @@ namespace EasyVersionBackup
             settingsToolTip.SetToolTip(comboBoxDefaultVersioning, "Default version or date pattern for new backups");
             settingsToolTip.SetToolTip(checkBoxAutoIncrementVersion, "Automatically increment the suggested version");
             settingsToolTip.SetToolTip(checkBoxMinimizeToSystray, "Hide the window in the system tray when minimized");
+            settingsToolTip.SetToolTip(checkBoxCloseToSystray, "Close the window to the system tray instead of exiting");
             settingsToolTip.SetToolTip(checkBoxAutoUpdateCheck, "Automatically check GitHub for new versions");
             settingsToolTip.SetToolTip(checkBoxStartWithWindows, "Start EasyVersionBackup when Windows starts");
             settingsToolTip.SetToolTip(checkBoxIgnoreCopyErrors, "Skip files that cannot be copied");
@@ -275,6 +282,7 @@ namespace EasyVersionBackup
             settingsToolTip.SetToolTip(comboBoxBackupDestinationConflictHandling, "Default action when the backup destination already exists");
             settingsToolTip.SetToolTip(comboBoxLogLevel, "Minimal = smallest log, Normal = useful decisions, Verbose = every file entry");
             settingsToolTip.SetToolTip(checkBoxAutoPurgeEnabled, "Experimental feature. Permanently deletes old ZIP backups. Use at your own risk.");
+            settingsToolTip.SetToolTip(checkBoxShowRetentionWarningDialogue, "Ask for confirmation before Retention deletes old ZIP backups.");
             settingsToolTip.SetToolTip(buttonExportSettings, "Export current settings to " + ToolsHelper.SettingsFileName);
             settingsToolTip.SetToolTip(buttonImportSettings, "Import settings from " + ToolsHelper.SettingsFileName);
             settingsToolTip.SetToolTip(textBoxTag, "New backup tag");
@@ -300,6 +308,8 @@ namespace EasyVersionBackup
             tabPageGeneral.Controls.Add(checkBoxAutoIncrementVersion);
             tabPageGeneral.Controls.Add(labelMinimizeToSystray);
             tabPageGeneral.Controls.Add(checkBoxMinimizeToSystray);
+            tabPageGeneral.Controls.Add(labelCloseToSystray);
+            tabPageGeneral.Controls.Add(checkBoxCloseToSystray);
             tabPageGeneral.Controls.Add(labelAutoUpdateCheck);
             tabPageGeneral.Controls.Add(checkBoxAutoUpdateCheck);
             tabPageGeneral.Controls.Add(labelStartWithWindows);
@@ -307,6 +317,8 @@ namespace EasyVersionBackup
             tabPageGeneral.Controls.Add(labelAutoPurgeEnabled);
             tabPageGeneral.Controls.Add(checkBoxAutoPurgeEnabled);
             tabPageGeneral.Controls.Add(pictureBoxAutoPurgeHint);
+            tabPageGeneral.Controls.Add(labelShowRetentionWarningDialogue);
+            tabPageGeneral.Controls.Add(checkBoxShowRetentionWarningDialogue);
 
             Panel tabPageBackup = CreateTabPage("tabPageBackup");
             tabPageBackup.Controls.Add(labelIgnoreCopyErrors);
@@ -734,10 +746,12 @@ namespace EasyVersionBackup
 
             checkBoxAutoIncrementVersion.Checked = settings.AutoIncrementVersion;
             checkBoxMinimizeToSystray.Checked = settings.MinimizeToSystray;
+            checkBoxCloseToSystray.Checked = settings.CloseToSystray;
             checkBoxAutoUpdateCheck.Checked = settings.AutoUpdateCheck;
             checkBoxStartWithWindows.Checked = settings.StartWithWindows;
             checkBoxIgnoreCopyErrors.Checked = settings.IgnoreCopyErrors;
             checkBoxAutoPurgeEnabled.Checked = settings.AutoPurgeEnabled;
+            checkBoxShowRetentionWarningDialogue.Checked = settings.ShowRetentionWarningDialogue;
             checkBoxAutoBackupEnabled.Checked = settings.AutoBackupEnabled;
             textBoxAutoBackupInterval.Text = FormatAutoBackupIntervalText(GetAutoBackupIntervalSeconds(settings));
 
@@ -757,6 +771,7 @@ namespace EasyVersionBackup
             _isApplyingSettingsToUi = false;
 
             UpdateAutoBackupControls();
+            UpdateRetentionWarningDialogueControls();
         }
 
         private AppSettings ReadSettingsFromUi()
@@ -767,10 +782,12 @@ namespace EasyVersionBackup
             settings.DefaultVersioning = comboBoxDefaultVersioning.Text.Trim();
             settings.AutoIncrementVersion = checkBoxAutoIncrementVersion.Checked;
             settings.MinimizeToSystray = checkBoxMinimizeToSystray.Checked;
+            settings.CloseToSystray = checkBoxCloseToSystray.Checked;
             settings.AutoUpdateCheck = checkBoxAutoUpdateCheck.Checked;
             settings.StartWithWindows = checkBoxStartWithWindows.Checked;
             settings.IgnoreCopyErrors = checkBoxIgnoreCopyErrors.Checked;
             settings.AutoPurgeEnabled = checkBoxAutoPurgeEnabled.Checked;
+            settings.ShowRetentionWarningDialogue = checkBoxShowRetentionWarningDialogue.Checked;
             settings.BackupDestinationConflictHandling = BackupHelper.NormalizeDestinationConflictHandling(comboBoxBackupDestinationConflictHandling.Text);
             settings.LogLevel = BackupLogger.NormalizeLogLevel(comboBoxLogLevel.Text);
             settings.AutoBackupEnabled = checkBoxAutoBackupEnabled.Checked;
@@ -788,6 +805,8 @@ namespace EasyVersionBackup
 
         private void checkBoxAutoPurgeEnabled_CheckedChanged(object? sender, EventArgs e)
         {
+            UpdateRetentionWarningDialogueControls();
+
             if (_isApplyingSettingsToUi)
             {
                 return;
@@ -801,6 +820,20 @@ namespace EasyVersionBackup
             if (!ShowAutoPurgeSafetyConfirmation())
             {
                 checkBoxAutoPurgeEnabled.Checked = false;
+            }
+        }
+
+        private void UpdateRetentionWarningDialogueControls()
+        {
+            checkBoxShowRetentionWarningDialogue.Enabled = checkBoxAutoPurgeEnabled.Checked;
+
+            foreach (Control control in checkBoxShowRetentionWarningDialogue.Parent.Controls)
+            {
+                if (control.Name == "labelShowRetentionWarningDialogue")
+                {
+                    control.Enabled = checkBoxAutoPurgeEnabled.Checked;
+                    break;
+                }
             }
         }
 
@@ -1326,10 +1359,12 @@ namespace EasyVersionBackup
                 DefaultVersioning = settings.DefaultVersioning,
                 AutoIncrementVersion = settings.AutoIncrementVersion,
                 MinimizeToSystray = settings.MinimizeToSystray,
+                CloseToSystray = settings.CloseToSystray,
                 AutoUpdateCheck = settings.AutoUpdateCheck,
                 StartWithWindows = settings.StartWithWindows,
                 IgnoreCopyErrors = settings.IgnoreCopyErrors,
                 AutoPurgeEnabled = settings.AutoPurgeEnabled,
+                ShowRetentionWarningDialogue = settings.ShowRetentionWarningDialogue,
                 BackupDestinationConflictHandling = settings.BackupDestinationConflictHandling,
                 LogLevel = BackupLogger.NormalizeLogLevel(settings.LogLevel),
                 AutoBackupEnabled = settings.AutoBackupEnabled,
@@ -1363,6 +1398,7 @@ namespace EasyVersionBackup
                     Versioning = pair.Versioning,
                     IgnoreCopyErrors = pair.IgnoreCopyErrors,
                     SkipDialogs = pair.SkipDialogs,
+                    AutoBackupIntervalSeconds = pair.AutoBackupIntervalSeconds,
                     RetentionKeepLastEnabled = pair.RetentionKeepLastEnabled,
                     RetentionKeepLastCount = pair.RetentionKeepLastCount,
                     RetentionKeepDaysEnabled = pair.RetentionKeepDaysEnabled,

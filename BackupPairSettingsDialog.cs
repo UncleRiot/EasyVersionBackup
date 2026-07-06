@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -36,6 +36,7 @@ namespace EasyVersionBackup
         public string ResultVersioning { get; private set; }
         public bool ResultIgnoreCopyErrors { get; private set; }
         public bool ResultSkipDialogs { get; private set; }
+        public int ResultAutoBackupIntervalSeconds { get; private set; }
         public bool ResultRetentionKeepLastEnabled { get; private set; }
         public int ResultRetentionKeepLastCount { get; private set; }
         public bool ResultRetentionKeepDaysEnabled { get; private set; }
@@ -51,6 +52,7 @@ namespace EasyVersionBackup
 
             ResultIgnoreCopyErrors = pair.IgnoreCopyErrors;
             ResultSkipDialogs = pair.SkipDialogs;
+            ResultAutoBackupIntervalSeconds = pair.AutoBackupIntervalSeconds < 1 ? 0 : pair.AutoBackupIntervalSeconds;
             ResultRetentionKeepLastEnabled = zipRetentionAvailable && pair.RetentionKeepLastEnabled;
             ResultRetentionKeepLastCount = pair.RetentionKeepLastCount <= 0 ? 10 : pair.RetentionKeepLastCount;
             ResultRetentionKeepDaysEnabled = zipRetentionAvailable && pair.RetentionKeepDaysEnabled;
@@ -71,8 +73,8 @@ namespace EasyVersionBackup
             Icon = owner.Icon;
             Text = "Backup Pair Settings";
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(420, 445);
-            MinimumSize = new Size(420, 445);
+            ClientSize = new Size(420, 485);
+            MinimumSize = new Size(420, 485);
             FormBorderStyle = FormBorderStyle.None;
             BackColor = ModernTheme.WindowBackColor;
             Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
@@ -139,11 +141,52 @@ namespace EasyVersionBackup
                     checkBoxSkipDialogs.Right + ModernTheme.SettingsHintSpacing,
                     GetDialogLabelTop(2) + 1));
 
+            Label labelAutoBackupTimer = CreateLabel("labelAutoBackupTimer", "Custom timer", 3);
+            CheckBox checkBoxAutoBackupTimer = CreateCheckBox("checkBoxAutoBackupTimer", 3);
+            checkBoxAutoBackupTimer.Checked = ResultAutoBackupIntervalSeconds > 0;
+
+            TextBox textBoxAutoBackupTimer = CreateTextBox("textBoxAutoBackupTimer", 3);
+            textBoxAutoBackupTimer.Text = ResultAutoBackupIntervalSeconds > 0
+                ? FormatAutoBackupIntervalText(ResultAutoBackupIntervalSeconds)
+                : string.Empty;
+            textBoxAutoBackupTimer.ReadOnly = ResultAutoBackupIntervalSeconds <= 0;
+            textBoxAutoBackupTimer.BackColor = ResultAutoBackupIntervalSeconds > 0
+                ? ModernTheme.TitleBarBackColor
+                : ModernTheme.DisabledControlBackColor;
+            textBoxAutoBackupTimer.ForeColor = ResultAutoBackupIntervalSeconds > 0
+                ? ModernTheme.TextColor
+                : ModernTheme.DisabledTextColor;
+
+            checkBoxAutoBackupTimer.CheckedChanged += (sender, e) =>
+            {
+                bool enabled = checkBoxAutoBackupTimer.Checked;
+
+                textBoxAutoBackupTimer.ReadOnly = !enabled;
+                textBoxAutoBackupTimer.BackColor = enabled
+                    ? ModernTheme.TitleBarBackColor
+                    : ModernTheme.DisabledControlBackColor;
+                textBoxAutoBackupTimer.ForeColor = enabled
+                    ? ModernTheme.TextColor
+                    : ModernTheme.DisabledTextColor;
+
+                if (enabled && string.IsNullOrWhiteSpace(textBoxAutoBackupTimer.Text))
+                {
+                    textBoxAutoBackupTimer.Text = "15m";
+                }
+            };
+
+            PictureBox pictureBoxAutoBackupTimerHint = CreateHintIcon(
+                "pictureBoxAutoBackupTimerHint",
+                "Overrides the global auto-backup timer. Examples: 30s, 15m, 1h",
+                new Point(
+                    textBoxAutoBackupTimer.Right + ModernTheme.SettingsHintSpacing,
+                    GetDialogLabelTop(3) + 1));
+
             labelRetentionHeader = new Label
             {
                 Name = "labelRetentionHeader",
                 Text = "Retention:",
-                Location = new Point(ModernTheme.SettingsLabelLeft, GetDialogLabelTop(3)),
+                Location = new Point(ModernTheme.SettingsLabelLeft, GetDialogLabelTop(4)),
                 Size = new Size(ModernTheme.SettingsLabelWidth, ModernTheme.SettingsLabelHeight),
                 ForeColor = retentionTextColor,
                 BackColor = Color.Transparent,
@@ -151,13 +194,13 @@ namespace EasyVersionBackup
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
-            labelKeepLast = CreateLabel("labelKeepLast", "Keep last backups", 4);
+            labelKeepLast = CreateLabel("labelKeepLast", "Keep last backups", 5);
             labelKeepLast.ForeColor = retentionTextColor;
 
-            labelKeepDays = CreateLabel("labelKeepDays", "Keep backups for", 5);
+            labelKeepDays = CreateLabel("labelKeepDays", "Keep backups for", 6);
             labelKeepDays.ForeColor = retentionTextColor;
 
-            labelRetentionMode = CreateLabel("labelRetentionMode", "Retention mode", 6);
+            labelRetentionMode = CreateLabel("labelRetentionMode", "Retention mode", 7);
             labelRetentionMode.ForeColor = retentionTextColor;
 
             comboBoxDefaultVersioning = new ComboBox
@@ -180,28 +223,28 @@ namespace EasyVersionBackup
             comboBoxDefaultVersioning.Items.Add("yyyyMMddHHmm");
             comboBoxDefaultVersioning.Text = string.IsNullOrWhiteSpace(ResultVersioning) ? "v1.0" : ResultVersioning;
 
-            checkBoxKeepLast = CreateCheckBox("checkBoxKeepLast", 4);
+            checkBoxKeepLast = CreateCheckBox("checkBoxKeepLast", 5);
             checkBoxKeepLast.Checked = ResultRetentionKeepLastEnabled;
             checkBoxKeepLast.AutoCheck = zipRetentionAvailable;
             checkBoxKeepLast.TabStop = zipRetentionAvailable;
             checkBoxKeepLast.Cursor = zipRetentionAvailable ? Cursors.Hand : Cursors.Default;
             checkBoxKeepLast.ForeColor = retentionTextColor;
 
-            textBoxKeepLast = CreateTextBox("textBoxKeepLast", 4);
+            textBoxKeepLast = CreateTextBox("textBoxKeepLast", 5);
             textBoxKeepLast.Text = ResultRetentionKeepLastCount.ToString();
             textBoxKeepLast.ReadOnly = !zipRetentionAvailable;
             textBoxKeepLast.TabStop = zipRetentionAvailable;
             textBoxKeepLast.BackColor = retentionBackColor;
             textBoxKeepLast.ForeColor = retentionTextColor;
 
-            checkBoxKeepDays = CreateCheckBox("checkBoxKeepDays", 5);
+            checkBoxKeepDays = CreateCheckBox("checkBoxKeepDays", 6);
             checkBoxKeepDays.Checked = ResultRetentionKeepDaysEnabled;
             checkBoxKeepDays.AutoCheck = zipRetentionAvailable;
             checkBoxKeepDays.TabStop = zipRetentionAvailable;
             checkBoxKeepDays.Cursor = zipRetentionAvailable ? Cursors.Hand : Cursors.Default;
             checkBoxKeepDays.ForeColor = retentionTextColor;
 
-            textBoxKeepDays = CreateTextBox("textBoxKeepDays", 5);
+            textBoxKeepDays = CreateTextBox("textBoxKeepDays", 6);
             textBoxKeepDays.Text = ResultRetentionKeepDaysCount.ToString();
             textBoxKeepDays.ReadOnly = !zipRetentionAvailable;
             textBoxKeepDays.TabStop = zipRetentionAvailable;
@@ -212,7 +255,7 @@ namespace EasyVersionBackup
             {
                 Name = "labelKeepDaysUnit",
                 Text = "days",
-                Location = new Point(textBoxKeepDays.Right + ModernTheme.SettingsHintSpacing, GetDialogLabelTop(5)),
+                Location = new Point(textBoxKeepDays.Right + ModernTheme.SettingsHintSpacing, GetDialogLabelTop(6)),
                 Size = new Size(50, ModernTheme.SettingsLabelHeight),
                 ForeColor = retentionTextColor,
                 BackColor = Color.Transparent,
@@ -222,7 +265,7 @@ namespace EasyVersionBackup
             comboBoxRetentionMode = new ComboBox
             {
                 Name = "comboBoxRetentionMode",
-                Location = new Point(ModernTheme.SettingsControlLeft, GetDialogRowTop(6)),
+                Location = new Point(ModernTheme.SettingsControlLeft, GetDialogRowTop(7)),
                 Size = new Size(ModernTheme.SettingsTimerInputWidth, ModernTheme.SettingsControlHeight),
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 FlatStyle = FlatStyle.Flat,
@@ -239,13 +282,13 @@ namespace EasyVersionBackup
                 ModernTheme.ApplyInactiveComboBoxStyle(comboBoxRetentionMode);
             }
 
-            labelRetentionExclusions = CreateLabel("labelRetentionExclusions", "Retention exclusions", 7);
+            labelRetentionExclusions = CreateLabel("labelRetentionExclusions", "Retention exclusions", 8);
             labelRetentionExclusions.ForeColor = retentionTextColor;
 
             checkedListBoxRetentionExclusions = new CheckedListBox
             {
                 Name = "checkedListBoxRetentionExclusions",
-                Location = new Point(ModernTheme.SettingsControlLeft, GetDialogRowTop(7)),
+                Location = new Point(ModernTheme.SettingsControlLeft, GetDialogRowTop(8)),
                 Size = new Size(ModernTheme.SettingsComboBoxWidth, 74),
                 CheckOnClick = true,
                 BorderStyle = BorderStyle.FixedSingle,
@@ -297,6 +340,10 @@ namespace EasyVersionBackup
             Controls.Add(labelSkipDialogs);
             Controls.Add(checkBoxSkipDialogs);
             Controls.Add(pictureBoxSkipDialogsHint);
+            Controls.Add(labelAutoBackupTimer);
+            Controls.Add(checkBoxAutoBackupTimer);
+            Controls.Add(textBoxAutoBackupTimer);
+            Controls.Add(pictureBoxAutoBackupTimerHint);
             Controls.Add(labelRetentionHeader);
             Controls.Add(labelKeepLast);
             Controls.Add(checkBoxKeepLast);
@@ -413,6 +460,68 @@ namespace EasyVersionBackup
             base.WndProc(ref m);
         }
 
+        private string FormatAutoBackupIntervalText(int seconds)
+        {
+            if (seconds % 3600 == 0)
+            {
+                return (seconds / 3600).ToString() + "h";
+            }
+
+            if (seconds % 60 == 0)
+            {
+                return (seconds / 60).ToString() + "m";
+            }
+
+            return seconds.ToString() + "s";
+        }
+
+        private bool TryParseAutoBackupIntervalSeconds(string value, out int seconds)
+        {
+            seconds = 0;
+
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            string normalizedValue = value.Trim().ToLowerInvariant();
+
+            if (normalizedValue.EndsWith("s"))
+            {
+                return int.TryParse(normalizedValue[..^1], out seconds) && seconds >= 1;
+            }
+
+            if (normalizedValue.EndsWith("m"))
+            {
+                if (!int.TryParse(normalizedValue[..^1], out int minutes) || minutes < 1)
+                {
+                    return false;
+                }
+
+                seconds = minutes * 60;
+                return true;
+            }
+
+            if (normalizedValue.EndsWith("h"))
+            {
+                if (!int.TryParse(normalizedValue[..^1], out int hours) || hours < 1)
+                {
+                    return false;
+                }
+
+                seconds = hours * 3600;
+                return true;
+            }
+
+            if (!int.TryParse(normalizedValue, out int defaultMinutes) || defaultMinutes < 1)
+            {
+                return false;
+            }
+
+            seconds = defaultMinutes * 60;
+            return true;
+        }
+
         private void buttonOk_Click(object? sender, EventArgs e)
         {
             string versioning = comboBoxDefaultVersioning.Text.Trim();
@@ -423,6 +532,23 @@ namespace EasyVersionBackup
             {
                 ModernMessageDialog.Show(this, "Error", "Default Versioning contains invalid filename characters.");
                 return;
+            }
+
+            if (Controls["checkBoxAutoBackupTimer"] is CheckBox checkBoxAutoBackupTimer &&
+                checkBoxAutoBackupTimer.Checked)
+            {
+                if (Controls["textBoxAutoBackupTimer"] is not TextBox textBoxAutoBackupTimer ||
+                    !TryParseAutoBackupIntervalSeconds(textBoxAutoBackupTimer.Text.Trim(), out int autoBackupIntervalSeconds))
+                {
+                    ModernMessageDialog.Show(this, "Error", "Custom timer must be a valid value. Examples: 30s, 15m, 1h.");
+                    return;
+                }
+
+                ResultAutoBackupIntervalSeconds = autoBackupIntervalSeconds;
+            }
+            else
+            {
+                ResultAutoBackupIntervalSeconds = 0;
             }
 
             if (checkBoxKeepLast.Checked &&

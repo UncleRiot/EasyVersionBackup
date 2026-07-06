@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text.Json;
 
@@ -49,6 +49,16 @@ namespace EasyVersionBackup
                 if (pair.ExcludedPaths == null)
                 {
                     pair.ExcludedPaths = new System.Collections.Generic.List<string>();
+                }
+
+                if (pair.RetentionExcludedTags == null)
+                {
+                    pair.RetentionExcludedTags = new System.Collections.Generic.List<string>();
+                }
+
+                if (pair.AutoBackupIntervalSeconds < 0)
+                {
+                    pair.AutoBackupIntervalSeconds = 0;
                 }
             }
 
@@ -149,6 +159,8 @@ namespace EasyVersionBackup
                 DefaultVersioning = "0.0.1",
                 AutoIncrementVersion = true,
                 MinimizeToSystray = false,
+                CloseToSystray = false,
+                ShowRetentionWarningDialogue = true,
                 Tags = new System.Collections.Generic.List<string>()
             };
         }

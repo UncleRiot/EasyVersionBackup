@@ -1,4 +1,4 @@
-
+﻿
 
 
 using System.Collections.Generic;
@@ -11,11 +11,13 @@ namespace EasyVersionBackup
         public string DefaultVersioning { get; set; } = "0.0.1";
         public bool AutoIncrementVersion { get; set; } = true;
         public bool MinimizeToSystray { get; set; } = false;
+        public bool CloseToSystray { get; set; } = false;
 
         public bool AutoUpdateCheck { get; set; } = true;
         public bool StartWithWindows { get; set; } = false;
         public bool IgnoreCopyErrors { get; set; } = false;
         public bool AutoPurgeEnabled { get; set; } = false;
+        public bool ShowRetentionWarningDialogue { get; set; } = true;
         public string BackupDestinationConflictHandling { get; set; } = "Ask";
         public bool AutoBackupEnabled { get; set; } = false;
         public int AutoBackupIntervalMinutes { get; set; } = 15;
@@ -51,6 +53,7 @@ namespace EasyVersionBackup
         public string Versioning { get; set; } = string.Empty;
         public bool IgnoreCopyErrors { get; set; } = false;
         public bool SkipDialogs { get; set; } = false;
+        public int AutoBackupIntervalSeconds { get; set; } = 0;
         public bool RetentionKeepLastEnabled { get; set; } = false;
         public int RetentionKeepLastCount { get; set; } = 10;
         public bool RetentionKeepDaysEnabled { get; set; } = false;

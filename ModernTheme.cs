@@ -199,7 +199,7 @@ namespace EasyVersionBackup
         }
 
         // themed scroll bar start
-        public static readonly Color DataGridViewScrollBarTrackColor = WindowBackColor;
+        public static readonly Color DataGridViewScrollBarTrackColor = ControlBackColor;
         public static readonly Color DataGridViewScrollBarThumbColor = ControlBackColor;
         public const int DataGridViewScrollBarSize = 14;
         public const int DataGridViewScrollBarMinimumThumbSize = 24;
@@ -256,7 +256,7 @@ namespace EasyVersionBackup
             {
                 base.OnPaint(e);
 
-                using SolidBrush trackBrush = new SolidBrush(DataGridViewScrollBarTrackColor);
+                using SolidBrush trackBrush = new SolidBrush(WindowBackColor);
                 e.Graphics.FillRectangle(trackBrush, ClientRectangle);
 
                 if (Maximum <= Minimum)
@@ -264,7 +264,7 @@ namespace EasyVersionBackup
                     return;
                 }
 
-                using SolidBrush thumbBrush = new SolidBrush(DataGridViewScrollBarThumbColor);
+                using SolidBrush thumbBrush = new SolidBrush(ControlBackColor);
                 e.Graphics.FillRectangle(thumbBrush, GetThumbRectangle());
             }
 
@@ -335,14 +335,30 @@ namespace EasyVersionBackup
             {
                 int length = Orientation == System.Windows.Forms.Orientation.Vertical ? Height : Width;
                 int thickness = Orientation == System.Windows.Forms.Orientation.Vertical ? Width : Height;
-                int range = Math.Max(1, Maximum - Minimum + 1);
+
+                if (length <= 0 || thickness <= 0)
+                {
+                    return Rectangle.Empty;
+                }
+
+                int scrollableRange = Math.Max(0, Maximum - Minimum);
                 int largeChange = Math.Max(1, LargeChange);
-                int thumbLength = Math.Max(DataGridViewScrollBarMinimumThumbSize, length * largeChange / (range + largeChange));
+                int virtualItemCount = Math.Max(1, scrollableRange + largeChange);
+
+                int thumbLength = scrollableRange == 0
+                    ? length
+                    : (int)Math.Round(length * ((double)largeChange / virtualItemCount));
+
+                thumbLength = Math.Max(DataGridViewScrollBarMinimumThumbSize, thumbLength);
                 thumbLength = Math.Min(length, thumbLength);
+
                 int availableTrack = Math.Max(1, length - thumbLength);
-                int thumbStart = Maximum <= Minimum
+
+                int thumbStart = scrollableRange == 0
                     ? 0
-                    : (int)Math.Round((double)(Value - Minimum) / (Maximum - Minimum) * availableTrack);
+                    : (int)Math.Round((double)(Value - Minimum) / scrollableRange * availableTrack);
+
+                thumbStart = Math.Max(0, Math.Min(availableTrack, thumbStart));
 
                 return Orientation == System.Windows.Forms.Orientation.Vertical
                     ? new Rectangle(0, thumbStart, thickness, thumbLength)

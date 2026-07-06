@@ -641,7 +641,88 @@ namespace EasyVersionBackup
         {
             return $"Backup canceled. File already exists:{Environment.NewLine}{destinationPath}";
         }
+        public static List<string> GetRetentionPurgePreviewPaths(BackupPathPair pair, bool zipDestinationFiles)
+        {
+            List<string> purgePreviewPaths = new List<string>();
 
+            if (!zipDestinationFiles)
+            {
+                return purgePreviewPaths;
+            }
+
+            if (!pair.RetentionKeepLastEnabled && !pair.RetentionKeepDaysEnabled)
+            {
+                return purgePreviewPaths;
+            }
+
+            if (string.IsNullOrWhiteSpace(pair.SourceDirectory) || string.IsNullOrWhiteSpace(pair.TargetDirectory))
+            {
+                return purgePreviewPaths;
+            }
+
+            if (!Directory.Exists(pair.TargetDirectory))
+            {
+                return purgePreviewPaths;
+            }
+
+            string sourceName = new DirectoryInfo(pair.SourceDirectory).Name;
+
+            if (string.IsNullOrWhiteSpace(sourceName))
+            {
+                return purgePreviewPaths;
+            }
+
+            List<FileInfo> backupFiles = GetRetentionZipBackupItems(pair.TargetDirectory, sourceName)
+                .OrderByDescending(file => file.LastWriteTimeUtc)
+                .ToList();
+
+            if (backupFiles.Count == 0)
+            {
+                return purgePreviewPaths;
+            }
+
+            DateTime deleteBeforeUtc = DateTime.UtcNow.AddDays(-Math.Max(1, pair.RetentionKeepDaysCount));
+            string retentionMode = NormalizeRetentionMode(pair.RetentionMode);
+            int newestRelevantBackupNumber = 0;
+
+            foreach (FileInfo file in backupFiles)
+            {
+                string? excludedTag = GetRetentionExcludedTag(file.FullName, pair);
+
+                if (!string.IsNullOrWhiteSpace(excludedTag))
+                {
+                    continue;
+                }
+
+                newestRelevantBackupNumber++;
+
+                bool deleteByLast = pair.RetentionKeepLastEnabled &&
+                    newestRelevantBackupNumber > Math.Max(1, pair.RetentionKeepLastCount);
+
+                bool deleteByDays = pair.RetentionKeepDaysEnabled &&
+                    file.LastWriteTimeUtc < deleteBeforeUtc;
+
+                bool shouldDelete;
+
+                if (pair.RetentionKeepLastEnabled && pair.RetentionKeepDaysEnabled)
+                {
+                    shouldDelete = retentionMode == RetentionModeAll
+                        ? deleteByLast && deleteByDays
+                        : deleteByLast || deleteByDays;
+                }
+                else
+                {
+                    shouldDelete = deleteByLast || deleteByDays;
+                }
+
+                if (shouldDelete)
+                {
+                    purgePreviewPaths.Add(file.FullName);
+                }
+            }
+
+            return purgePreviewPaths;
+        }
         public static string FormatDestinationActionSummary(IEnumerable<string> destinationActions)
         {
             int appended = 0;
