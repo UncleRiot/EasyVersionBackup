@@ -39,39 +39,24 @@ If this tool saves you time, you can support development here:
 ---
 
 <br>
-<img width="806" height="262" alt="grafik" src="https://github.com/user-attachments/assets/b09bffdb-9053-456b-8596-d1ca3fd8e6ba" />
+<img width="956" height="326" alt="grafik" src="https://github.com/user-attachments/assets/c0c3a094-8d77-407e-8464-49fcc665ce75" />
+
 <br>
 
 <br>
-<img width="417" height="446" alt="grafik" src="https://github.com/user-attachments/assets/6f5feaea-6cf6-45f4-bc0b-8e354f53cbba" />
+<img width="720" height="480" alt="grafik" src="https://github.com/user-attachments/assets/6215d6ef-fdb2-48dc-8213-ba0d02ee1113" />
 <br>
 
 <br>
-<img width="523" height="190" alt="grafik" src="https://github.com/user-attachments/assets/5a92894d-5d78-4d0f-a877-355fb9efddd2" />
+<img width="420" height="485" alt="grafik" src="https://github.com/user-attachments/assets/fb3fd8db-0252-4f1e-8241-79683586c527" />
 <br>
 
 <br>
-<img width="1232" height="358" alt="grafik"  src="https://github.com/user-attachments/assets/387485ed-64b3-43f4-a9be-f33864569674" />
+<img width="520" height="353" alt="grafik" src="https://github.com/user-attachments/assets/0eb99537-3643-44b5-a4f5-a3ecc3d5efd3" />
 <br>
 
 <br>
-<img width="501" height="300" alt="grafik" src="https://github.com/user-attachments/assets/d10fa442-f473-41ec-b1b6-d947ea1e5624" />
-<br>
-
-<br>
-<img width="507" height="236" alt="grafik"src="https://github.com/user-attachments/assets/80810de1-43a3-431f-b2c8-2a82b75e1682" />
-<br>
-
-<br>
-<img width="497" height="320" alt="grafik"  src="https://github.com/user-attachments/assets/6a0f8e1f-7582-42b8-aacf-82d454b6e2a7" />
-<br>
-
-<br>
-<img width="499" height="169" alt="grafik"  src="https://github.com/user-attachments/assets/a4b50590-0f0a-43f6-8243-d30cb866a259" />
-<br>
-
-<br>
-<img width="504" height="172" alt="grafik" src="https://github.com/user-attachments/assets/20bbdb84-0a3e-479e-8633-7dffccc1ddd4" />
+<img width="760" height="430" alt="grafik" src="https://github.com/user-attachments/assets/caee9f1d-9609-41fb-b16b-bf744374f555" />
 <br>
 
 
