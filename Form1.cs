@@ -1498,6 +1498,9 @@ namespace EasyVersionBackup
 
                 skipped += CreateZipFromDirectory(pair.SourceDirectory, zipPath, pair.ExcludedPaths, skippedFilePaths);
                 _lastBackupDestinationFileName = Path.GetFileName(zipPath);
+
+                BackupLogger.WriteLine($"BACKUP CREATED | source=\"{pair.SourceDirectory}\" | target=\"{pair.TargetDirectory}\" | backup=\"{_lastBackupDestinationFileName}\" | destinationAction={destinationAction} | skippedFiles={skipped}");
+
                 return skipped;
             }
 
@@ -1540,6 +1543,8 @@ namespace EasyVersionBackup
 
             skipped += CopyDirectory(pair.SourceDirectory, destinationDirectory, pair.ExcludedPaths, skippedFilePaths);
             _lastBackupDestinationFileName = Path.GetFileName(destinationDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+
+            BackupLogger.WriteLine($"BACKUP CREATED | source=\"{pair.SourceDirectory}\" | target=\"{pair.TargetDirectory}\" | backup=\"{_lastBackupDestinationFileName}\" | destinationAction={destinationAction} | skippedFiles={skipped}");
 
             return skipped;
         }
