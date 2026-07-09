@@ -207,7 +207,7 @@ namespace EasyVersionBackup
         {
             base.OnShown(e);
 
-            if (_startMinimizedToSystray && _settings.MinimizeToSystray)
+            if (_startMinimizedToSystray && (_settings.MinimizeToSystray || _settings.CloseToSystray))
             {
                 StartMinimizedToSystray();
             }
@@ -3080,10 +3080,20 @@ namespace EasyVersionBackup
         private void RestoreFromSystray()
         {
             Show();
-            ShowInTaskbar = true;
+
+            if (_settings.MinimizeToSystray || _settings.CloseToSystray)
+            {
+                ShowInTaskbar = false;
+                notifyIconMain.Visible = true;
+            }
+            else
+            {
+                ShowInTaskbar = true;
+                notifyIconMain.Visible = false;
+            }
+
             WindowState = FormWindowState.Normal;
             Activate();
-            notifyIconMain.Visible = false;
         }
 
         private enum FileErrorAction

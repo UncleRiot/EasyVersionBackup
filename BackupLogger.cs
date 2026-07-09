@@ -157,7 +157,6 @@ namespace EasyVersionBackup
                 return entries
                     .OrderByDescending(entry => entry.Timestamp)
                     .Take(Math.Max(1, maxEntries))
-                    .OrderBy(entry => entry.Timestamp)
                     .ToList();
             }
             catch
