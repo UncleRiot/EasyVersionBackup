@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -31,6 +31,9 @@ namespace EasyVersionBackup
         private readonly CheckedListBox checkedListBoxRetentionExclusions;
         private readonly Button buttonOk;
         private readonly Button buttonCancel;
+        private readonly ToolTip toolTip = new ToolTip();
+        private readonly bool zipRetentionAvailable;
+        private readonly System.Collections.Generic.List<string> originalRetentionExcludedTags;
 
 
         public string ResultVersioning { get; private set; }
@@ -46,6 +49,11 @@ namespace EasyVersionBackup
 
         public BackupPairSettingsDialog(Form owner, BackupPathPair pair, string defaultVersioning, bool zipRetentionAvailable, System.Collections.Generic.List<string> availableTags)
         {
+            this.zipRetentionAvailable = zipRetentionAvailable;
+            originalRetentionExcludedTags = pair.RetentionExcludedTags != null
+                ? new System.Collections.Generic.List<string>(pair.RetentionExcludedTags)
+                : new System.Collections.Generic.List<string>();
+
             ResultVersioning = string.IsNullOrWhiteSpace(pair.Versioning)
                 ? defaultVersioning
                 : pair.Versioning;
@@ -53,9 +61,9 @@ namespace EasyVersionBackup
             ResultIgnoreCopyErrors = pair.IgnoreCopyErrors;
             ResultSkipDialogs = pair.SkipDialogs;
             ResultAutoBackupIntervalSeconds = pair.AutoBackupIntervalSeconds < 1 ? 0 : pair.AutoBackupIntervalSeconds;
-            ResultRetentionKeepLastEnabled = zipRetentionAvailable && pair.RetentionKeepLastEnabled;
+            ResultRetentionKeepLastEnabled = pair.RetentionKeepLastEnabled;
             ResultRetentionKeepLastCount = pair.RetentionKeepLastCount <= 0 ? 10 : pair.RetentionKeepLastCount;
-            ResultRetentionKeepDaysEnabled = zipRetentionAvailable && pair.RetentionKeepDaysEnabled;
+            ResultRetentionKeepDaysEnabled = pair.RetentionKeepDaysEnabled;
             ResultRetentionKeepDaysCount = pair.RetentionKeepDaysCount <= 0 ? 14 : pair.RetentionKeepDaysCount;
             ResultRetentionMode = BackupHelper.NormalizeRetentionMode(pair.RetentionMode);
             ResultRetentionExcludedTags = pair.RetentionExcludedTags != null
@@ -147,7 +155,7 @@ namespace EasyVersionBackup
 
             TextBox textBoxAutoBackupTimer = CreateTextBox("textBoxAutoBackupTimer", 3);
             textBoxAutoBackupTimer.Text = ResultAutoBackupIntervalSeconds > 0
-                ? FormatAutoBackupIntervalText(ResultAutoBackupIntervalSeconds)
+                ? AutoBackupIntervalHelper.Format(ResultAutoBackupIntervalSeconds)
                 : string.Empty;
             textBoxAutoBackupTimer.ReadOnly = ResultAutoBackupIntervalSeconds <= 0;
             textBoxAutoBackupTimer.BackColor = ResultAutoBackupIntervalSeconds > 0
@@ -460,77 +468,16 @@ namespace EasyVersionBackup
             base.WndProc(ref m);
         }
 
-        private string FormatAutoBackupIntervalText(int seconds)
-        {
-            if (seconds % 3600 == 0)
-            {
-                return (seconds / 3600).ToString() + "h";
-            }
-
-            if (seconds % 60 == 0)
-            {
-                return (seconds / 60).ToString() + "m";
-            }
-
-            return seconds.ToString() + "s";
-        }
-
-        private bool TryParseAutoBackupIntervalSeconds(string value, out int seconds)
-        {
-            seconds = 0;
-
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return false;
-            }
-
-            string normalizedValue = value.Trim().ToLowerInvariant();
-
-            if (normalizedValue.EndsWith("s"))
-            {
-                return int.TryParse(normalizedValue[..^1], out seconds) && seconds >= 1;
-            }
-
-            if (normalizedValue.EndsWith("m"))
-            {
-                if (!int.TryParse(normalizedValue[..^1], out int minutes) || minutes < 1)
-                {
-                    return false;
-                }
-
-                seconds = minutes * 60;
-                return true;
-            }
-
-            if (normalizedValue.EndsWith("h"))
-            {
-                if (!int.TryParse(normalizedValue[..^1], out int hours) || hours < 1)
-                {
-                    return false;
-                }
-
-                seconds = hours * 3600;
-                return true;
-            }
-
-            if (!int.TryParse(normalizedValue, out int defaultMinutes) || defaultMinutes < 1)
-            {
-                return false;
-            }
-
-            seconds = defaultMinutes * 60;
-            return true;
-        }
-
         private void buttonOk_Click(object? sender, EventArgs e)
         {
             string versioning = comboBoxDefaultVersioning.Text.Trim();
 
-            if (!string.Equals(versioning, "none", StringComparison.OrdinalIgnoreCase) &&
-                !VersionPatternHelper.IsDatePattern(versioning) &&
-                !VersionPatternHelper.IsValidVersionValue(versioning))
+            if (!VersionPatternHelper.IsValidVersioningValue(versioning))
             {
-                ModernMessageDialog.Show(this, "Error", "Default Versioning contains invalid filename characters.");
+                ModernMessageDialog.Show(
+                    this,
+                    "Error",
+                    "Default Versioning contains invalid filename characters or an invalid date pattern.");
                 return;
             }
 
@@ -538,54 +485,134 @@ namespace EasyVersionBackup
                 checkBoxAutoBackupTimer.Checked)
             {
                 if (Controls["textBoxAutoBackupTimer"] is not TextBox textBoxAutoBackupTimer ||
-                    !TryParseAutoBackupIntervalSeconds(textBoxAutoBackupTimer.Text.Trim(), out int autoBackupIntervalSeconds))
+                    !AutoBackupIntervalHelper.TryParseSeconds(
+                        textBoxAutoBackupTimer.Text.Trim(),
+                        out int autoBackupIntervalSeconds))
                 {
-                    ModernMessageDialog.Show(this, "Error", "Custom timer must be a valid value. Examples: 30s, 15m, 1h.");
+                    ModernMessageDialog.Show(
+                        this,
+                        "Error",
+                        "Custom timer must be a valid value. Examples: 30s, 15m, 1h.");
                     return;
                 }
 
-                ResultAutoBackupIntervalSeconds = autoBackupIntervalSeconds;
+                ResultAutoBackupIntervalSeconds =
+                    autoBackupIntervalSeconds;
             }
             else
             {
                 ResultAutoBackupIntervalSeconds = 0;
             }
 
-            if (checkBoxKeepLast.Checked &&
-                (!int.TryParse(textBoxKeepLast.Text.Trim(), out int keepLastCount) || keepLastCount < 1))
+            if (zipRetentionAvailable &&
+                checkBoxKeepLast.Checked &&
+                (!int.TryParse(
+                    textBoxKeepLast.Text.Trim(),
+                    out int keepLastCount) ||
+                 keepLastCount < 1))
             {
-                ModernMessageDialog.Show(this, "Error", "Keep last backups must be a number greater than 0.");
+                ModernMessageDialog.Show(
+                    this,
+                    "Error",
+                    "Keep last backups must be a number greater than 0.");
                 return;
             }
 
-            if (checkBoxKeepDays.Checked &&
-                (!int.TryParse(textBoxKeepDays.Text.Trim(), out int keepDaysCount) || keepDaysCount < 1))
+            if (zipRetentionAvailable &&
+                checkBoxKeepDays.Checked &&
+                (!int.TryParse(
+                    textBoxKeepDays.Text.Trim(),
+                    out int keepDaysCount) ||
+                 keepDaysCount < 1))
             {
-                ModernMessageDialog.Show(this, "Error", "Keep backups for days must be a number greater than 0.");
+                ModernMessageDialog.Show(
+                    this,
+                    "Error",
+                    "Keep backups for days must be a number greater than 0.");
                 return;
             }
 
             ResultVersioning = versioning;
-            ResultIgnoreCopyErrors = Controls["checkBoxIgnoreCopyErrors"] is CheckBox checkBoxIgnoreCopyErrors && checkBoxIgnoreCopyErrors.Checked;
-            ResultSkipDialogs = Controls["checkBoxSkipDialogs"] is CheckBox checkBoxSkipDialogs && checkBoxSkipDialogs.Checked;
-            ResultRetentionKeepLastEnabled = checkBoxKeepLast.Checked;
-            ResultRetentionKeepLastCount = int.TryParse(textBoxKeepLast.Text.Trim(), out int resultKeepLastCount) ? resultKeepLastCount : 10;
-            ResultRetentionKeepDaysEnabled = checkBoxKeepDays.Checked;
-            ResultRetentionKeepDaysCount = int.TryParse(textBoxKeepDays.Text.Trim(), out int resultKeepDaysCount) ? resultKeepDaysCount : 14;
-            ResultRetentionMode = comboBoxRetentionMode.SelectedIndex == 1
-                ? BackupHelper.RetentionModeAll
-                : BackupHelper.RetentionModeAny;
+            ResultIgnoreCopyErrors =
+                Controls["checkBoxIgnoreCopyErrors"] is CheckBox checkBoxIgnoreCopyErrors &&
+                checkBoxIgnoreCopyErrors.Checked;
 
-            ResultRetentionExcludedTags = new System.Collections.Generic.List<string>();
+            ResultSkipDialogs =
+                Controls["checkBoxSkipDialogs"] is CheckBox checkBoxSkipDialogs &&
+                checkBoxSkipDialogs.Checked;
 
-            foreach (object checkedItem in checkedListBoxRetentionExclusions.CheckedItems)
+            if (zipRetentionAvailable)
             {
-                string? tag = checkedItem.ToString();
+                ResultRetentionKeepLastEnabled =
+                    checkBoxKeepLast.Checked;
 
-                if (!string.IsNullOrWhiteSpace(tag) && !ContainsIgnoreCase(ResultRetentionExcludedTags, tag.Trim()))
+                ResultRetentionKeepLastCount =
+                    int.TryParse(
+                        textBoxKeepLast.Text.Trim(),
+                        out int resultKeepLastCount)
+                        ? resultKeepLastCount
+                        : 10;
+
+                ResultRetentionKeepDaysEnabled =
+                    checkBoxKeepDays.Checked;
+
+                ResultRetentionKeepDaysCount =
+                    int.TryParse(
+                        textBoxKeepDays.Text.Trim(),
+                        out int resultKeepDaysCount)
+                        ? resultKeepDaysCount
+                        : 14;
+
+                ResultRetentionMode =
+                    comboBoxRetentionMode.SelectedIndex == 1
+                        ? BackupHelper.RetentionModeAll
+                        : BackupHelper.RetentionModeAny;
+
+                System.Collections.Generic.List<string> resultTags =
+                    new System.Collections.Generic.List<string>();
+
+                foreach (string originalTag in originalRetentionExcludedTags)
                 {
-                    ResultRetentionExcludedTags.Add(tag.Trim());
+                    bool isVisibleTag = false;
+
+                    foreach (object item in checkedListBoxRetentionExclusions.Items)
+                    {
+                        if (string.Equals(
+                            item?.ToString(),
+                            originalTag,
+                            StringComparison.OrdinalIgnoreCase))
+                        {
+                            isVisibleTag = true;
+                            break;
+                        }
+                    }
+
+                    if (!isVisibleTag &&
+                        !string.IsNullOrWhiteSpace(originalTag) &&
+                        !ContainsIgnoreCase(resultTags, originalTag.Trim()))
+                    {
+                        resultTags.Add(originalTag.Trim());
+                    }
                 }
+
+                foreach (object checkedItem in checkedListBoxRetentionExclusions.CheckedItems)
+                {
+                    string? tag = checkedItem.ToString();
+
+                    if (!string.IsNullOrWhiteSpace(tag) &&
+                        !ContainsIgnoreCase(resultTags, tag.Trim()))
+                    {
+                        resultTags.Add(tag.Trim());
+                    }
+                }
+
+                ResultRetentionExcludedTags = resultTags;
+            }
+            else
+            {
+                ResultRetentionExcludedTags =
+                    new System.Collections.Generic.List<string>(
+                        originalRetentionExcludedTags);
             }
 
             DialogResult = DialogResult.OK;
@@ -593,8 +620,6 @@ namespace EasyVersionBackup
         }
         private PictureBox CreateHintIcon(string name, string hintText, Point location)
         {
-            ToolTip toolTip = new ToolTip();
-
             PictureBox pictureBox = new PictureBox
             {
                 Name = name,

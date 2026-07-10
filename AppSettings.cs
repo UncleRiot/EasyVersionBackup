@@ -1,18 +1,15 @@
-﻿
-
-
 using System.Collections.Generic;
 
 namespace EasyVersionBackup
 {
     public class AppSettings
     {
+        public int SettingsSchemaVersion { get; set; } = 2;
         public bool ZipDestinationFiles { get; set; } = true;
         public string DefaultVersioning { get; set; } = "0.0.1";
         public bool AutoIncrementVersion { get; set; } = true;
         public bool MinimizeToSystray { get; set; } = false;
         public bool CloseToSystray { get; set; } = false;
-
         public bool AutoUpdateCheck { get; set; } = true;
         public bool StartWithWindows { get; set; } = false;
         public bool IgnoreCopyErrors { get; set; } = false;
@@ -20,9 +17,7 @@ namespace EasyVersionBackup
         public bool ShowRetentionWarningDialogue { get; set; } = true;
         public string BackupDestinationConflictHandling { get; set; } = "Ask";
         public bool AutoBackupEnabled { get; set; } = false;
-        public int AutoBackupIntervalMinutes { get; set; } = 15;
         public int AutoBackupIntervalSeconds { get; set; } = 900;
-
         public List<BackupPathPair> BackupPathPairs { get; set; } = new List<BackupPathPair>();
         public Dictionary<string, string> LastUsedVersionsByPair { get; set; } = new Dictionary<string, string>();
         public Dictionary<string, BackupPathStatus> BackupStatusesByPair { get; set; } = new Dictionary<string, BackupPathStatus>();
@@ -40,11 +35,16 @@ namespace EasyVersionBackup
 
     public class BackupPathStatus
     {
+        public const string StatusOk = "OK";
+        public const string StatusWarning = "Warning";
+        public const string StatusError = "Error";
+
         public string LastBackupDateTime { get; set; } = string.Empty;
         public string LastBackupStatus { get; set; } = string.Empty;
         public string LastBackupFileName { get; set; } = string.Empty;
         public string LastBackupErrorMessage { get; set; } = string.Empty;
     }
+
     public class BackupPathPair
     {
         public bool IsEnabled { get; set; } = true;

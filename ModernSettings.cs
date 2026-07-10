@@ -1,4 +1,4 @@
-﻿// Design-Rule / UI consistency:
+// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // 03.05.2026 /dc
@@ -38,6 +38,7 @@ namespace EasyVersionBackup
         private readonly CheckBox checkBoxAutoUpdateCheck;
         private readonly CheckBox checkBoxStartWithWindows;
         private readonly CheckBox checkBoxIgnoreCopyErrors;
+        private readonly CheckBox checkBoxZipDestinationFiles;
         private readonly CheckBox checkBoxAutoPurgeEnabled;
         private readonly CheckBox checkBoxShowRetentionWarningDialogue;
         private readonly CheckBox checkBoxAutoBackupEnabled;
@@ -144,6 +145,7 @@ namespace EasyVersionBackup
             checkBoxStartWithWindows = CreateCheckBox("checkBoxStartWithWindows", 5);
             checkBoxIgnoreCopyErrors = CreateCheckBox("checkBoxIgnoreCopyErrors", 0);
             checkBoxAutoBackupEnabled = CreateCheckBox("checkBoxAutoBackupEnabled", 1);
+            checkBoxZipDestinationFiles = CreateCheckBox("checkBoxZipDestinationFiles", 3);
             checkBoxAutoPurgeEnabled = CreateCheckBox("checkBoxAutoPurgeEnabled", 6);
             checkBoxShowRetentionWarningDialogue = CreateCheckBox("checkBoxShowRetentionWarningDialogue", 7);
 
@@ -220,6 +222,7 @@ namespace EasyVersionBackup
             Label labelIgnoreCopyErrors = CreateLabel("labelIgnoreCopyErrors", "Ignore Copy-Errors", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(0)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelAutoBackupEnabled = CreateLabel("labelAutoBackupEnabled", "Backup Timer", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(1)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelBackupDestinationConflictHandling = CreateLabel("labelBackupDestinationConflictHandling", "Destination Conflict", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(2)), new Size(ModernTheme.SettingsLabelWidth, 20));
+            Label labelZipDestinationFiles = CreateLabel("labelZipDestinationFiles", "Create ZIP backups", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(3)), new Size(ModernTheme.SettingsLabelWidth, 20));
             Label labelLogLevel = CreateLabel("labelLogLevel", "Log level", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(0)), new Size(ModernTheme.SettingsLabelWidth, 20));
 
             Label labelAutoPurgeEnabled = CreateLabel("labelAutoPurgeEnabled", "Retention", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(6)), new Size(ModernTheme.SettingsLabelWidth, 20));
@@ -280,6 +283,7 @@ namespace EasyVersionBackup
             settingsToolTip.SetToolTip(checkBoxAutoBackupEnabled, "Run backups automatically / timer based");
             settingsToolTip.SetToolTip(textBoxAutoBackupInterval, "Time between automatic backups");
             settingsToolTip.SetToolTip(comboBoxBackupDestinationConflictHandling, "Default action when the backup destination already exists");
+            settingsToolTip.SetToolTip(checkBoxZipDestinationFiles, "Create one ZIP archive instead of a backup directory");
             settingsToolTip.SetToolTip(comboBoxLogLevel, "Minimal = smallest log, Normal = useful decisions, Verbose = every file entry");
             settingsToolTip.SetToolTip(checkBoxAutoPurgeEnabled, "Experimental feature. Permanently deletes old ZIP backups. Use at your own risk.");
             settingsToolTip.SetToolTip(checkBoxShowRetentionWarningDialogue, "Ask for confirmation before Retention deletes old ZIP backups.");
@@ -329,6 +333,8 @@ namespace EasyVersionBackup
             tabPageBackup.Controls.Add(pictureBoxAutoBackupTimerHint);
             tabPageBackup.Controls.Add(labelBackupDestinationConflictHandling);
             tabPageBackup.Controls.Add(comboBoxBackupDestinationConflictHandling);
+            tabPageBackup.Controls.Add(labelZipDestinationFiles);
+            tabPageBackup.Controls.Add(checkBoxZipDestinationFiles);
 
             Panel tabPageTags = CreateTabPage("tabPageTags");
             tabPageTags.Controls.Add(buttonAddTag);
@@ -750,10 +756,11 @@ namespace EasyVersionBackup
             checkBoxAutoUpdateCheck.Checked = settings.AutoUpdateCheck;
             checkBoxStartWithWindows.Checked = settings.StartWithWindows;
             checkBoxIgnoreCopyErrors.Checked = settings.IgnoreCopyErrors;
+            checkBoxZipDestinationFiles.Checked = settings.ZipDestinationFiles;
             checkBoxAutoPurgeEnabled.Checked = settings.AutoPurgeEnabled;
             checkBoxShowRetentionWarningDialogue.Checked = settings.ShowRetentionWarningDialogue;
             checkBoxAutoBackupEnabled.Checked = settings.AutoBackupEnabled;
-            textBoxAutoBackupInterval.Text = FormatAutoBackupIntervalText(GetAutoBackupIntervalSeconds(settings));
+            textBoxAutoBackupInterval.Text = AutoBackupIntervalHelper.Format(GetAutoBackupIntervalSeconds(settings));
 
             tags.Clear();
 
@@ -777,7 +784,7 @@ namespace EasyVersionBackup
         private AppSettings ReadSettingsFromUi()
         {
             AppSettings settings = CloneSettings(ResultSettings);
-            int autoBackupIntervalSeconds = ParseAutoBackupIntervalSeconds(textBoxAutoBackupInterval.Text.Trim());
+            int autoBackupIntervalSeconds = AutoBackupIntervalHelper.ParseSecondsOrDefault(textBoxAutoBackupInterval.Text.Trim(), ResultSettings.AutoBackupIntervalSeconds);
 
             settings.DefaultVersioning = comboBoxDefaultVersioning.Text.Trim();
             settings.AutoIncrementVersion = checkBoxAutoIncrementVersion.Checked;
@@ -786,14 +793,14 @@ namespace EasyVersionBackup
             settings.AutoUpdateCheck = checkBoxAutoUpdateCheck.Checked;
             settings.StartWithWindows = checkBoxStartWithWindows.Checked;
             settings.IgnoreCopyErrors = checkBoxIgnoreCopyErrors.Checked;
+            settings.ZipDestinationFiles = checkBoxZipDestinationFiles.Checked;
             settings.AutoPurgeEnabled = checkBoxAutoPurgeEnabled.Checked;
             settings.ShowRetentionWarningDialogue = checkBoxShowRetentionWarningDialogue.Checked;
             settings.BackupDestinationConflictHandling = BackupHelper.NormalizeDestinationConflictHandling(comboBoxBackupDestinationConflictHandling.Text);
             settings.LogLevel = BackupLogger.NormalizeLogLevel(comboBoxLogLevel.Text);
             settings.AutoBackupEnabled = checkBoxAutoBackupEnabled.Checked;
             settings.AutoBackupIntervalSeconds = autoBackupIntervalSeconds;
-            settings.AutoBackupIntervalMinutes = Math.Max(1, (int)Math.Ceiling(autoBackupIntervalSeconds / 60.0));
-            settings.Tags = tags
+                        settings.Tags = tags
                 .Where(tag => !string.IsNullOrWhiteSpace(tag))
                 .Select(tag => tag.Trim())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -987,7 +994,7 @@ namespace EasyVersionBackup
             settings = ResultSettings;
 
             if (checkBoxAutoBackupEnabled.Checked &&
-                !TryParseAutoBackupIntervalSeconds(textBoxAutoBackupInterval.Text.Trim(), out int autoBackupIntervalSeconds))
+                !AutoBackupIntervalHelper.TryParseSeconds(textBoxAutoBackupInterval.Text.Trim(), out int autoBackupIntervalSeconds))
             {
                 ModernMessageDialog.Show(this, "Error", "Backup Timer must be valid. Examples: 30s, 5m, 1h, 15.");
                 return false;
@@ -995,9 +1002,7 @@ namespace EasyVersionBackup
 
             string defaultVersioning = comboBoxDefaultVersioning.Text.Trim();
 
-            if (!string.Equals(defaultVersioning, "none", StringComparison.OrdinalIgnoreCase) &&
-                !VersionPatternHelper.IsDatePattern(defaultVersioning) &&
-                !VersionPatternHelper.IsValidVersionValue(defaultVersioning))
+            if (!VersionPatternHelper.IsValidVersioningValue(defaultVersioning))
             {
                 ModernMessageDialog.Show(this, "Error", "Default Versioning contains invalid filename characters.");
                 return false;
@@ -1271,90 +1276,14 @@ namespace EasyVersionBackup
 
         private int GetAutoBackupIntervalSeconds(AppSettings settings)
         {
-            if (settings.AutoBackupIntervalSeconds >= 1)
-            {
-                return settings.AutoBackupIntervalSeconds;
-            }
-
-            return Math.Max(1, settings.AutoBackupIntervalMinutes) * 60;
-        }
-
-        private string FormatAutoBackupIntervalText(int seconds)
-        {
-            if (seconds % 3600 == 0)
-            {
-                return (seconds / 3600).ToString() + "h";
-            }
-
-            if (seconds % 60 == 0)
-            {
-                return (seconds / 60).ToString() + "m";
-            }
-
-            return seconds.ToString() + "s";
-        }
-
-        private int ParseAutoBackupIntervalSeconds(string value)
-        {
-            if (!TryParseAutoBackupIntervalSeconds(value, out int seconds))
-            {
-                return 900;
-            }
-
-            return seconds;
-        }
-
-        private bool TryParseAutoBackupIntervalSeconds(string value, out int seconds)
-        {
-            seconds = 0;
-
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return false;
-            }
-
-            string normalizedValue = value.Trim().ToLowerInvariant();
-
-            if (normalizedValue.EndsWith("s"))
-            {
-                return int.TryParse(normalizedValue[..^1], out seconds) && seconds >= 1;
-            }
-
-            if (normalizedValue.EndsWith("m"))
-            {
-                if (!int.TryParse(normalizedValue[..^1], out int minutes) || minutes < 1)
-                {
-                    return false;
-                }
-
-                seconds = minutes * 60;
-                return true;
-            }
-
-            if (normalizedValue.EndsWith("h"))
-            {
-                if (!int.TryParse(normalizedValue[..^1], out int hours) || hours < 1)
-                {
-                    return false;
-                }
-
-                seconds = hours * 3600;
-                return true;
-            }
-
-            if (!int.TryParse(normalizedValue, out int defaultMinutes) || defaultMinutes < 1)
-            {
-                return false;
-            }
-
-            seconds = defaultMinutes * 60;
-            return true;
+            return Math.Max(1, settings.AutoBackupIntervalSeconds);
         }
 
         private AppSettings CloneSettings(AppSettings settings)
         {
             AppSettings clone = new AppSettings
             {
+                SettingsSchemaVersion = settings.SettingsSchemaVersion,
                 ZipDestinationFiles = settings.ZipDestinationFiles,
                 DefaultVersioning = settings.DefaultVersioning,
                 AutoIncrementVersion = settings.AutoIncrementVersion,
@@ -1368,7 +1297,6 @@ namespace EasyVersionBackup
                 BackupDestinationConflictHandling = settings.BackupDestinationConflictHandling,
                 LogLevel = BackupLogger.NormalizeLogLevel(settings.LogLevel),
                 AutoBackupEnabled = settings.AutoBackupEnabled,
-                AutoBackupIntervalMinutes = settings.AutoBackupIntervalMinutes,
                 AutoBackupIntervalSeconds = settings.AutoBackupIntervalSeconds,
                 BackupPathPairs = new List<BackupPathPair>(),
                 LastUsedVersionsByPair = settings.LastUsedVersionsByPair != null
@@ -1385,7 +1313,9 @@ namespace EasyVersionBackup
                     ? new List<string>(settings.Tags)
                     : new List<string>(),
                 BackupVersionDialogWidth = settings.BackupVersionDialogWidth,
-                BackupVersionDialogHeight = settings.BackupVersionDialogHeight
+                BackupVersionDialogHeight = settings.BackupVersionDialogHeight,
+                BackupInfoDialogWidth = settings.BackupInfoDialogWidth,
+                BackupInfoDialogHeight = settings.BackupInfoDialogHeight
             };
 
             foreach (BackupPathPair pair in settings.BackupPathPairs)
@@ -1407,7 +1337,9 @@ namespace EasyVersionBackup
                     RetentionExcludedTags = pair.RetentionExcludedTags != null
                         ? new List<string>(pair.RetentionExcludedTags)
                         : new List<string>(),
-                    ExcludedPaths = new List<string>(pair.ExcludedPaths)
+                    ExcludedPaths = pair.ExcludedPaths != null
+                        ? new List<string>(pair.ExcludedPaths)
+                        : new List<string>()
                 });
             }
 

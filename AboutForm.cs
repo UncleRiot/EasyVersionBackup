@@ -1,11 +1,16 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Windows.Forms;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace EasyVersionBackup
 {
     public class AboutForm : Form
     {
+        private readonly CancellationTokenSource updateCheckCancellation =
+            new CancellationTokenSource();
+
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern bool ReleaseCapture();
 
@@ -143,7 +148,7 @@ namespace EasyVersionBackup
 
             Label labelVersion = new Label
             {
-                Text = "Version: " + GetApplicationVersionText(),
+                Text = "Version: " + ApplicationVersionHelper.GetApplicationVersionText(),
                 AutoSize = true,
                 Location = new Point(130, 117),
                 ForeColor = ModernTheme.TextColor,
@@ -172,11 +177,7 @@ namespace EasyVersionBackup
                     return;
                 }
 
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = downloadUrl,
-                    UseShellExecute = true
-                });
+                OpenUrl(downloadUrl);
             };
 
             LinkLabel linkLabelGithub = new LinkLabel
@@ -192,11 +193,7 @@ namespace EasyVersionBackup
 
             linkLabelGithub.LinkClicked += (sender, e) =>
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = linkLabelGithub.Text,
-                    UseShellExecute = true
-                });
+                OpenUrl(linkLabelGithub.Text);
             };
 
             Label labelKoFiText = new Label
@@ -223,11 +220,7 @@ namespace EasyVersionBackup
 
             pictureBoxKoFi.Click += (sender, e) =>
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "https://ko-fi.com/uncleriot",
-                    UseShellExecute = true
-                });
+                OpenUrl("https://ko-fi.com/uncleriot");
             };
 
             Button buttonOk = new Button
@@ -265,8 +258,36 @@ namespace EasyVersionBackup
 
             AcceptButton = buttonOk;
 
-            UpdateGitHubStatusAsync(linkLabelUpdate);
+            Shown += async (sender, e) =>
+            {
+                await UpdateGitHubStatusAsync(linkLabelUpdate);
+            };
+
+            FormClosed += (sender, e) =>
+            {
+                updateCheckCancellation.Cancel();
+            };
         }
+        private void OpenUrl(string url)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = url,
+                        UseShellExecute = true
+                    });
+            }
+            catch (Exception exception)
+            {
+                ModernMessageDialog.Show(
+                    this,
+                    "Error",
+                    $"The link could not be opened:{Environment.NewLine}{url}{Environment.NewLine}{Environment.NewLine}{exception.Message}");
+            }
+        }
+
         private Image? CreateKoFiImage()
         {
             using System.IO.Stream? stream = typeof(AboutForm).Assembly.GetManifestResourceStream("EasyVersionBackup.Ressources.ko-fi.png");
@@ -335,33 +356,25 @@ namespace EasyVersionBackup
             ReleaseCapture();
             SendMessage(Handle, wmNclbuttondown, htCaption, 0);
         }
-        private string GetApplicationVersionText()
-        {
-            System.Reflection.Assembly assembly = typeof(AboutForm).Assembly;
 
-            foreach (object attribute in assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false))
+        private async Task UpdateGitHubStatusAsync(
+            LinkLabel linkLabelUpdate)
+        {
+            VersionHelperGitResult result;
+
+            try
             {
-                if (attribute is System.Reflection.AssemblyInformationalVersionAttribute informationalVersionAttribute &&
-                    !string.IsNullOrWhiteSpace(informationalVersionAttribute.InformationalVersion))
-                {
-                    return informationalVersionAttribute.InformationalVersion.Split('+')[0];
-                }
+                result = await VersionHelperGit.CheckForUpdateAsync(
+                    ApplicationVersionHelper.GetApplicationVersionText(),
+                    updateCheckCancellation.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
             }
 
-            Version? version = assembly.GetName().Version;
-
-            if (version == null)
-            {
-                return "unknown";
-            }
-
-            return $"{version.Major}.{version.Minor}.{version.Build}";
-        }
-        private async void UpdateGitHubStatusAsync(LinkLabel linkLabelUpdate)
-        {
-            VersionHelperGitResult result = await VersionHelperGit.CheckForUpdateAsync(GetApplicationVersionText());
-
-            if (IsDisposed)
+            if (IsDisposed ||
+                updateCheckCancellation.IsCancellationRequested)
             {
                 return;
             }
@@ -371,22 +384,37 @@ namespace EasyVersionBackup
 
             if (!result.CanConnectToGitHub)
             {
-                linkLabelUpdate.Text = "Can not connect to Github";
-                linkLabelUpdate.LinkBehavior = LinkBehavior.NeverUnderline;
+                linkLabelUpdate.Text =
+                    string.IsNullOrWhiteSpace(result.ErrorMessage)
+                        ? "Can not connect to GitHub"
+                        : result.ErrorMessage;
+
+                linkLabelUpdate.LinkBehavior =
+                    LinkBehavior.NeverUnderline;
+
                 return;
             }
 
             if (!result.UpdateAvailable)
             {
                 linkLabelUpdate.Text = "No new updates";
-                linkLabelUpdate.LinkBehavior = LinkBehavior.NeverUnderline;
+                linkLabelUpdate.LinkBehavior =
+                    LinkBehavior.NeverUnderline;
+
                 return;
             }
 
-            linkLabelUpdate.Text = "Update available: " + result.LatestVersion;
+            linkLabelUpdate.Text =
+                "Update available: " +
+                result.LatestVersion;
+
             linkLabelUpdate.Tag = result.DownloadUrl;
-            linkLabelUpdate.LinkBehavior = LinkBehavior.SystemDefault;
-            linkLabelUpdate.Links.Add(0, linkLabelUpdate.Text.Length);
+            linkLabelUpdate.LinkBehavior =
+                LinkBehavior.SystemDefault;
+
+            linkLabelUpdate.Links.Add(
+                0,
+                linkLabelUpdate.Text.Length);
         }
     }
 }

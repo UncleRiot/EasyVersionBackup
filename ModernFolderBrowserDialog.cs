@@ -1,4 +1,4 @@
-﻿// Design-Rule / UI consistency:
+// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // 03.05.2026 /dc
@@ -118,8 +118,6 @@ namespace EasyVersionBackup
 
             Controls.Add(labelFileName);
             Controls.Add(textBoxFileName);
-
-            LoadDrives();
         }
 
         public static bool ShowFile(Form owner, string title, string initialPath, string initialFileName, out string selectedFilePath)
@@ -471,8 +469,11 @@ namespace EasyVersionBackup
                     }
                 }
             }
-            catch
+            catch (Exception exception)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    "Folder contents could not be loaded: " +
+                    exception.Message);
             }
         }
 
@@ -487,8 +488,11 @@ namespace EasyVersionBackup
 
                 return Controls["textBoxFileName"] is TextBox && Directory.EnumerateFiles(directoryPath).Any();
             }
-            catch
+            catch (Exception exception)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    "Folder contents could not be checked: " +
+                    exception.Message);
                 return false;
             }
         }
@@ -591,9 +595,12 @@ namespace EasyVersionBackup
             buttonOk.Enabled = Directory.Exists(selectedPath);
         }
 
-        private void buttonOk_Click(object? sender, EventArgs e)
+        private void buttonOk_Click(
+            object? sender,
+            EventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(SelectedPath) || !Directory.Exists(SelectedPath))
+            if (string.IsNullOrWhiteSpace(SelectedPath) ||
+                !Directory.Exists(SelectedPath))
             {
                 DialogResult = DialogResult.None;
                 return;
@@ -601,15 +608,49 @@ namespace EasyVersionBackup
 
             if (Controls["textBoxFileName"] is TextBox textBoxFileName)
             {
-                string fileName = textBoxFileName.Text.Trim();
+                string fileName =
+                    textBoxFileName.Text.Trim();
 
-                if (string.IsNullOrWhiteSpace(fileName) || fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                if (string.IsNullOrWhiteSpace(fileName) ||
+                    fileName.IndexOfAny(
+                        Path.GetInvalidFileNameChars()) >= 0 ||
+                    fileName.EndsWith(
+                        ".",
+                        StringComparison.Ordinal) ||
+                    fileName.EndsWith(
+                        " ",
+                        StringComparison.Ordinal))
                 {
+                    ModernMessageDialog.Show(
+                        this,
+                        "Error",
+                        "File name is invalid.");
+
                     DialogResult = DialogResult.None;
                     return;
                 }
 
-                SelectedPath = Path.Combine(SelectedPath, fileName);
+                string selectedFilePath =
+                    Path.Combine(
+                        SelectedPath,
+                        fileName);
+
+                if (File.Exists(selectedFilePath))
+                {
+                    DialogResult overwriteResult =
+                        ModernConfirmationDialog.Show(
+                            this,
+                            "Overwrite file",
+                            $"The file already exists:{Environment.NewLine}{selectedFilePath}{Environment.NewLine}{Environment.NewLine}Do you want to overwrite it?");
+
+                    if (overwriteResult != DialogResult.Yes)
+                    {
+                        DialogResult = DialogResult.None;
+                        return;
+                    }
+                }
+
+                SelectedPath = selectedFilePath;
             }
 
             DialogResult = DialogResult.OK;

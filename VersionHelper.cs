@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -31,19 +31,25 @@ namespace EasyVersionBackup
                 ? lastUsed
                 : string.Empty;
 
-            string compatibleLastUsedVersion = VersionPatternHelper.GetHighestCompatibleVersion(defaultVersion, new[]
-            {
-        lastUsedVersion
-    });
+            string compatibleLastUsedVersion =
+                VersionPatternHelper.GetHighestCompatibleVersion(
+                    defaultVersion,
+                    new[]
+                    {
+                        lastUsedVersion
+                    });
 
-            string highestExistingVersion = GetHighestExistingVersion(pair, defaultVersion);
+            string highestExistingVersion = GetHighestExistingVersion(pair, defaultVersion, settings.ZipDestinationFiles);
 
-            string highestKnownVersion = VersionPatternHelper.GetHighestCompatibleVersion(defaultVersion, new[]
-            {
-        defaultVersion,
-        compatibleLastUsedVersion,
-        highestExistingVersion
-    });
+            string highestKnownVersion =
+                VersionPatternHelper.GetHighestCompatibleVersion(
+                    defaultVersion,
+                    new[]
+                    {
+                        defaultVersion,
+                        compatibleLastUsedVersion,
+                        highestExistingVersion
+                    });
 
             if (string.IsNullOrWhiteSpace(highestKnownVersion))
             {
@@ -58,37 +64,7 @@ namespace EasyVersionBackup
             return highestKnownVersion;
         }
 
-        public static string IncrementVersion(string version)
-        {
-            if (string.IsNullOrWhiteSpace(version))
-            {
-                return "0.0.1";
-            }
 
-            string trimmedVersion = version.Trim();
-            Match match = Regex.Match(trimmedVersion, @"^(?<prefix>.*?)(?<number>\d+)$");
-
-            if (!match.Success)
-            {
-                return trimmedVersion;
-            }
-
-            string prefix = match.Groups["prefix"].Value;
-            string numberText = match.Groups["number"].Value;
-
-            if (!long.TryParse(numberText, out long number))
-            {
-                return trimmedVersion;
-            }
-
-            number++;
-
-            string incrementedNumber = numberText.Length > 1
-                ? number.ToString("D" + numberText.Length)
-                : number.ToString();
-
-            return prefix + incrementedNumber;
-        }
 
         public static bool IsValidVersion(string version)
         {
@@ -105,49 +81,85 @@ namespace EasyVersionBackup
             return $"{folderName}_{version}";
         }
 
-        private static string GetHighestExistingVersion(BackupPathPair pair, string defaultVersion)
+        private static string GetHighestExistingVersion(
+            BackupPathPair pair,
+            string defaultVersion,
+            bool zipDestinationFiles)
         {
-            if (string.IsNullOrWhiteSpace(pair.SourceDirectory) || string.IsNullOrWhiteSpace(pair.TargetDirectory))
+            if (string.IsNullOrWhiteSpace(pair.SourceDirectory) ||
+                string.IsNullOrWhiteSpace(pair.TargetDirectory) ||
+                !Directory.Exists(pair.TargetDirectory))
             {
                 return string.Empty;
             }
 
-            if (!Directory.Exists(pair.TargetDirectory))
+            try
             {
+                string sourceFolderName =
+                    new DirectoryInfo(pair.SourceDirectory).Name;
+
+                string escapedSourceFolderName =
+                    Regex.Escape(sourceFolderName);
+
+                Regex zipRegex = new Regex(
+                    $"^{escapedSourceFolderName}_(?<version>.+)\\.zip$",
+                    RegexOptions.IgnoreCase);
+
+                Regex directoryRegex = new Regex(
+                    $"^{escapedSourceFolderName}_(?<version>.+)$",
+                    RegexOptions.IgnoreCase);
+
+                List<string> foundVersions = new List<string>();
+
+                if (zipDestinationFiles)
+                {
+                    foreach (string filePath in Directory.GetFiles(
+                        pair.TargetDirectory,
+                        "*.zip",
+                        SearchOption.TopDirectoryOnly))
+                    {
+                        string fileName = Path.GetFileName(filePath);
+                        Match match = zipRegex.Match(fileName);
+
+                        if (match.Success)
+                        {
+                            foundVersions.Add(
+                                match.Groups["version"].Value);
+                        }
+                    }
+                }
+                else
+                {
+                    foreach (string directoryPath in Directory.GetDirectories(
+                        pair.TargetDirectory,
+                        "*",
+                        SearchOption.TopDirectoryOnly))
+                    {
+                        string directoryName =
+                            Path.GetFileName(directoryPath);
+
+                        Match match =
+                            directoryRegex.Match(directoryName);
+
+                        if (match.Success)
+                        {
+                            foundVersions.Add(
+                                match.Groups["version"].Value);
+                        }
+                    }
+                }
+
+                return VersionPatternHelper.GetHighestCompatibleVersion(
+                    defaultVersion,
+                    foundVersions);
+            }
+            catch (Exception exception)
+            {
+                BackupLogger.WriteNormalLine(
+                    $"VERSION SCAN WARNING | source=\"{pair.SourceDirectory}\" | target=\"{pair.TargetDirectory}\" | error=\"{exception.Message}\"");
+
                 return string.Empty;
             }
-
-            string sourceFolderName = new DirectoryInfo(pair.SourceDirectory).Name;
-            string escapedSourceFolderName = Regex.Escape(sourceFolderName);
-
-            Regex zipRegex = new Regex($"^{escapedSourceFolderName}_(?<version>.+)\\.zip$", RegexOptions.IgnoreCase);
-            Regex directoryRegex = new Regex($"^{escapedSourceFolderName}_(?<version>.+)$", RegexOptions.IgnoreCase);
-
-            List<string> foundVersions = new List<string>();
-
-            foreach (string filePath in Directory.GetFiles(pair.TargetDirectory, "*.zip"))
-            {
-                string fileName = Path.GetFileName(filePath);
-                Match match = zipRegex.Match(fileName);
-
-                if (match.Success)
-                {
-                    foundVersions.Add(match.Groups["version"].Value);
-                }
-            }
-
-            foreach (string directoryPath in Directory.GetDirectories(pair.TargetDirectory))
-            {
-                string directoryName = Path.GetFileName(directoryPath);
-                Match match = directoryRegex.Match(directoryName);
-
-                if (match.Success)
-                {
-                    foundVersions.Add(match.Groups["version"].Value);
-                }
-            }
-
-            return VersionPatternHelper.GetHighestCompatibleVersion(defaultVersion, foundVersions);
         }
     }
 }

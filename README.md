@@ -1,7 +1,7 @@
 # EasyVersionBackup
 
-EasyVersionBackup is a lightweight, portable Windows tool for creating versioned backups of folders. 
-Backup your savegame-folders, office-document-folders, VisualC project folders, every folder.
+EasyVersionBackup is a lightweight Windows tool for creating versioned backups of folders. 
+Back up save-game folders, office-document folders, Visual C# project folders, and other local directories.
 
 It supports manual and automatic backups, multiple source → target configurations, ZIP backups, per-entry exclusions, skipped-file reporting, system tray integration, and a clean WinForms interface.
 
@@ -32,7 +32,6 @@ If this tool saves you time, you can support development here:
 > [!IMPORTANT]
 > If Windows SmartScreen blocks the app, right-click the EXE → **Properties** → check **Unblock** → **Apply** → **OK**, then start it again.
 >
-> VirusTotal scan: [https://www.virustotal.com/gui/file/f6b9a2e7084680248d013ac2d0de8cd8c88d7aece87dee745a26e25aee0967d6?nocache=1](https://www.virustotal.com/gui/file/4a8a5f940efd69f19dc4cb00eab5841c687e8cefff3e9b5c22b2bca593eeae03?nocache=1)
 
 <br>
 
@@ -101,9 +100,9 @@ If this tool saves you time, you can support development here:
 
 * **Automatic Background Backups**
 
-  * Runs fully in the background
+  * File and ZIP creation runs outside the UI thread
   * Works while you use other applications
-  * No interaction required once configured
+  * Destination-conflict and retention confirmations can still require interaction
   * Optional minimize-to-system-tray behavior
 
 * **Status & Feedback System**
@@ -184,10 +183,6 @@ If this tool saves you time, you can support development here:
     * `1h` → 1 hour
     * `15` → 15 minutes by default
 
-* **Zip Destination Files**
-
-  * Store backups as `.zip` archives instead of normal folders
-
 * **Default Versioning**
 
   * Starting version or pattern, for example:
@@ -211,9 +206,24 @@ If this tool saves you time, you can support development here:
 
   * Skips locked or problematic files instead of stopping the backup
 
+* **ZIP Backups**
+
+  * Enable to create one `.zip` archive per backup
+  * Disable to create a versioned backup directory
+
 * **Per-Path Exclusions**
 
   * Exclude folders or files from individual backup entries
+
+---
+
+## 🖥️ Runtime requirement
+
+The published application targets Windows x64 and requires the .NET 8 Desktop Runtime because the project is framework-dependent (`SelfContained=false`).
+
+Application settings are stored in `%LOCALAPPDATA%\EasyVersionBackup`. Existing settings from the legacy `Settings` folder beside the executable are imported automatically on first start.
+
+ZIP backups created by this version receive a small `.evbmeta` sidecar file. Retention only deletes ZIP backups whose metadata matches the configured source directory; legacy or unrelated ZIP files are left untouched.
 
 ---
 

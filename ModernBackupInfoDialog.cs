@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -456,8 +456,11 @@ namespace EasyVersionBackup
                 int value = Math.Min(verticalScrollBarBackupLog.Value, dataGridViewBackupLog.Rows.Count - 1);
                 dataGridViewBackupLog.FirstDisplayedScrollingRowIndex = value;
             }
-            catch (InvalidOperationException)
+            catch (InvalidOperationException exception)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    "Backup log could not be scrolled: " +
+                    exception.Message);
             }
         }
 
@@ -602,5 +605,34 @@ namespace EasyVersionBackup
 
             base.WndProc(ref m);
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                foreach (DataGridViewRow row in dataGridViewBackupLog.Rows)
+                {
+                    if (row.Cells["ColumnLogStatus"].Value is Image image)
+                    {
+                        row.Cells["ColumnLogStatus"].Value = null;
+                        image.Dispose();
+                    }
+                }
+
+                Control[] titleIcons = Controls.Find(
+                    "pictureBoxModernTitleIcon",
+                    true);
+
+                foreach (PictureBox pictureBox in titleIcons.OfType<PictureBox>())
+                {
+                    Image? image = pictureBox.Image;
+                    pictureBox.Image = null;
+                    image?.Dispose();
+                }
+            }
+
+            base.Dispose(disposing);
+        }
+
     }
 }

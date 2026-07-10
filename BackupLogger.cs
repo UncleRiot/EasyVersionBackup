@@ -1,4 +1,4 @@
-﻿// Design-Rule / UI consistency:
+// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // 03.05.2026 /dc
@@ -88,9 +88,14 @@ namespace EasyVersionBackup
             return Path.Combine(GetLogDirectory(), $"EasyVersionBackup_{DateTime.Now:yyyy-MM-dd}.log");
         }
 
-        public static List<BackupLogEntry> ReadBackupPairEntries(string sourceDirectory, string targetDirectory, string lastBackupFileName, int maxEntries)
+        public static List<BackupLogEntry> ReadBackupPairEntries(
+            string sourceDirectory,
+            string targetDirectory,
+            string lastBackupFileName,
+            int maxEntries)
         {
-            List<BackupLogEntry> entries = new List<BackupLogEntry>();
+            List<BackupLogEntry> entries =
+                new List<BackupLogEntry>();
 
             try
             {
@@ -101,45 +106,94 @@ namespace EasyVersionBackup
                     return entries;
                 }
 
-                string normalizedSourceDirectory = sourceDirectory ?? string.Empty;
-                string normalizedTargetDirectory = targetDirectory ?? string.Empty;
-                string normalizedLastBackupFileName = lastBackupFileName ?? string.Empty;
+                string normalizedSourceDirectory =
+                    NormalizeForSearch(sourceDirectory ?? string.Empty);
+
+                string normalizedTargetDirectory =
+                    NormalizeForSearch(targetDirectory ?? string.Empty);
+
+                string normalizedLastBackupFileName =
+                    (lastBackupFileName ?? string.Empty).Trim();
 
                 List<string> logFilePaths = Directory
-                    .GetFiles(logDirectory, "EasyVersionBackup_*.log")
+                    .GetFiles(
+                        logDirectory,
+                        "EasyVersionBackup_*.log",
+                        SearchOption.TopDirectoryOnly)
                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
                 bool isInsideMatchingBackupBlock = false;
-                HashSet<string> addedLines = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                HashSet<string> addedLines =
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 foreach (string logFilePath in logFilePaths)
                 {
                     foreach (string line in File.ReadLines(logFilePath))
                     {
-                        if (!TryParseLogLine(line, out BackupLogEntry entry))
+                        if (!TryParseLogLine(
+                            line,
+                            out BackupLogEntry entry))
                         {
                             continue;
                         }
 
-                        bool isBackupPairLine = entry.Text.StartsWith("BACKUP PAIR |", StringComparison.OrdinalIgnoreCase);
-                        bool isRetentionSettingsLine = entry.Text.StartsWith("RETENTION SETTINGS |", StringComparison.OrdinalIgnoreCase);
-                        bool isBackupEndLine = entry.Text.StartsWith("MANUAL BACKUP END", StringComparison.OrdinalIgnoreCase) ||
-                                               entry.Text.StartsWith("AUTOMATIC BACKUP END", StringComparison.OrdinalIgnoreCase);
+                        bool isBackupStartLine =
+                            entry.Text.StartsWith(
+                                "MANUAL BACKUP START |",
+                                StringComparison.OrdinalIgnoreCase) ||
+                            entry.Text.StartsWith(
+                                "AUTOMATIC BACKUP START |",
+                                StringComparison.OrdinalIgnoreCase);
 
-                        if (isBackupPairLine || isRetentionSettingsLine)
+                        bool isBackupEndLine =
+                            entry.Text.StartsWith(
+                                "MANUAL BACKUP END |",
+                                StringComparison.OrdinalIgnoreCase) ||
+                            entry.Text.StartsWith(
+                                "AUTOMATIC BACKUP END |",
+                                StringComparison.OrdinalIgnoreCase);
+
+                        if (isBackupStartLine)
                         {
-                            isInsideMatchingBackupBlock = ContainsText(entry.Text, normalizedSourceDirectory) &&
-                                                          ContainsText(entry.Text, normalizedTargetDirectory);
+                            isInsideMatchingBackupBlock =
+                                ContainsPairField(
+                                    entry.Text,
+                                    "source",
+                                    normalizedSourceDirectory) &&
+                                ContainsPairField(
+                                    entry.Text,
+                                    "target",
+                                    normalizedTargetDirectory);
                         }
 
-                        bool matchesDirectly = ContainsText(entry.Text, normalizedSourceDirectory) ||
-                                               ContainsText(entry.Text, normalizedTargetDirectory) ||
-                                               ContainsText(entry.Text, normalizedLastBackupFileName);
+                        bool matchesLegacyLine =
+                            ContainsPairField(
+                                entry.Text,
+                                "source",
+                                normalizedSourceDirectory) &&
+                            ContainsPairField(
+                                entry.Text,
+                                "target",
+                                normalizedTargetDirectory);
 
-                        if (isInsideMatchingBackupBlock || matchesDirectly)
+                        bool matchesBackupFileName =
+                            !string.IsNullOrWhiteSpace(
+                                normalizedLastBackupFileName) &&
+                            entry.Text.Contains(
+                                "backup=\"" +
+                                normalizedLastBackupFileName +
+                                "\"",
+                                StringComparison.OrdinalIgnoreCase);
+
+                        if (isInsideMatchingBackupBlock ||
+                            matchesLegacyLine ||
+                            matchesBackupFileName)
                         {
-                            string uniqueKey = entry.Timestamp.ToString("O") + "|" + entry.Text;
+                            string uniqueKey =
+                                entry.Timestamp.ToString("O") +
+                                "|" +
+                                entry.Text;
 
                             if (addedLines.Add(uniqueKey))
                             {
@@ -147,7 +201,8 @@ namespace EasyVersionBackup
                             }
                         }
 
-                        if (isBackupEndLine)
+                        if (isBackupEndLine &&
+                            isInsideMatchingBackupBlock)
                         {
                             isInsideMatchingBackupBlock = false;
                         }
@@ -159,8 +214,12 @@ namespace EasyVersionBackup
                     .Take(Math.Max(1, maxEntries))
                     .ToList();
             }
-            catch
+            catch (Exception exception)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    "Log entries could not be read: " +
+                    exception.Message);
+
                 return entries;
             }
         }
@@ -224,17 +283,69 @@ namespace EasyVersionBackup
             return LogSeverityInfo;
         }
 
-        private static bool ContainsText(string text, string value)
+        private static bool ContainsPairField(
+            string text,
+            string fieldName,
+            string normalizedValue)
         {
-            if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(value))
+            if (string.IsNullOrWhiteSpace(text) ||
+                string.IsNullOrWhiteSpace(fieldName) ||
+                string.IsNullOrWhiteSpace(normalizedValue))
             {
                 return false;
             }
 
-            string normalizedText = NormalizeForSearch(text);
-            string normalizedValue = NormalizeForSearch(value);
+            string quotedPrefix = fieldName + "=\"";
+            int quotedStart = text.IndexOf(
+                quotedPrefix,
+                StringComparison.OrdinalIgnoreCase);
 
-            return normalizedText.Contains(normalizedValue, StringComparison.OrdinalIgnoreCase);
+            if (quotedStart >= 0)
+            {
+                quotedStart += quotedPrefix.Length;
+                int quotedEnd = text.IndexOf(
+                    '"',
+                    quotedStart);
+
+                if (quotedEnd >= quotedStart)
+                {
+                    string fieldValue = text.Substring(
+                        quotedStart,
+                        quotedEnd - quotedStart);
+
+                    return string.Equals(
+                        NormalizeForSearch(fieldValue),
+                        normalizedValue,
+                        StringComparison.OrdinalIgnoreCase);
+                }
+            }
+
+            string unquotedPrefix = fieldName + "=";
+            int unquotedStart = text.IndexOf(
+                unquotedPrefix,
+                StringComparison.OrdinalIgnoreCase);
+
+            if (unquotedStart < 0)
+            {
+                return false;
+            }
+
+            unquotedStart += unquotedPrefix.Length;
+            int unquotedEnd = text.IndexOf(
+                " | ",
+                unquotedStart,
+                StringComparison.Ordinal);
+
+            string unquotedValue = unquotedEnd >= 0
+                ? text.Substring(
+                    unquotedStart,
+                    unquotedEnd - unquotedStart)
+                : text.Substring(unquotedStart);
+
+            return string.Equals(
+                NormalizeForSearch(unquotedValue),
+                normalizedValue,
+                StringComparison.OrdinalIgnoreCase);
         }
 
         private static string NormalizeForSearch(string value)
@@ -260,8 +371,45 @@ namespace EasyVersionBackup
                     File.AppendAllText(logFilePath, logLine);
                 }
             }
-            catch
+            catch (Exception exception)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    "Log entry could not be written: " +
+                    exception.Message);
+            }
+        }
+
+        public static void CleanupOldLogFiles(int retentionDays)
+        {
+            try
+            {
+                string logDirectory = GetLogDirectory();
+
+                if (!Directory.Exists(logDirectory))
+                {
+                    return;
+                }
+
+                DateTime deleteBeforeUtc = DateTime.UtcNow.AddDays(
+                    -Math.Max(1, retentionDays));
+
+                foreach (string logFilePath in Directory.GetFiles(
+                    logDirectory,
+                    "EasyVersionBackup_*.log",
+                    SearchOption.TopDirectoryOnly))
+                {
+                    if (File.GetLastWriteTimeUtc(logFilePath) <
+                        deleteBeforeUtc)
+                    {
+                        File.Delete(logFilePath);
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "Old log files could not be cleaned up: " +
+                    exception.Message);
             }
         }
 

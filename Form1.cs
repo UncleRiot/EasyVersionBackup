@@ -1,4 +1,4 @@
-﻿// Design-Rule / UI consistency:
+// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // 03.05.2026 /dc
@@ -8,8 +8,8 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace EasyVersionBackup
@@ -17,12 +17,10 @@ namespace EasyVersionBackup
     public partial class Form1 : Form
     {
         private AppSettings _settings = new AppSettings();
-        private bool _ignoreAllFileErrors;
         private readonly System.Windows.Forms.Timer _autoBackupCountdownTimer = new System.Windows.Forms.Timer();
         private readonly Dictionary<string, DateTime> _nextAutoBackupRunsByPair = new Dictionary<string, DateTime>();
         private bool _isRefreshingConfiguredPaths;
         private readonly ToolTip _mainToolTip = new ToolTip();
-        private string _lastBackupDestinationFileName = string.Empty;
         private readonly bool _startMinimizedToSystray;
         private readonly ModernTheme.ModernScrollBar _configuredPathsVerticalScrollBar = new ModernTheme.ModernScrollBar
         {
@@ -32,6 +30,8 @@ namespace EasyVersionBackup
         };
         private bool _isUpdatingConfiguredPathsScrollBar;
         private bool _isApplyingWindowSettings;
+        private bool _isBackupRunning;
+        private bool _isExplicitExitRequested;
 
         private Panel? _modernTitleBarPanel;
         private Label? _modernTitleLabel;
@@ -188,21 +188,8 @@ namespace EasyVersionBackup
 
             return string.Empty;
         }
-        private void dataGridViewConfiguredPaths_CellMouseLeave(object? sender, DataGridViewCellEventArgs e)
-        {
-            _mainToolTip.SetToolTip(dataGridViewConfiguredPaths, string.Empty);
-        }
-        private void dataGridViewConfiguredPaths_CellMouseEnter(object? sender, DataGridViewCellEventArgs e)
-        {
-            if (e.ColumnIndex < 0)
-            {
-                _mainToolTip.SetToolTip(dataGridViewConfiguredPaths, string.Empty);
-                return;
-            }
 
-            string toolTipText = GetConfiguredPathActionColumnToolTipText(e.ColumnIndex);
-            _mainToolTip.SetToolTip(dataGridViewConfiguredPaths, toolTipText);
-        }
+
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
@@ -219,7 +206,7 @@ namespace EasyVersionBackup
         }
         private async Task CheckForUpdatesOnStartupAsync()
         {
-            VersionHelperGitResult result = await VersionHelperGit.CheckForUpdateAsync(GetApplicationVersionText());
+            VersionHelperGitResult result = await VersionHelperGit.CheckForUpdateAsync(ApplicationVersionHelper.GetApplicationVersionText());
 
             if (IsDisposed)
             {
@@ -252,35 +239,30 @@ namespace EasyVersionBackup
                 return;
             }
 
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = result.DownloadUrl,
-                UseShellExecute = true
-            });
+            OpenUrl(result.DownloadUrl);
         }
 
-        private string GetApplicationVersionText()
+
+        private void OpenUrl(string url)
         {
-            System.Reflection.Assembly assembly = typeof(Form1).Assembly;
-
-            foreach (object attribute in assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false))
+            try
             {
-                if (attribute is System.Reflection.AssemblyInformationalVersionAttribute informationalVersionAttribute &&
-                    !string.IsNullOrWhiteSpace(informationalVersionAttribute.InformationalVersion))
-                {
-                    return informationalVersionAttribute.InformationalVersion.Split('+')[0];
-                }
+                System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = url,
+                        UseShellExecute = true
+                    });
             }
-
-            Version? version = assembly.GetName().Version;
-
-            if (version == null)
+            catch (Exception exception)
             {
-                return "unknown";
+                ModernMessageDialog.Show(
+                    this,
+                    "Error",
+                    $"The link could not be opened:{Environment.NewLine}{url}{Environment.NewLine}{Environment.NewLine}{exception.Message}");
             }
-
-            return $"{version.Major}.{version.Minor}.{version.Build}";
         }
+
         private void StartMinimizedToSystray()
         {
             RefreshNotifyIconText();
@@ -881,6 +863,7 @@ namespace EasyVersionBackup
             _settings.BackupPathPairs.RemoveAt(rowIndex);
             _settings.LastUsedVersionsByPair.Remove(pairKey);
             _settings.BackupStatusesByPair.Remove(pairKey);
+            _nextAutoBackupRunsByPair.Remove(pairKey);
 
             SaveSettings();
             RefreshConfiguredPaths();
@@ -889,6 +872,8 @@ namespace EasyVersionBackup
         private void LoadSettings()
         {
             _settings = SettingsStorage.Load();
+            BackupLogger.SetLogLevel(_settings.LogLevel);
+            BackupLogger.CleanupOldLogFiles(30);
 
             foreach (BackupPathPair pair in _settings.BackupPathPairs)
             {
@@ -896,6 +881,18 @@ namespace EasyVersionBackup
                 {
                     pair.Versioning = _settings.DefaultVersioning;
                 }
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                SettingsStorage.LastLoadErrorMessage))
+            {
+                Shown += (sender, e) =>
+                {
+                    ModernMessageDialog.Show(
+                        this,
+                        "Settings",
+                        SettingsStorage.LastLoadErrorMessage);
+                };
             }
         }
 
@@ -1006,6 +1003,7 @@ namespace EasyVersionBackup
 
         private void SaveSettings()
         {
+            BackupLogger.SetLogLevel(_settings.LogLevel);
             SettingsStorage.Save(_settings);
         }
 
@@ -1015,6 +1013,14 @@ namespace EasyVersionBackup
 
             try
             {
+                foreach (DataGridViewRow existingRow in dataGridViewConfiguredPaths.Rows)
+                {
+                    if (existingRow.Cells["ColumnConfiguredBackupInfo"].Value is Image oldImage)
+                    {
+                        oldImage.Dispose();
+                    }
+                }
+
                 dataGridViewConfiguredPaths.Rows.Clear();
 
                 if (_settings.BackupPathPairs.Count == 0)
@@ -1152,8 +1158,11 @@ namespace EasyVersionBackup
             {
                 dataGridViewConfiguredPaths.FirstDisplayedScrollingRowIndex = Math.Min(_configuredPathsVerticalScrollBar.Value, dataGridViewConfiguredPaths.Rows.Count - 1);
             }
-            catch (InvalidOperationException)
+            catch (InvalidOperationException exception)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    "Configured paths could not be scrolled: " +
+                    exception.Message);
             }
         }
 
@@ -1177,14 +1186,13 @@ namespace EasyVersionBackup
             _configuredPathsVerticalScrollBar.Value += e.Delta > 0 ? -1 : 1;
         }
 
-        private void exitToolStripMenuItem_Click(object? sender, EventArgs e)
+        private void exitToolStripMenuItem_Click(
+            object? sender,
+            EventArgs e)
         {
-            bool closeToSystray = _settings.CloseToSystray;
-
+            _isExplicitExitRequested = true;
             notifyIconMain.Visible = false;
-            _settings.CloseToSystray = false;
             Close();
-            _settings.CloseToSystray = closeToSystray;
         }
 
         private void generalToolStripMenuItem_Click(object? sender, EventArgs e)
@@ -1200,211 +1208,327 @@ namespace EasyVersionBackup
             }
         }
 
-        private void buttonBackup_Click(object sender, EventArgs e)
+        private async void buttonBackup_Click(
+            object sender,
+            EventArgs e)
         {
-            SyncEnabledPairsFromGrid();
-
-            List<BackupPathPair> validPairs = _settings.BackupPathPairs
-                .Where(p => p.IsEnabled && !string.IsNullOrWhiteSpace(p.SourceDirectory) && !string.IsNullOrWhiteSpace(p.TargetDirectory))
-                .ToList();
-
-            if (validPairs.Count == 0)
+            if (_isBackupRunning)
             {
-                ModernMessageDialog.Show(this, "Error", "No active paths selected.");
                 return;
             }
 
-            foreach (BackupPathPair pair in validPairs)
-            {
-                if (!Directory.Exists(pair.SourceDirectory))
-                {
-                    SetBackupStatus(pair, "Error", $"Source directory not found: {pair.SourceDirectory}");
-                    SaveSettings();
-                    RefreshBackupInfoColumn();
+            _isBackupRunning = true;
+            buttonBackup.Enabled = false;
 
+            try
+            {
+                SyncEnabledPairsFromGrid();
+
+                List<BackupPathPair> activePairs =
+                    _settings.BackupPathPairs
+                        .Where(pair =>
+                            pair.IsEnabled &&
+                            !string.IsNullOrWhiteSpace(
+                                pair.SourceDirectory) &&
+                            !string.IsNullOrWhiteSpace(
+                                pair.TargetDirectory))
+                        .ToList();
+
+                if (activePairs.Count == 0)
+                {
                     ModernMessageDialog.Show(
                         this,
                         "Error",
-                        $"Source directory not found:{Environment.NewLine}{pair.SourceDirectory}");
-
+                        "No active paths selected.");
                     return;
                 }
 
-                if (!EnsureTargetDirectoryExistsForManualBackup(pair))
+                List<BackupPathPair> runnablePairs =
+                    new List<BackupPathPair>();
+
+                int prevalidationFailedBackups = 0;
+                int prevalidationCanceledBackups = 0;
+
+                Dictionary<BackupPathPair, string> versionsByPair =
+                    new Dictionary<BackupPathPair, string>();
+
+                foreach (BackupPathPair pair in activePairs)
                 {
-                    return;
-                }
-            }
+                    string? pathValidationError =
+                        BackupHelper.GetBackupPathValidationError(
+                            pair,
+                            activePairs);
 
-            List<BackupPathPair> dialogPairs = validPairs
-                .Where(pair => !pair.SkipDialogs)
-                .ToList();
-
-            Dictionary<BackupPathPair, string> versionsByPair = validPairs
-                .ToDictionary(pair => pair, pair => VersionHelper.GetSuggestedVersion(_settings, pair));
-
-            Dictionary<BackupPathPair, string> tagsByPair = validPairs
-                .ToDictionary(pair => pair, pair => string.Empty);
-
-            if (dialogPairs.Count > 0)
-            {
-                List<BackupVersionItem> versionItems = dialogPairs
-                    .Select(pair => new BackupVersionItem
+                    if (!string.IsNullOrWhiteSpace(
+                        pathValidationError))
                     {
-                        SourceDirectory = pair.SourceDirectory,
-                        TargetDirectory = pair.TargetDirectory,
-                        SourceName = new DirectoryInfo(pair.SourceDirectory).Name,
-                        Version = versionsByPair[pair],
-                        Tag = tagsByPair[pair]
-                    })
-                    .ToList();
+                        SetBackupStatus(
+                            pair,
+                            BackupPathStatus.StatusError,
+                            pathValidationError);
 
-                using VersionInputForm versionForm = new VersionInputForm(
-                    versionItems,
-                    _settings.IgnoreCopyErrors,
-                    (_settings.Tags ?? new List<string>()),
-                    new Size(_settings.BackupVersionDialogWidth, _settings.BackupVersionDialogHeight));
+                        if (!pair.SkipDialogs)
+                        {
+                            ModernMessageDialog.Show(
+                                this,
+                                "Error",
+                                $"{pair.SourceDirectory}{Environment.NewLine}{Environment.NewLine}{pathValidationError}");
+                        }
 
-                DialogResult versionDialogResult = versionForm.ShowDialog(this);
-
-                if (versionForm.DialogSize.Width > 0 && versionForm.DialogSize.Height > 0)
-                {
-                    _settings.BackupVersionDialogWidth = versionForm.DialogSize.Width;
-                    _settings.BackupVersionDialogHeight = versionForm.DialogSize.Height;
-                    SaveSettings();
-                }
-
-                if (versionDialogResult != DialogResult.OK)
-                {
-                    return;
-                }
-
-                _settings.IgnoreCopyErrors = versionForm.IgnoreCopyErrors;
-
-                for (int i = 0; i < dialogPairs.Count; i++)
-                {
-                    BackupPathPair dialogPair = dialogPairs[i];
-                    string resultVersion = versionForm.ResultItems[i].Version;
-                    string newPairVersioning = string.IsNullOrWhiteSpace(resultVersion)
-                        ? "none"
-                        : resultVersion;
-
-                    if (!string.Equals(dialogPair.Versioning, newPairVersioning, StringComparison.OrdinalIgnoreCase))
-                    {
-                        string pairKey = SettingsStorage.CreatePairKey(dialogPair.SourceDirectory, dialogPair.TargetDirectory);
-                        _settings.LastUsedVersionsByPair.Remove(pairKey);
-                        dialogPair.Versioning = newPairVersioning;
+                        prevalidationFailedBackups++;
+                        continue;
                     }
 
-                    versionsByPair[dialogPair] = resultVersion;
-                    tagsByPair[dialogPair] = versionForm.ResultItems[i].Tag;
+                    if (!Directory.Exists(pair.SourceDirectory))
+                    {
+                        string errorMessage =
+                            $"Source directory not found: {pair.SourceDirectory}";
+
+                        SetBackupStatus(
+                            pair,
+                            BackupPathStatus.StatusError,
+                            errorMessage);
+
+                        if (!pair.SkipDialogs)
+                        {
+                            ModernMessageDialog.Show(
+                                this,
+                                "Error",
+                                $"Source directory not found:{Environment.NewLine}{pair.SourceDirectory}");
+                        }
+
+                        prevalidationFailedBackups++;
+                        continue;
+                    }
+
+                    if (!EnsureTargetDirectoryExistsForManualBackup(
+                            pair,
+                            out bool targetPreparationFailed))
+                    {
+                        if (targetPreparationFailed)
+                        {
+                            prevalidationFailedBackups++;
+                        }
+                        else
+                        {
+                            prevalidationCanceledBackups++;
+                        }
+
+                        continue;
+                    }
+
+                    try
+                    {
+                        versionsByPair[pair] =
+                            VersionHelper.GetSuggestedVersion(
+                                _settings,
+                                pair);
+
+                        runnablePairs.Add(pair);
+                    }
+                    catch (Exception exception)
+                    {
+                        SetBackupStatus(
+                            pair,
+                            BackupPathStatus.StatusError,
+                            exception.Message);
+
+                        if (!pair.SkipDialogs)
+                        {
+                            ModernMessageDialog.Show(
+                                this,
+                                "Error",
+                                $"Version could not be determined:{Environment.NewLine}{pair.SourceDirectory}{Environment.NewLine}{Environment.NewLine}{exception.Message}");
+                        }
+
+                        prevalidationFailedBackups++;
+                    }
                 }
 
                 SaveSettings();
-                RestartAutoBackupCountdown();
-            }
+                RefreshBackupInfoColumn();
 
-            int skippedFiles = 0;
-            int purgedBackups = 0;
-            List<string> destinationActions = new List<string>();
-
-            foreach (BackupPathPair pair in validPairs)
-            {
-                try
+                if (runnablePairs.Count == 0)
                 {
-                    _ignoreAllFileErrors = pair.IgnoreCopyErrors;
+                    return;
+                }
 
-                    int skippedForPair = ExecuteBackup(pair, versionsByPair[pair], tagsByPair[pair], out List<string> skippedFilePaths, out string destinationAction);
+                Dictionary<BackupPathPair, string> tagsByPair =
+                    runnablePairs.ToDictionary(
+                        pair => pair,
+                        pair => string.Empty);
 
-                    int purgedForPair;
-                    List<string> purgedPaths;
+                Dictionary<BackupPathPair, bool> ignoreErrorsByPair =
+                    runnablePairs.ToDictionary(
+                        pair => pair,
+                        pair => pair.IgnoreCopyErrors);
 
-                    if (ShouldRunRetentionForPair(pair))
+                List<BackupPathPair> dialogPairs =
+                    runnablePairs
+                        .Where(pair => !pair.SkipDialogs)
+                        .ToList();
+
+                if (dialogPairs.Count > 0)
+                {
+                    List<BackupVersionItem> versionItems =
+                        dialogPairs
+                            .Select(pair =>
+                                new BackupVersionItem
+                                {
+                                    SourceDirectory =
+                                        pair.SourceDirectory,
+                                    TargetDirectory =
+                                        pair.TargetDirectory,
+                                    SourceName =
+                                        new DirectoryInfo(
+                                            pair.SourceDirectory).Name,
+                                    Version =
+                                        versionsByPair[pair],
+                                    Tag =
+                                        tagsByPair[pair]
+                                })
+                            .ToList();
+
+                    using VersionInputForm versionForm =
+                        new VersionInputForm(
+                            versionItems,
+                            _settings.IgnoreCopyErrors,
+                            _settings.Tags ?? new List<string>(),
+                            new Size(
+                                _settings.BackupVersionDialogWidth,
+                                _settings.BackupVersionDialogHeight));
+
+                    DialogResult versionDialogResult =
+                        versionForm.ShowDialog(this);
+
+                    if (versionForm.DialogSize.Width > 0 &&
+                        versionForm.DialogSize.Height > 0)
                     {
-                        List<string> purgePreviewPaths = BackupHelper.GetRetentionPurgePreviewPaths(pair, _settings.ZipDestinationFiles);
-                        DialogResult retentionDialogResult = TryConfirmRetentionWarningDialogue(pair, purgePreviewPaths);
+                        _settings.BackupVersionDialogWidth =
+                            versionForm.DialogSize.Width;
 
-                        if (retentionDialogResult == DialogResult.Cancel)
+                        _settings.BackupVersionDialogHeight =
+                            versionForm.DialogSize.Height;
+
+                        SaveSettings();
+                    }
+
+                    if (versionDialogResult != DialogResult.OK)
+                    {
+                        return;
+                    }
+
+                    _settings.IgnoreCopyErrors =
+                        versionForm.IgnoreCopyErrors;
+
+                    for (int i = 0;
+                         i < dialogPairs.Count;
+                         i++)
+                    {
+                        BackupPathPair dialogPair =
+                            dialogPairs[i];
+
+                        versionsByPair[dialogPair] =
+                            versionForm.ResultItems[i].Version;
+
+                        tagsByPair[dialogPair] =
+                            versionForm.ResultItems[i].Tag;
+
+                        ignoreErrorsByPair[dialogPair] =
+                            versionForm.IgnoreCopyErrors;
+                    }
+
+                    SaveSettings();
+                }
+
+                int successfulBackups = 0;
+                int failedBackups = prevalidationFailedBackups;
+                int canceledBackups = prevalidationCanceledBackups;
+                int skippedPaths = 0;
+                int purgedBackups = 0;
+
+                List<string> destinationActions =
+                    new List<string>();
+
+                foreach (BackupPathPair pair in runnablePairs)
+                {
+                    BackupPairRunResult runResult =
+                        await ExecuteBackupPairAsync(
+                            pair,
+                            versionsByPair[pair],
+                            tagsByPair[pair],
+                            ignoreErrorsByPair[pair],
+                            "MANUAL");
+
+                    if (runResult.Successful)
+                    {
+                        successfulBackups++;
+                        skippedPaths +=
+                            runResult.SkippedPaths;
+                        purgedBackups +=
+                            runResult.PurgedBackups;
+
+                        destinationActions.Add(
+                            runResult.DestinationAction);
+                    }
+                    else if (runResult.Canceled)
+                    {
+                        canceledBackups++;
+
+                        if (!pair.SkipDialogs &&
+                            runResult.Error != null)
                         {
-                            return;
+                            BackupDialogHelper.ShowBackupCanceledBecauseDestinationExists(
+                                this,
+                                runResult.Error.Message);
                         }
-
-                        purgedForPair = retentionDialogResult == DialogResult.Yes
-                            ? BackupHelper.ApplyRetention(pair, _settings.ZipDestinationFiles, out purgedPaths)
-                            : BackupHelper.ApplyRetentionDisabled(out purgedPaths);
                     }
                     else
                     {
-                        purgedForPair = BackupHelper.ApplyRetentionDisabled(out purgedPaths);
+                        failedBackups++;
+
+                        if (!pair.SkipDialogs &&
+                            runResult.Error != null)
+                        {
+                            ModernMessageDialog.Show(
+                                this,
+                                "Error",
+                                $"Backup failed:{Environment.NewLine}{pair.SourceDirectory}{Environment.NewLine}{Environment.NewLine}{runResult.Error.Message}");
+                        }
                     }
-
-                    skippedFiles += skippedForPair;
-                    purgedBackups += purgedForPair;
-                    destinationActions.Add(destinationAction);
-
-                    List<string> statusMessages = new List<string>();
-
-                    if (skippedForPair > 0)
-                    {
-                        statusMessages.Add(FormatSkippedFilesMessage(skippedForPair, skippedFilePaths));
-                    }
-
-                    if (purgedForPair > 0)
-                    {
-                        statusMessages.Add(BackupHelper.FormatRetentionStatusMessage(purgedPaths));
-                    }
-
-                    SetBackupStatus(
-                        pair,
-                        skippedForPair == 0 ? "OK" : "Warning",
-                        string.Join(Environment.NewLine + Environment.NewLine, statusMessages.Where(message => !string.IsNullOrWhiteSpace(message))));
-
-                    string key = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
-                    _settings.LastUsedVersionsByPair[key] = versionsByPair[pair];
                 }
-                catch (OperationCanceledException exception)
-                {
-                    SetBackupStatus(pair, "Warning", BackupHelper.FormatBackupCanceledBecauseDestinationExistsMessage(exception.Message));
-                    SaveSettings();
-                    RefreshBackupInfoColumn();
 
-                    if (!pair.SkipDialogs)
-                    {
-                        BackupDialogHelper.ShowBackupCanceledBecauseDestinationExists(this, exception.Message);
-                    }
+                notifyIconMain.Visible = true;
+                notifyIconMain.BalloonTipTitle =
+                    "EasyVersionBackup";
 
-                    return;
-                }
-                catch (Exception exception)
-                {
-                    SetBackupStatus(pair, "Error", exception.Message);
-                    SaveSettings();
-                    RefreshBackupInfoColumn();
+                notifyIconMain.BalloonTipText =
+                    $"Backup finished. Successful: {successfulBackups}, failed: {failedBackups}, canceled: {canceledBackups}, skipped paths: {skippedPaths}.{BackupHelper.FormatDestinationActionSummary(destinationActions)}{BackupHelper.FormatRetentionSummary(purgedBackups)}";
 
-                    if (!pair.SkipDialogs)
-                    {
-                        ModernMessageDialog.Show(
-                            this,
-                            "Error",
-                            $"Backup failed:{Environment.NewLine}{pair.SourceDirectory}{Environment.NewLine}{Environment.NewLine}{exception.Message}");
-                    }
+                notifyIconMain.BalloonTipIcon =
+                    failedBackups > 0
+                        ? ToolTipIcon.Warning
+                        : ToolTipIcon.None;
 
-                    return;
-                }
+                notifyIconMain.ShowBalloonTip(5000);
             }
+            finally
+            {
+                _isBackupRunning = false;
+                buttonBackup.Enabled =
+                    _settings.BackupPathPairs.Any(
+                        pair => pair.IsEnabled);
 
-            SaveSettings();
-            RefreshBackupInfoColumn();
-
-            notifyIconMain.Visible = true;
-            notifyIconMain.BalloonTipTitle = "EasyVersionBackup";
-            notifyIconMain.BalloonTipText = $"Backup completed. {skippedFiles} files skipped.{BackupHelper.FormatDestinationActionSummary(destinationActions)}{BackupHelper.FormatRetentionSummary(purgedBackups)}";
-            notifyIconMain.BalloonTipIcon = ToolTipIcon.None;
-            notifyIconMain.ShowBalloonTip(5000);
+                RefreshAutoBackupTimerColumn();
+            }
         }
 
-        private bool EnsureTargetDirectoryExistsForManualBackup(BackupPathPair pair)
+        private bool EnsureTargetDirectoryExistsForManualBackup(
+            BackupPathPair pair,
+            out bool failed)
         {
+            failed = false;
+
             if (Directory.Exists(pair.TargetDirectory))
             {
                 return true;
@@ -1427,7 +1551,11 @@ namespace EasyVersionBackup
             }
             catch (Exception exception)
             {
-                SetBackupStatus(pair, "Error", exception.Message);
+                failed = true;
+                SetBackupStatus(
+                    pair,
+                    BackupPathStatus.StatusError,
+                    exception.Message);
                 SaveSettings();
                 RefreshBackupInfoColumn();
 
@@ -1440,489 +1568,599 @@ namespace EasyVersionBackup
             }
         }
 
-        private int ExecuteBackup(BackupPathPair pair, string version, string tag, out List<string> skippedFilePaths, out string destinationAction)
+        private async Task<(BackupFileOperationResult FileResult, string DestinationAction)> ExecuteBackupAsync(
+            BackupPathPair pair,
+            string version,
+            string tag,
+            bool ignoreCopyErrors)
         {
-            int skipped = 0;
-            skippedFilePaths = new List<string>();
-            destinationAction = BackupHelper.DestinationActionCreated;
-            _lastBackupDestinationFileName = string.Empty;
+            string sourceName =
+                new DirectoryInfo(pair.SourceDirectory).Name;
 
-            string sourceName = new DirectoryInfo(pair.SourceDirectory).Name;
-            string versionedName = VersionHelper.BuildVersionedName(sourceName, version);
+            string versionedName =
+                VersionHelper.BuildVersionedName(
+                    sourceName,
+                    version);
 
             if (!string.IsNullOrWhiteSpace(tag))
             {
                 versionedName += "_" + tag.Trim();
             }
 
-            string conflictHandling = BackupHelper.NormalizeDestinationConflictHandling(_settings.BackupDestinationConflictHandling);
+            string conflictHandling =
+                BackupHelper.NormalizeDestinationConflictHandling(
+                    _settings.BackupDestinationConflictHandling);
 
-            if (_settings.ZipDestinationFiles)
+            bool createZip = _settings.ZipDestinationFiles;
+            string destinationPath = createZip
+                ? Path.Combine(
+                    pair.TargetDirectory,
+                    $"{versionedName}.zip")
+                : Path.Combine(
+                    pair.TargetDirectory,
+                    versionedName);
+
+            string destinationAction =
+                BackupHelper.DestinationActionCreated;
+
+            bool overwriteExisting = false;
+
+            if (BackupHelper.DestinationExists(destinationPath))
             {
-                string zipPath = Path.Combine(pair.TargetDirectory, $"{versionedName}.zip");
-
-                if (BackupHelper.DestinationExists(zipPath))
+                if (conflictHandling ==
+                    BackupHelper.DestinationConflictAsk)
                 {
-                    if (conflictHandling == BackupHelper.DestinationConflictAsk)
-                    {
-                        DialogResult result = BackupDialogHelper.ShowDestinationConflictDialog(this, zipPath, out string selectedConflictAction);
-
-                        if (result != DialogResult.OK)
-                        {
-                            throw new OperationCanceledException(zipPath);
-                        }
-
-                        conflictHandling = BackupHelper.NormalizeDestinationConflictHandling(selectedConflictAction);
-                    }
-
-                    if (conflictHandling == BackupHelper.DestinationConflictAppend)
-                    {
-                        zipPath = BackupHelper.GetNumberedDestinationPath(zipPath);
-                        destinationAction = BackupHelper.DestinationActionAppended;
-                    }
-                    else if (conflictHandling == BackupHelper.DestinationConflictCancel)
-                    {
-                        throw new OperationCanceledException(zipPath);
-                    }
-                    else
-                    {
-                        if (BackupHelper.IsProtectedByRetentionExcludedTag(zipPath, pair))
-                        {
-                            throw new OperationCanceledException(zipPath);
-                        }
-
-                        File.Delete(zipPath);
-                        destinationAction = BackupHelper.DestinationActionOverwritten;
-                    }
-                }
-
-                skipped += CreateZipFromDirectory(pair.SourceDirectory, zipPath, pair.ExcludedPaths, skippedFilePaths);
-                _lastBackupDestinationFileName = Path.GetFileName(zipPath);
-
-                BackupLogger.WriteLine($"BACKUP CREATED | source=\"{pair.SourceDirectory}\" | target=\"{pair.TargetDirectory}\" | backup=\"{_lastBackupDestinationFileName}\" | destinationAction={destinationAction} | skippedFiles={skipped}");
-
-                return skipped;
-            }
-
-            string destinationDirectory = Path.Combine(pair.TargetDirectory, versionedName);
-
-            if (BackupHelper.DestinationExists(destinationDirectory))
-            {
-                if (conflictHandling == BackupHelper.DestinationConflictAsk)
-                {
-                    DialogResult result = BackupDialogHelper.ShowDestinationConflictDialog(this, destinationDirectory, out string selectedConflictAction);
+                    DialogResult result =
+                        BackupDialogHelper.ShowDestinationConflictDialog(
+                            this,
+                            destinationPath,
+                            out string selectedConflictAction);
 
                     if (result != DialogResult.OK)
                     {
-                        throw new OperationCanceledException(destinationDirectory);
+                        throw new OperationCanceledException(
+                            destinationPath);
                     }
 
-                    conflictHandling = BackupHelper.NormalizeDestinationConflictHandling(selectedConflictAction);
+                    conflictHandling =
+                        BackupHelper.NormalizeDestinationConflictHandling(
+                            selectedConflictAction);
                 }
 
-                if (conflictHandling == BackupHelper.DestinationConflictAppend)
+                if (conflictHandling ==
+                    BackupHelper.DestinationConflictAppend)
                 {
-                    destinationDirectory = BackupHelper.GetNumberedDestinationPath(destinationDirectory);
-                    destinationAction = BackupHelper.DestinationActionAppended;
+                    destinationPath =
+                        BackupHelper.GetNumberedDestinationPath(
+                            destinationPath);
+
+                    destinationAction =
+                        BackupHelper.DestinationActionAppended;
                 }
-                else if (conflictHandling == BackupHelper.DestinationConflictCancel)
+                else if (conflictHandling ==
+                    BackupHelper.DestinationConflictCancel)
                 {
-                    throw new OperationCanceledException(destinationDirectory);
+                    throw new OperationCanceledException(
+                        destinationPath);
                 }
                 else
                 {
-                    if (BackupHelper.IsProtectedByRetentionExcludedTag(destinationDirectory, pair))
+                    if (BackupHelper.IsProtectedByRetentionExcludedTag(
+                        destinationPath,
+                        pair))
                     {
-                        throw new OperationCanceledException(destinationDirectory);
+                        throw new OperationCanceledException(
+                            destinationPath);
                     }
 
-                    Directory.Delete(destinationDirectory, true);
-                    destinationAction = BackupHelper.DestinationActionOverwritten;
+                    overwriteExisting = true;
+                    destinationAction =
+                        BackupHelper.DestinationActionOverwritten;
                 }
             }
 
-            skipped += CopyDirectory(pair.SourceDirectory, destinationDirectory, pair.ExcludedPaths, skippedFilePaths);
-            _lastBackupDestinationFileName = Path.GetFileName(destinationDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            BackupFileOperationResult fileResult =
+                await Task.Run(
+                    () => BackupFileService.CreateBackup(
+                        pair.SourceDirectory,
+                        destinationPath,
+                        createZip,
+                        overwriteExisting,
+                        pair.ExcludedPaths,
+                        ignoreCopyErrors,
+                        ShowFileErrorActionDialog));
 
-            BackupLogger.WriteLine($"BACKUP CREATED | source=\"{pair.SourceDirectory}\" | target=\"{pair.TargetDirectory}\" | backup=\"{_lastBackupDestinationFileName}\" | destinationAction={destinationAction} | skippedFiles={skipped}");
+            BackupLogger.WriteLine(
+                $"BACKUP CREATED | source=\"{pair.SourceDirectory}\" | target=\"{pair.TargetDirectory}\" | backup=\"{fileResult.DestinationFileName}\" | destinationAction={destinationAction} | skippedPaths={fileResult.SkippedCount}");
 
-            return skipped;
+            return (fileResult, destinationAction);
         }
-        private int CopyDirectory(string sourceDirectory, string destinationDirectory, List<string> excludedPaths, List<string> skippedFilePaths)
+
+
+        private async Task<BackupPairRunResult> ExecuteBackupPairAsync(
+            BackupPathPair pair,
+            string version,
+            string tag,
+            bool ignoreCopyErrors,
+            string backupKind)
         {
-            int skipped = 0;
+            BackupPairRunResult runResult =
+                new BackupPairRunResult();
 
-            Directory.CreateDirectory(destinationDirectory);
+            string logResult = "FAILED";
 
-            foreach (string directoryPath in BackupHelper.GetIncludedDirectories(sourceDirectory, excludedPaths))
+            BackupLogger.WriteLine(
+                $"{backupKind} BACKUP START | source=\"{pair.SourceDirectory}\" | target=\"{pair.TargetDirectory}\"");
+
+            try
             {
-                string relativeDirectoryPath = Path.GetRelativePath(sourceDirectory, directoryPath);
-                string targetDirectoryPath = relativeDirectoryPath == "."
-                    ? destinationDirectory
-                    : Path.Combine(destinationDirectory, relativeDirectoryPath);
+                (
+                    BackupFileOperationResult fileResult,
+                    string destinationAction
+                ) = await ExecuteBackupAsync(
+                    pair,
+                    version,
+                    tag,
+                    ignoreCopyErrors);
 
-                Directory.CreateDirectory(targetDirectoryPath);
+                string pairKey =
+                    SettingsStorage.CreatePairKey(
+                        pair.SourceDirectory,
+                        pair.TargetDirectory);
 
-                foreach (string filePath in Directory.GetFiles(directoryPath, "*", SearchOption.TopDirectoryOnly))
+                _settings.LastUsedVersionsByPair[pairKey] =
+                    version;
+
+                int purgedForPair = 0;
+                List<string> purgedPaths =
+                    new List<string>();
+
+                bool retentionCanceled = false;
+
+                if (ShouldRunRetentionForPair(pair))
                 {
-                    if (BackupHelper.IsExcludedPath(sourceDirectory, filePath, excludedPaths))
+                    List<string> purgePreviewPaths =
+                        BackupHelper.GetRetentionPurgePreviewPaths(
+                            pair,
+                            _settings.ZipDestinationFiles);
+
+                    DialogResult retentionDialogResult =
+                        TryConfirmRetentionWarningDialogue(
+                            pair,
+                            purgePreviewPaths);
+
+                    if (retentionDialogResult ==
+                        DialogResult.Cancel)
                     {
-                        continue;
+                        retentionCanceled = true;
                     }
-
-                    string relativeFilePath = Path.GetRelativePath(sourceDirectory, filePath);
-                    string targetFilePath = Path.Combine(destinationDirectory, relativeFilePath);
-
-                    while (true)
+                    else if (retentionDialogResult ==
+                        DialogResult.Yes)
                     {
-                        try
-                        {
-                            Directory.CreateDirectory(Path.GetDirectoryName(targetFilePath) ?? destinationDirectory);
-                            File.Copy(filePath, targetFilePath, true);
-                            break;
-                        }
-                        catch (Exception exception)
-                        {
-                            if (_ignoreAllFileErrors)
-                            {
-                                skipped++;
-                                skippedFilePaths.Add(filePath);
-                                break;
-                            }
-
-                            FileErrorAction action = ShowFileErrorActionDialog(filePath, exception);
-
-                            if (action == FileErrorAction.Retry)
-                            {
-                                continue;
-                            }
-
-                            if (action == FileErrorAction.Skip)
-                            {
-                                skipped++;
-                                skippedFilePaths.Add(filePath);
-                                break;
-                            }
-
-                            if (action == FileErrorAction.IgnoreAll)
-                            {
-                                _ignoreAllFileErrors = true;
-                                skipped++;
-                                skippedFilePaths.Add(filePath);
-                                break;
-                            }
-
-                            throw;
-                        }
+                        purgedForPair =
+                            BackupHelper.ApplyRetention(
+                                pair,
+                                _settings.ZipDestinationFiles,
+                                purgePreviewPaths,
+                                out purgedPaths);
+                    }
+                    else
+                    {
+                        BackupHelper.ApplyRetentionDisabled(
+                            out purgedPaths);
                     }
                 }
-            }
-
-            return skipped;
-        }
-        private int CreateZipFromDirectory(string sourceDirectory, string zipPath, List<string> excludedPaths, List<string> skippedFilePaths)
-        {
-            int skipped = 0;
-
-            using FileStream zipStream = new FileStream(zipPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
-            using ZipArchive zipArchive = new ZipArchive(zipStream, ZipArchiveMode.Create);
-
-            foreach (string directoryPath in BackupHelper.GetIncludedDirectories(sourceDirectory, excludedPaths))
-            {
-                foreach (string filePath in Directory.GetFiles(directoryPath, "*", SearchOption.TopDirectoryOnly))
+                else
                 {
-                    if (BackupHelper.IsExcludedPath(sourceDirectory, filePath, excludedPaths))
-                    {
-                        continue;
-                    }
-
-                    string relativeFilePath = Path.GetRelativePath(sourceDirectory, filePath).Replace('\\', '/');
-
-                    while (true)
-                    {
-                        try
-                        {
-                            using FileStream sourceStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                            ZipArchiveEntry entry = zipArchive.CreateEntry(relativeFilePath, CompressionLevel.Optimal);
-
-                            using Stream entryStream = entry.Open();
-                            sourceStream.CopyTo(entryStream);
-                            break;
-                        }
-                        catch (Exception exception)
-                        {
-                            if (_ignoreAllFileErrors)
-                            {
-                                skipped++;
-                                skippedFilePaths.Add(filePath);
-                                break;
-                            }
-
-                            FileErrorAction action = ShowFileErrorActionDialog(filePath, exception);
-
-                            if (action == FileErrorAction.Retry)
-                            {
-                                continue;
-                            }
-
-                            if (action == FileErrorAction.Skip)
-                            {
-                                skipped++;
-                                skippedFilePaths.Add(filePath);
-                                break;
-                            }
-
-                            if (action == FileErrorAction.IgnoreAll)
-                            {
-                                _ignoreAllFileErrors = true;
-                                skipped++;
-                                skippedFilePaths.Add(filePath);
-                                break;
-                            }
-
-                            throw;
-                        }
-                    }
+                    BackupHelper.ApplyRetentionDisabled(
+                        out purgedPaths);
                 }
-            }
 
-            return skipped;
-        }
-        private string FormatSkippedFilesMessage(int skippedFiles, List<string> skippedFilePaths)
-        {
-            if (skippedFilePaths.Count == 0)
+                List<string> statusMessages =
+                    new List<string>();
+
+                if (fileResult.SkippedCount > 0)
+                {
+                    statusMessages.Add(
+                        FormatSkippedFilesMessage(
+                            fileResult.SkippedCount,
+                            fileResult.SkippedPaths));
+                }
+
+                if (purgedForPair > 0)
+                {
+                    statusMessages.Add(
+                        BackupHelper.FormatRetentionStatusMessage(
+                            purgedPaths));
+                }
+
+                if (retentionCanceled)
+                {
+                    statusMessages.Add(
+                        "Backup was created, but retention was canceled.");
+                }
+
+                SetBackupStatus(
+                    pair,
+                    fileResult.SkippedCount == 0 &&
+                    !retentionCanceled
+                        ? BackupPathStatus.StatusOk
+                        : BackupPathStatus.StatusWarning,
+                    string.Join(
+                        Environment.NewLine +
+                        Environment.NewLine,
+                        statusMessages.Where(message =>
+                            !string.IsNullOrWhiteSpace(
+                                message))),
+                    fileResult.DestinationFileName);
+
+                runResult.Successful = true;
+                runResult.SkippedPaths =
+                    fileResult.SkippedCount;
+                runResult.PurgedBackups =
+                    purgedForPair;
+                runResult.DestinationAction =
+                    destinationAction;
+                logResult = retentionCanceled
+                    ? "SUCCESS_WITH_RETENTION_CANCELED"
+                    : "SUCCESS";
+            }
+            catch (OperationCanceledException exception)
             {
-                return $"{skippedFiles} files skipped.";
+                SetBackupStatus(
+                    pair,
+                    BackupPathStatus.StatusWarning,
+                    BackupHelper.FormatBackupCanceledBecauseDestinationExistsMessage(
+                        exception.Message));
+
+                runResult.Canceled = true;
+                runResult.Error = exception;
+                logResult = "CANCELED";
+            }
+            catch (Exception exception)
+            {
+                SetBackupStatus(
+                    pair,
+                    BackupPathStatus.StatusError,
+                    exception.Message);
+
+                runResult.Error = exception;
+                logResult = "FAILED";
+            }
+            finally
+            {
+                BackupLogger.WriteLine(
+                    $"{backupKind} BACKUP END | source=\"{pair.SourceDirectory}\" | target=\"{pair.TargetDirectory}\" | result={logResult}");
+
+                SaveSettings();
+                RefreshBackupInfoColumn();
             }
 
-            return $"{skippedFiles} files skipped:{Environment.NewLine}" +
-                string.Join(Environment.NewLine, skippedFilePaths);
+            return runResult;
+        }
+
+        private string FormatSkippedFilesMessage(
+            int skippedPaths,
+            List<string> skippedPathList)
+        {
+            if (skippedPathList.Count == 0)
+            {
+                return $"{skippedPaths} paths skipped.";
+            }
+
+            return $"{skippedPaths} paths skipped:{Environment.NewLine}" +
+                string.Join(
+                    Environment.NewLine,
+                    skippedPathList);
         }
         
         
-        private FileErrorAction ShowFileErrorActionDialog(string filePath, Exception exception)
+        private BackupFileErrorAction ShowFileErrorActionDialog(
+            string filePath,
+            Exception exception)
         {
-            if (_ignoreAllFileErrors)
+            if (InvokeRequired)
             {
-                return FileErrorAction.IgnoreAll;
+                return (BackupFileErrorAction)Invoke(
+                    new Func<BackupFileErrorAction>(
+                        () => ShowFileErrorActionDialog(
+                            filePath,
+                            exception)));
             }
 
-            using FileErrorDialog dialog = new FileErrorDialog(filePath, exception.Message);
-            DialogResult result = dialog.ShowDialog(this);
+            using FileErrorDialog dialog =
+                new FileErrorDialog(
+                    filePath,
+                    exception.Message);
+
+            DialogResult result =
+                dialog.ShowDialog(this);
 
             if (result == DialogResult.Retry)
             {
-                return FileErrorAction.Retry;
+                return BackupFileErrorAction.Retry;
             }
 
             if (result == DialogResult.Ignore)
             {
-                return FileErrorAction.Skip;
+                return BackupFileErrorAction.Skip;
             }
 
             if (result == DialogResult.Yes)
             {
-                return FileErrorAction.IgnoreAll;
+                return BackupFileErrorAction.IgnoreAll;
             }
 
-            return FileErrorAction.Abort;
+            return BackupFileErrorAction.Abort;
         }
 
-        private void ExecuteAutomaticBackup(List<BackupPathPair> automaticBackupPairs)
+        private async Task ExecuteAutomaticBackupAsync(
+            List<BackupPathPair> automaticBackupPairs)
         {
-            _ignoreAllFileErrors = true;
-
-            List<BackupPathPair> validPairs = automaticBackupPairs
-                .Where(p => p.IsEnabled && !string.IsNullOrWhiteSpace(p.SourceDirectory) && !string.IsNullOrWhiteSpace(p.TargetDirectory))
-                .ToList();
+            List<BackupPathPair> validPairs =
+                automaticBackupPairs
+                    .Where(pair =>
+                        pair.IsEnabled &&
+                        !string.IsNullOrWhiteSpace(
+                            pair.SourceDirectory) &&
+                        !string.IsNullOrWhiteSpace(
+                            pair.TargetDirectory))
+                    .ToList();
 
             if (validPairs.Count == 0)
             {
                 return;
             }
 
+            int successfulBackups = 0;
+            int failedBackups = 0;
+            int canceledBackups = 0;
+            int skippedPaths = 0;
+            int purgedBackups = 0;
+
+            List<string> destinationActions =
+                new List<string>();
+
             foreach (BackupPathPair pair in validPairs)
             {
-                if (!Directory.Exists(pair.SourceDirectory))
+                string? pathValidationError =
+                    BackupHelper.GetBackupPathValidationError(
+                        pair,
+                        _settings.BackupPathPairs);
+
+                if (!string.IsNullOrWhiteSpace(
+                    pathValidationError))
                 {
-                    SetBackupStatus(pair, "Error", $"Source directory not found: {pair.SourceDirectory}");
+                    SetBackupStatus(
+                        pair,
+                        BackupPathStatus.StatusError,
+                        pathValidationError);
+
                     SaveSettings();
                     RefreshBackupInfoColumn();
-                    return;
+                    failedBackups++;
+                    continue;
                 }
 
-                if (!Directory.Exists(pair.TargetDirectory))
+                if (!Directory.Exists(
+                    pair.SourceDirectory))
                 {
-                    try
-                    {
-                        Directory.CreateDirectory(pair.TargetDirectory);
-                    }
-                    catch (Exception exception)
-                    {
-                        SetBackupStatus(pair, "Error", exception.Message);
-                        SaveSettings();
-                        RefreshBackupInfoColumn();
-                        return;
-                    }
+                    SetBackupStatus(
+                        pair,
+                        BackupPathStatus.StatusError,
+                        $"Source directory not found: {pair.SourceDirectory}");
+
+                    SaveSettings();
+                    RefreshBackupInfoColumn();
+                    failedBackups++;
+                    continue;
                 }
-            }
-
-            int skippedFiles = 0;
-            int purgedBackups = 0;
-            List<string> destinationActions = new List<string>();
-
-            foreach (BackupPathPair pair in validPairs)
-            {
-                string automaticVersion = VersionHelper.GetSuggestedVersion(_settings, pair);
 
                 try
                 {
-                    int skippedForPair = ExecuteBackup(pair, automaticVersion, string.Empty, out List<string> skippedFilePaths, out string destinationAction);
-
-                    int purgedForPair;
-                    List<string> purgedPaths;
-
-                    if (ShouldRunRetentionForPair(pair))
+                    if (!Directory.Exists(
+                        pair.TargetDirectory))
                     {
-                        List<string> purgePreviewPaths = BackupHelper.GetRetentionPurgePreviewPaths(pair, _settings.ZipDestinationFiles);
-                        DialogResult retentionDialogResult = TryConfirmRetentionWarningDialogue(pair, purgePreviewPaths);
+                        Directory.CreateDirectory(
+                            pair.TargetDirectory);
+                    }
 
-                        if (retentionDialogResult == DialogResult.Cancel)
-                        {
-                            return;
-                        }
+                    string automaticVersion =
+                        VersionHelper.GetSuggestedVersion(
+                            _settings,
+                            pair);
 
-                        purgedForPair = retentionDialogResult == DialogResult.Yes
-                            ? BackupHelper.ApplyRetention(pair, _settings.ZipDestinationFiles, out purgedPaths)
-                            : BackupHelper.ApplyRetentionDisabled(out purgedPaths);
+                    BackupPairRunResult runResult =
+                        await ExecuteBackupPairAsync(
+                            pair,
+                            automaticVersion,
+                            string.Empty,
+                            pair.IgnoreCopyErrors,
+                            "AUTOMATIC");
+
+                    if (runResult.Successful)
+                    {
+                        successfulBackups++;
+                        skippedPaths +=
+                            runResult.SkippedPaths;
+                        purgedBackups +=
+                            runResult.PurgedBackups;
+
+                        destinationActions.Add(
+                            runResult.DestinationAction);
+                    }
+                    else if (runResult.Canceled)
+                    {
+                        canceledBackups++;
                     }
                     else
                     {
-                        purgedForPair = BackupHelper.ApplyRetentionDisabled(out purgedPaths);
+                        failedBackups++;
                     }
-
-                    skippedFiles += skippedForPair;
-                    purgedBackups += purgedForPair;
-                    destinationActions.Add(destinationAction);
-
-                    List<string> statusMessages = new List<string>();
-
-                    if (skippedForPair > 0)
-                    {
-                        statusMessages.Add(FormatSkippedFilesMessage(skippedForPair, skippedFilePaths));
-                    }
-
-                    if (purgedForPair > 0)
-                    {
-                        statusMessages.Add(BackupHelper.FormatRetentionStatusMessage(purgedPaths));
-                    }
-
-                    SetBackupStatus(
-                        pair,
-                        skippedForPair == 0 ? "OK" : "Warning",
-                        string.Join(Environment.NewLine + Environment.NewLine, statusMessages.Where(message => !string.IsNullOrWhiteSpace(message))));
-
-                    string key = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
-                    _settings.LastUsedVersionsByPair[key] = automaticVersion;
-                }
-                catch (OperationCanceledException exception)
-                {
-                    SetBackupStatus(pair, "Warning", BackupHelper.FormatBackupCanceledBecauseDestinationExistsMessage(exception.Message));
                 }
                 catch (Exception exception)
                 {
-                    SetBackupStatus(pair, "Error", exception.Message);
+                    SetBackupStatus(
+                        pair,
+                        BackupPathStatus.StatusError,
+                        exception.Message);
+
+                    BackupLogger.WriteLine(
+                        $"AUTOMATIC BACKUP ERROR | source=\"{pair.SourceDirectory}\" | target=\"{pair.TargetDirectory}\" | result=FAILED_BEFORE_START | error=\"{exception.Message}\"");
+
+                    SaveSettings();
+                    RefreshBackupInfoColumn();
+                    failedBackups++;
                 }
             }
 
-            SaveSettings();
-            RefreshBackupInfoColumn();
-
             notifyIconMain.Visible = true;
-            notifyIconMain.BalloonTipTitle = "EasyVersionBackup";
-            notifyIconMain.BalloonTipText = $"Auto-Backup completed. {skippedFiles} files skipped.{BackupHelper.FormatDestinationActionSummary(destinationActions)}{BackupHelper.FormatRetentionSummary(purgedBackups)}";
+            notifyIconMain.BalloonTipTitle =
+                "EasyVersionBackup";
+
+            notifyIconMain.BalloonTipText =
+                successfulBackups > 0
+                    ? $"Auto-Backup finished. Successful: {successfulBackups}, failed: {failedBackups}, canceled: {canceledBackups}, skipped paths: {skippedPaths}.{BackupHelper.FormatDestinationActionSummary(destinationActions)}{BackupHelper.FormatRetentionSummary(purgedBackups)}"
+                    : $"Auto-Backup failed. Successful: 0, failed: {failedBackups}, canceled: {canceledBackups}.";
+
+            notifyIconMain.BalloonTipIcon =
+                failedBackups > 0 ||
+                successfulBackups == 0
+                    ? ToolTipIcon.Warning
+                    : ToolTipIcon.None;
+
             notifyIconMain.ShowBalloonTip(5000);
         }
-        private void autoBackupCountdownTimer_Tick(object? sender, EventArgs e)
+        private async void autoBackupCountdownTimer_Tick(
+            object? sender,
+            EventArgs e)
         {
             RefreshAutoBackupTimerColumn();
             RefreshWindowTitleCountdown();
             RefreshNotifyIconText();
 
-            if (!_settings.AutoBackupEnabled)
+            if (!_settings.AutoBackupEnabled ||
+                _isBackupRunning)
             {
                 return;
             }
 
             DateTime now = DateTime.Now;
 
-            List<BackupPathPair> duePairs = _settings.BackupPathPairs
-                .Where(pair => pair.IsEnabled &&
-                    !string.IsNullOrWhiteSpace(pair.SourceDirectory) &&
-                    !string.IsNullOrWhiteSpace(pair.TargetDirectory))
-                .Where(pair =>
-                {
-                    string pairKey = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
-
-                    if (!_nextAutoBackupRunsByPair.TryGetValue(pairKey, out DateTime nextRun))
+            List<BackupPathPair> duePairs =
+                _settings.BackupPathPairs
+                    .Where(pair =>
+                        pair.IsEnabled &&
+                        !string.IsNullOrWhiteSpace(
+                            pair.SourceDirectory) &&
+                        !string.IsNullOrWhiteSpace(
+                            pair.TargetDirectory))
+                    .Where(pair =>
                     {
-                        _nextAutoBackupRunsByPair[pairKey] = now.AddSeconds(GetAutoBackupIntervalSeconds(pair));
-                        return false;
-                    }
+                        string pairKey =
+                            SettingsStorage.CreatePairKey(
+                                pair.SourceDirectory,
+                                pair.TargetDirectory);
 
-                    return now >= nextRun;
-                })
-                .ToList();
+                        if (!_nextAutoBackupRunsByPair.TryGetValue(
+                            pairKey,
+                            out DateTime nextRun))
+                        {
+                            _nextAutoBackupRunsByPair[pairKey] =
+                                now.AddSeconds(
+                                    GetAutoBackupIntervalSeconds(
+                                        pair));
+
+                            return false;
+                        }
+
+                        return now >= nextRun;
+                    })
+                    .ToList();
 
             if (duePairs.Count == 0)
             {
                 return;
             }
 
-            ExecuteAutomaticBackup(duePairs);
+            _isBackupRunning = true;
+            buttonBackup.Enabled = false;
 
-            DateTime nextBaseTime = DateTime.Now;
-
-            foreach (BackupPathPair pair in duePairs)
+            try
             {
-                string pairKey = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
-                _nextAutoBackupRunsByPair[pairKey] = nextBaseTime.AddSeconds(GetAutoBackupIntervalSeconds(pair));
+                await ExecuteAutomaticBackupAsync(
+                    duePairs);
             }
+            finally
+            {
+                DateTime nextBaseTime = DateTime.Now;
 
-            RefreshAutoBackupTimerColumn();
-            RefreshWindowTitleCountdown();
-            RefreshNotifyIconText();
+                foreach (BackupPathPair pair in duePairs)
+                {
+                    string pairKey =
+                        SettingsStorage.CreatePairKey(
+                            pair.SourceDirectory,
+                            pair.TargetDirectory);
+
+                    _nextAutoBackupRunsByPair[pairKey] =
+                        nextBaseTime.AddSeconds(
+                            GetAutoBackupIntervalSeconds(
+                                pair));
+                }
+
+                _isBackupRunning = false;
+                buttonBackup.Enabled =
+                    _settings.BackupPathPairs.Any(
+                        pair => pair.IsEnabled);
+
+                RefreshAutoBackupTimerColumn();
+                RefreshWindowTitleCountdown();
+                RefreshNotifyIconText();
+            }
         }
         private void RefreshAutoBackupTimerColumn()
         {
             DateTime now = DateTime.Now;
 
-            for (int i = 0; i < dataGridViewConfiguredPaths.Rows.Count && i < _settings.BackupPathPairs.Count; i++)
+            for (int i = 0;
+                 i < dataGridViewConfiguredPaths.Rows.Count &&
+                 i < _settings.BackupPathPairs.Count;
+                 i++)
             {
-                DataGridViewRow row = dataGridViewConfiguredPaths.Rows[i];
-                BackupPathPair pair = _settings.BackupPathPairs[i];
+                DataGridViewRow row =
+                    dataGridViewConfiguredPaths.Rows[i];
 
-                if (pair.AutoBackupIntervalSeconds > 0)
-                {
-                    row.Cells["ColumnConfiguredAutoBackupTimer"].Value = FormatAutoBackupInterval(TimeSpan.FromSeconds(pair.AutoBackupIntervalSeconds));
-                    continue;
-                }
+                BackupPathPair pair =
+                    _settings.BackupPathPairs[i];
 
                 if (!_settings.AutoBackupEnabled ||
                     !pair.IsEnabled ||
-                    string.IsNullOrWhiteSpace(pair.SourceDirectory) ||
-                    string.IsNullOrWhiteSpace(pair.TargetDirectory))
+                    string.IsNullOrWhiteSpace(
+                        pair.SourceDirectory) ||
+                    string.IsNullOrWhiteSpace(
+                        pair.TargetDirectory))
                 {
-                    row.Cells["ColumnConfiguredAutoBackupTimer"].Value = string.Empty;
+                    row.Cells[
+                        "ColumnConfiguredAutoBackupTimer"
+                    ].Value = string.Empty;
+
                     continue;
                 }
 
-                string pairKey = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+                string pairKey =
+                    SettingsStorage.CreatePairKey(
+                        pair.SourceDirectory,
+                        pair.TargetDirectory);
 
-                if (!_nextAutoBackupRunsByPair.TryGetValue(pairKey, out DateTime nextRun))
+                if (!_nextAutoBackupRunsByPair.TryGetValue(
+                    pairKey,
+                    out DateTime nextRun))
                 {
-                    nextRun = now.AddSeconds(GetAutoBackupIntervalSeconds(pair));
-                    _nextAutoBackupRunsByPair[pairKey] = nextRun;
+                    nextRun = now.AddSeconds(
+                        GetAutoBackupIntervalSeconds(pair));
+
+                    _nextAutoBackupRunsByPair[pairKey] =
+                        nextRun;
                 }
 
                 TimeSpan remaining = nextRun - now;
@@ -1932,7 +2170,10 @@ namespace EasyVersionBackup
                     remaining = TimeSpan.Zero;
                 }
 
-                row.Cells["ColumnConfiguredAutoBackupTimer"].Value = FormatAutoBackupInterval(remaining);
+                row.Cells[
+                    "ColumnConfiguredAutoBackupTimer"
+                ].Value = FormatAutoBackupInterval(
+                    remaining);
             }
         }
         private void RefreshWindowTitleCountdown()
@@ -1964,35 +2205,24 @@ namespace EasyVersionBackup
                 _modernTitleLabel.Text = Text;
             }
         }
-        private string FormatAutoBackupInterval(TimeSpan interval)
+        private string FormatAutoBackupInterval(
+            TimeSpan interval)
         {
-            int totalSeconds = Math.Max(0, (int)Math.Ceiling(interval.TotalSeconds));
+            int totalSeconds = Math.Max(
+                0,
+                (int)Math.Ceiling(
+                    Math.Min(
+                        interval.TotalSeconds,
+                        int.MaxValue)));
 
-            if (totalSeconds < 60)
-            {
-                return totalSeconds + "s";
-            }
-
-            if (totalSeconds % 3600 == 0)
-            {
-                return (totalSeconds / 3600) + "h";
-            }
-
-            if (totalSeconds % 60 == 0)
-            {
-                return (totalSeconds / 60) + "m";
-            }
-
-            return totalSeconds + "s";
+            return AutoBackupIntervalHelper.Format(
+                totalSeconds);
         }
         private int GetAutoBackupIntervalSeconds()
         {
-            if (_settings.AutoBackupIntervalSeconds > 0)
-            {
-                return _settings.AutoBackupIntervalSeconds;
-            }
-
-            return Math.Max(1, _settings.AutoBackupIntervalMinutes) * 60;
+            return Math.Max(
+                1,
+                _settings.AutoBackupIntervalSeconds);
         }
 
         private int GetAutoBackupIntervalSeconds(BackupPathPair pair)
@@ -2075,12 +2305,26 @@ namespace EasyVersionBackup
 
         private void RefreshBackupInfoColumn()
         {
-            for (int i = 0; i < dataGridViewConfiguredPaths.Rows.Count && i < _settings.BackupPathPairs.Count; i++)
+            for (int i = 0;
+                 i < dataGridViewConfiguredPaths.Rows.Count &&
+                 i < _settings.BackupPathPairs.Count;
+                 i++)
             {
-                BackupPathPair pair = _settings.BackupPathPairs[i];
+                BackupPathPair pair =
+                    _settings.BackupPathPairs[i];
 
-                dataGridViewConfiguredPaths.Rows[i].Cells["ColumnConfiguredBackupInfo"].Value = GetBackupInfoIcon(pair);
-                dataGridViewConfiguredPaths.Rows[i].Cells["ColumnConfiguredBackupInfo"].ToolTipText = GetBackupInfoToolTipText(pair);
+                DataGridViewCell infoCell =
+                    dataGridViewConfiguredPaths.Rows[i]
+                        .Cells["ColumnConfiguredBackupInfo"];
+
+                if (infoCell.Value is Image oldImage)
+                {
+                    oldImage.Dispose();
+                }
+
+                infoCell.Value = GetBackupInfoIcon(pair);
+                infoCell.ToolTipText =
+                    GetBackupInfoToolTipText(pair);
             }
         }
         private string GetBackupInfoToolTipText(BackupPathPair pair)
@@ -2101,11 +2345,11 @@ namespace EasyVersionBackup
 
             if (!string.IsNullOrWhiteSpace(status.LastBackupErrorMessage))
             {
-                if (status.LastBackupStatus == "Error")
+                if (status.LastBackupStatus == BackupPathStatus.StatusError)
                 {
                     text += $"{Environment.NewLine}Error: {status.LastBackupErrorMessage}";
                 }
-                else if (status.LastBackupStatus == "Warning")
+                else if (status.LastBackupStatus == BackupPathStatus.StatusWarning)
                 {
                     text += $"{Environment.NewLine}{status.LastBackupErrorMessage}";
                 }
@@ -2122,17 +2366,17 @@ namespace EasyVersionBackup
                 return ModernTheme.BackupInfoDefaultColor;
             }
 
-            if (status.LastBackupStatus == "OK")
+            if (status.LastBackupStatus == BackupPathStatus.StatusOk)
             {
                 return ModernTheme.BackupInfoOkColor;
             }
 
-            if (status.LastBackupStatus == "Warning")
+            if (status.LastBackupStatus == BackupPathStatus.StatusWarning)
             {
                 return ModernTheme.BackupInfoWarningColor;
             }
 
-            if (status.LastBackupStatus == "Error")
+            if (status.LastBackupStatus == BackupPathStatus.StatusError)
             {
                 return ModernTheme.BackupInfoErrorColor;
             }
@@ -2169,22 +2413,32 @@ namespace EasyVersionBackup
 
             return bitmap;
         }
-        private void SetBackupStatus(BackupPathPair pair, string status, string errorMessage)
+        private void SetBackupStatus(
+            BackupPathPair pair,
+            string status,
+            string errorMessage,
+            string backupFileName = "")
         {
-            string key = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+            string key = SettingsStorage.CreatePairKey(
+                pair.SourceDirectory,
+                pair.TargetDirectory);
 
-            _settings.BackupStatusesByPair[key] = new BackupPathStatus
-            {
-                LastBackupDateTime = DateTime.Now.ToString("dd.MM.yyyy, HH:mm"),
-                LastBackupStatus = status,
-                LastBackupFileName = status == "Error" ? string.Empty : _lastBackupDestinationFileName,
-                LastBackupErrorMessage = errorMessage
-            };
-
-            if (status == "Error")
-            {
-                _lastBackupDestinationFileName = string.Empty;
-            }
+            _settings.BackupStatusesByPair[key] =
+                new BackupPathStatus
+                {
+                    LastBackupDateTime =
+                        DateTime.Now.ToString(
+                            "dd.MM.yyyy, HH:mm"),
+                    LastBackupStatus = status,
+                    LastBackupFileName =
+                        string.Equals(
+                            status,
+                            BackupPathStatus.StatusError,
+                            StringComparison.OrdinalIgnoreCase)
+                            ? string.Empty
+                            : backupFileName,
+                    LastBackupErrorMessage = errorMessage
+                };
         }
 
         private void InitializeBackupInfoColumn()
@@ -2229,29 +2483,106 @@ namespace EasyVersionBackup
         }
         private void SyncEnabledPairsFromGrid()
         {
-            for (int i = 0; i < _settings.BackupPathPairs.Count && i < dataGridViewConfiguredPaths.Rows.Count; i++)
+            for (int i = 0;
+                 i < _settings.BackupPathPairs.Count &&
+                 i < dataGridViewConfiguredPaths.Rows.Count;
+                 i++)
             {
-                DataGridViewRow row = dataGridViewConfiguredPaths.Rows[i];
+                DataGridViewRow row =
+                    dataGridViewConfiguredPaths.Rows[i];
 
-                object? value = row.Cells["ColumnConfiguredIsEnabled"].Value;
+                BackupPathPair pair =
+                    _settings.BackupPathPairs[i];
+
+                string oldPairKey = SettingsStorage.CreatePairKey(
+                    pair.SourceDirectory,
+                    pair.TargetDirectory);
+
+                object? value =
+                    row.Cells["ColumnConfiguredIsEnabled"].Value;
+
                 bool isEnabled = false;
 
                 if (value != null)
                 {
-                    bool.TryParse(value.ToString(), out isEnabled);
+                    bool.TryParse(
+                        value.ToString(),
+                        out isEnabled);
                 }
 
-                _settings.BackupPathPairs[i].IsEnabled = isEnabled;
-                _settings.BackupPathPairs[i].SourceDirectory = row.Cells["ColumnConfiguredSourceDirectory"].Value?.ToString()?.Trim() ?? string.Empty;
-                _settings.BackupPathPairs[i].TargetDirectory = row.Cells["ColumnConfiguredTargetDirectory"].Value?.ToString()?.Trim() ?? string.Empty;
-                _settings.BackupPathPairs[i].ExcludedPaths = row.Tag is List<string> excludedPaths
-                    ? new List<string>(excludedPaths)
-                    : new List<string>();
+                pair.IsEnabled = isEnabled;
+                pair.SourceDirectory =
+                    row.Cells["ColumnConfiguredSourceDirectory"]
+                        .Value?.ToString()?.Trim() ??
+                    string.Empty;
+
+                pair.TargetDirectory =
+                    row.Cells["ColumnConfiguredTargetDirectory"]
+                        .Value?.ToString()?.Trim() ??
+                    string.Empty;
+
+                pair.ExcludedPaths =
+                    row.Tag is List<string> excludedPaths
+                        ? new List<string>(excludedPaths)
+                        : new List<string>();
+
+                string newPairKey = SettingsStorage.CreatePairKey(
+                    pair.SourceDirectory,
+                    pair.TargetDirectory);
+
+                if (!string.Equals(
+                    oldPairKey,
+                    newPairKey,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    MigratePairStateKey(
+                        oldPairKey,
+                        newPairKey);
+                }
             }
 
-            buttonBackup.Enabled = _settings.BackupPathPairs.Any(p => p.IsEnabled);
+            buttonBackup.Enabled =
+                !_isBackupRunning &&
+                _settings.BackupPathPairs.Any(
+                    pair => pair.IsEnabled);
+
             RefreshAutoBackupTimerColumn();
             SaveSettings();
+        }
+
+        private void MigratePairStateKey(
+            string oldPairKey,
+            string newPairKey)
+        {
+            if (_settings.LastUsedVersionsByPair.TryGetValue(
+                oldPairKey,
+                out string? lastUsedVersion))
+            {
+                _settings.LastUsedVersionsByPair.Remove(
+                    oldPairKey);
+
+                _settings.LastUsedVersionsByPair[newPairKey] =
+                    lastUsedVersion;
+            }
+
+            if (_settings.BackupStatusesByPair.TryGetValue(
+                oldPairKey,
+                out BackupPathStatus? status))
+            {
+                _settings.BackupStatusesByPair.Remove(
+                    oldPairKey);
+
+                _settings.BackupStatusesByPair[newPairKey] =
+                    status;
+            }
+
+            if (_nextAutoBackupRunsByPair.TryGetValue(
+                oldPairKey,
+                out DateTime nextRun))
+            {
+                _nextAutoBackupRunsByPair.Remove(oldPairKey);
+                _nextAutoBackupRunsByPair[newPairKey] = nextRun;
+            }
         }
 
         private void dataGridViewConfiguredPaths_CurrentCellDirtyStateChanged(object sender, EventArgs e)
@@ -2332,16 +2663,7 @@ namespace EasyVersionBackup
             }
         }
 
-        private void ApplyInitialMainWindowHeightForThreeRows()
-        {
-            int gridHeight = dataGridViewConfiguredPaths.ColumnHeadersHeight + (dataGridViewConfiguredPaths.RowTemplate.Height * 3) + 2;
-            int clientHeight = dataGridViewConfiguredPaths.Top + gridHeight + 12;
 
-            ClientSize = new Size(ClientSize.Width, clientHeight);
-
-            int minimumHeight = Height - ClientSize.Height + clientHeight;
-            MinimumSize = new Size(500, minimumHeight);
-        }
 
         private void dataGridViewConfiguredPaths_CellContentClick(object? sender, DataGridViewCellEventArgs e)
         {
@@ -2633,9 +2955,13 @@ namespace EasyVersionBackup
             }
         }
 
-        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        private void Form1_FormClosing(
+            object sender,
+            FormClosingEventArgs e)
         {
-            if (_settings.CloseToSystray && e.CloseReason == CloseReason.UserClosing)
+            if (!_isExplicitExitRequested &&
+                _settings.CloseToSystray &&
+                e.CloseReason == CloseReason.UserClosing)
             {
                 e.Cancel = true;
                 SaveWindowSettings();
@@ -2644,7 +2970,6 @@ namespace EasyVersionBackup
                 Hide();
                 ShowInTaskbar = false;
                 notifyIconMain.Visible = true;
-
                 return;
             }
 
@@ -3067,14 +3392,13 @@ namespace EasyVersionBackup
             buttonBackup_Click(sender, e);
         }
 
-        private void toolStripMenuItemExitTray_Click(object sender, EventArgs e)
+        private void toolStripMenuItemExitTray_Click(
+            object sender,
+            EventArgs e)
         {
-            bool closeToSystray = _settings.CloseToSystray;
-
+            _isExplicitExitRequested = true;
             notifyIconMain.Visible = false;
-            _settings.CloseToSystray = false;
             Close();
-            _settings.CloseToSystray = closeToSystray;
         }
 
         private void RestoreFromSystray()
@@ -3096,12 +3420,20 @@ namespace EasyVersionBackup
             Activate();
         }
 
-        private enum FileErrorAction
+
+        private sealed class BackupPairRunResult
         {
-            Retry,
-            Skip,
-            IgnoreAll,
-            Abort
+            public bool Successful { get; set; }
+            public bool Canceled { get; set; }
+            public bool RetentionCanceled { get; set; }
+            public Exception? Error { get; set; }
+            public int SkippedPaths { get; set; }
+            public int PurgedBackups { get; set; }
+            public string DestinationAction { get; set; } =
+                BackupHelper.DestinationActionCreated;
+            public string DestinationFileName { get; set; } =
+                string.Empty;
         }
+
     }
 }

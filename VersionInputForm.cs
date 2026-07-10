@@ -1,4 +1,4 @@
-﻿// Design-Rule / UI consistency:
+// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // 03.05.2026 /dc
@@ -427,8 +427,11 @@ namespace EasyVersionBackup
                 int value = Math.Min(_verticalScrollBar.Value, dataGridViewVersions.Rows.Count - 1);
                 dataGridViewVersions.FirstDisplayedScrollingRowIndex = value;
             }
-            catch (InvalidOperationException)
+            catch (InvalidOperationException exception)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    "Version list could not be scrolled: " +
+                    exception.Message);
             }
         }
 
