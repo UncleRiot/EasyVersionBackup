@@ -35,7 +35,7 @@ namespace EasyVersionBackup
         public static readonly Color BackupInfoTextColor = Color.White;
         public static readonly Color ActiveExclusionColor = Color.LimeGreen;
         public static readonly Color ActiveRetentionColor = Color.FromArgb(196, 43, 28);
-        public static readonly Color ActiveSourceCleanupColor = Color.FromArgb(0, 200, 220);
+        public static readonly Color ActiveSourceCleanupColor = Color.FromArgb(40, 225, 255);
         public static readonly Color BackupProgressFillColor = Color.FromArgb(72, 160, 170, 178);
         public static readonly Color BackupProgressPulseColor = Color.FromArgb(96, 190, 200, 208);
         // public static readonly Color DisabledTextColor = WindowBorderColor;
