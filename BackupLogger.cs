@@ -1,4 +1,4 @@
-// Design-Rule / UI consistency:
+﻿// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // 03.05.2026 /dc
@@ -25,6 +25,7 @@ namespace EasyVersionBackup
         public const string LogLevelVerbose = "Verbose";
 
         public const string LogSeverityInfo = "Info";
+        public const string LogSeverityCleanup = "Sourc-Cleanup";
         public const string LogSeverityWarning = "Warnung";
         public const string LogSeverityError = "Fehler";
 
@@ -266,6 +267,11 @@ namespace EasyVersionBackup
                 normalizedMessage.Contains("result=FAILED", StringComparison.OrdinalIgnoreCase))
             {
                 return LogSeverityError;
+            }
+
+            if (logCategory.StartsWith("SOURCE CLEANUP ", StringComparison.OrdinalIgnoreCase))
+            {
+                return LogSeverityCleanup;
             }
 
             if (logCategory.Contains("WARNING", StringComparison.OrdinalIgnoreCase) ||

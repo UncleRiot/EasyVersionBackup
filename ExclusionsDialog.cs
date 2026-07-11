@@ -1,4 +1,4 @@
-// Design-Rule / UI consistency:
+﻿// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // 03.05.2026 /dc
@@ -258,13 +258,23 @@ namespace EasyVersionBackup
             PictureBox pictureBoxExclusionListHint = CreateExclusionHintIcon(
                 "pictureBoxExclusionListHint",
                 "Exclusion examples:" + Environment.NewLine +
-                "bin = exclude every folder or file named bin" + Environment.NewLine +
-                "bin\\ = exclude every folder named bin" + Environment.NewLine +
-                "*.tmp = exclude matching files" + Environment.NewLine +
-                "d:\\source\\ = exclude this absolute folder path" + Environment.NewLine +
-                "file*xyz.exe = exclude matching file names" + Environment.NewLine +
-                "file.* = exclude matching file names" + Environment.NewLine +
-                "* = wildcard for any characters inside a name" + Environment.NewLine +
+                "bin = file or folder named bin on any level" + Environment.NewLine +
+                "bin\\ = folder named bin on any level" + Environment.NewLine +
+                ".sav = all .sav files on any level" + Environment.NewLine +
+                "*.sav = all .sav files on any level" + Environment.NewLine +
+                "Saved\\SaveGames\\*.sav = .sav files directly in this source subfolder" + Environment.NewLine +
+                "**\\SaveGames\\*.sav = .sav files in every matching SaveGames folder" + Environment.NewLine +
+                "Saved\\**\\*.sav = .sav files in Saved and all subfolders" + Environment.NewLine +
+                "*\\cache\\ = cache folder exactly two levels below the source" + Environment.NewLine +
+                "d:\\source\\cache\\ = this absolute folder and everything inside it" + Environment.NewLine +
+                Environment.NewLine +
+                "Rules:" + Environment.NewLine +
+                "* matches characters inside one path level" + Environment.NewLine +
+                "** matches any number of folder levels" + Environment.NewLine +
+                "A trailing \\ means folders only" + Environment.NewLine +
+                "Relative paths start at the backup source" + Environment.NewLine +
+                "Matching is case-insensitive" + Environment.NewLine +
+                "? and wildcard-only rules are not allowed" + Environment.NewLine +
                 Environment.NewLine +
                 "Invalid Windows characters:" + Environment.NewLine +
                 "< > \" / | ?");
@@ -512,7 +522,7 @@ namespace EasyVersionBackup
 
             if (value.Contains('?'))
             {
-                return "Invalid exclusion. Use * as wildcard. ? is not supported.";
+                return "Invalid exclusion. Use * or ** as wildcard. ? is not supported.";
             }
 
             if (value.IndexOfAny(new[] { '<', '>', '"', '|' }) >= 0)
@@ -529,7 +539,10 @@ namespace EasyVersionBackup
 
             if (colonIndex >= 0)
             {
-                if (colonIndex != 1 || value.Length < 3 || !char.IsLetter(value[0]) || value[2] != '\\')
+                if (colonIndex != 1 ||
+                    value.Length < 3 ||
+                    !char.IsLetter(value[0]) ||
+                    value[2] != '\\')
                 {
                     return "Invalid exclusion. A drive path must look like d:\\source\\.";
                 }
@@ -538,21 +551,31 @@ namespace EasyVersionBackup
                 {
                     return "Invalid exclusion. Only one drive separator is allowed.";
                 }
+
+                if (value.Contains('*'))
+                {
+                    return "Invalid exclusion. Wildcards are not supported in absolute paths.";
+                }
             }
 
-            string valueWithoutTrailingSlash = value.TrimEnd('\\');
+            string valueWithoutTrailingSlash =
+                value.TrimEnd('\\');
 
-            if (string.IsNullOrWhiteSpace(valueWithoutTrailingSlash))
+            if (string.IsNullOrWhiteSpace(
+                    valueWithoutTrailingSlash))
             {
                 return "Invalid exclusion. A root separator alone is not allowed.";
             }
 
-            if (valueWithoutTrailingSlash.All(character => character == '*'))
+            if (valueWithoutTrailingSlash == "*" ||
+                valueWithoutTrailingSlash == "**")
             {
                 return "Invalid exclusion. A wildcard-only exclusion would exclude everything.";
             }
 
-            string[] parts = valueWithoutTrailingSlash.Split(new[] { '\\' }, StringSplitOptions.RemoveEmptyEntries);
+            string[] parts = valueWithoutTrailingSlash.Split(
+                new[] { '\\' },
+                StringSplitOptions.RemoveEmptyEntries);
 
             foreach (string part in parts)
             {
@@ -561,14 +584,24 @@ namespace EasyVersionBackup
                     return "Invalid exclusion. Relative navigation entries are not allowed.";
                 }
 
-                if (part.EndsWith(" ", StringComparison.Ordinal) || part.EndsWith(".", StringComparison.Ordinal))
+                if (part.EndsWith(" ", StringComparison.Ordinal) ||
+                    (part.EndsWith(".", StringComparison.Ordinal) &&
+                     part != "." &&
+                     !part.StartsWith("*.", StringComparison.Ordinal)))
                 {
                     return "Invalid exclusion. Windows names must not end with a space or dot.";
                 }
 
-                if (part.All(character => character == '*'))
+                if (part.All(character => character == '*') &&
+                    part != "*" &&
+                    part != "**")
                 {
-                    return "Invalid exclusion. Wildcard-only path parts are not allowed.";
+                    return "Invalid exclusion. Wildcard path parts may only be * or **.";
+                }
+
+                if (part.Contains("***", StringComparison.Ordinal))
+                {
+                    return "Invalid exclusion. Use * for one level or ** for any number of levels.";
                 }
             }
 

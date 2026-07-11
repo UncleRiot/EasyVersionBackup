@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,7 +8,7 @@ namespace EasyVersionBackup
 {
     public static class SettingsStorage
     {
-        private const int CurrentSettingsSchemaVersion = 2;
+        private const int CurrentSettingsSchemaVersion = 3;
 
         private static readonly string SettingsDirectoryPath =
             GetSettingsDirectoryPath();
@@ -163,6 +163,15 @@ namespace EasyVersionBackup
                 pair.RetentionMode = BackupHelper.NormalizeRetentionMode(pair.RetentionMode);
                 pair.ExcludedPaths ??= new List<string>();
                 pair.RetentionExcludedTags ??= new List<string>();
+                pair.SourceCleanupRelativeDirectory ??= string.Empty;
+                pair.SourceCleanupFileExtensions ??= new List<string>();
+                pair.SourceCleanupMode = SourceCleanupService.NormalizeMode(pair.SourceCleanupMode);
+                pair.SourceCleanupKeepAfterDate ??= string.Empty;
+
+                if (pair.SourceCleanupKeepLastCount < 1)
+                {
+                    pair.SourceCleanupKeepLastCount = 10;
+                }
 
                 if (pair.AutoBackupIntervalSeconds < 0)
                 {

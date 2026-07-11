@@ -1,4 +1,4 @@
-// Design-Rule / UI consistency:
+﻿// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // 03.05.2026 /dc
@@ -1301,6 +1301,29 @@ namespace EasyVersionBackup
                         continue;
                     }
 
+                    if (pair.SourceCleanupEnabled &&
+                        !SourceCleanupService.TryValidateSettings(
+                            pair,
+                            out _,
+                            out string sourceCleanupValidationError))
+                    {
+                        SetBackupStatus(
+                            pair,
+                            BackupPathStatus.StatusError,
+                            sourceCleanupValidationError);
+
+                        if (!pair.SkipDialogs)
+                        {
+                            ModernMessageDialog.Show(
+                                this,
+                                "Error",
+                                $"{pair.SourceDirectory}{Environment.NewLine}{Environment.NewLine}{sourceCleanupValidationError}");
+                        }
+
+                        prevalidationFailedBackups++;
+                        continue;
+                    }
+
                     if (!EnsureTargetDirectoryExistsForManualBackup(
                             pair,
                             out bool targetPreparationFailed))
@@ -1428,14 +1451,28 @@ namespace EasyVersionBackup
                         BackupPathPair dialogPair =
                             dialogPairs[i];
 
-                        versionsByPair[dialogPair] =
+                        string selectedVersion =
                             versionForm.ResultItems[i].Version;
+
+                        versionsByPair[dialogPair] =
+                            selectedVersion;
 
                         tagsByPair[dialogPair] =
                             versionForm.ResultItems[i].Tag;
 
                         ignoreErrorsByPair[dialogPair] =
                             versionForm.IgnoreCopyErrors;
+
+                        if (!VersionPatternHelper.IsDatePattern(
+                                dialogPair.Versioning) &&
+                            !string.Equals(
+                                dialogPair.Versioning,
+                                selectedVersion,
+                                StringComparison.Ordinal))
+                        {
+                            dialogPair.Versioning =
+                                selectedVersion;
+                        }
                     }
 
                     SaveSettings();
@@ -1503,7 +1540,7 @@ namespace EasyVersionBackup
                     "EasyVersionBackup";
 
                 notifyIconMain.BalloonTipText =
-                    $"Backup finished. Successful: {successfulBackups}, failed: {failedBackups}, canceled: {canceledBackups}, skipped paths: {skippedPaths}.{BackupHelper.FormatDestinationActionSummary(destinationActions)}{BackupHelper.FormatRetentionSummary(purgedBackups)}";
+                    $"Backup finished. Successful: {successfulBackups}, failed: {failedBackups}, canceled: {canceledBackups}, skipped files: {skippedPaths}.{BackupHelper.FormatDestinationActionSummary(destinationActions)}{BackupHelper.FormatRetentionSummary(purgedBackups)}";
 
                 notifyIconMain.BalloonTipIcon =
                     failedBackups > 0
@@ -1671,7 +1708,7 @@ namespace EasyVersionBackup
                         ShowFileErrorActionDialog));
 
             BackupLogger.WriteLine(
-                $"BACKUP CREATED | source=\"{pair.SourceDirectory}\" | target=\"{pair.TargetDirectory}\" | backup=\"{fileResult.DestinationFileName}\" | destinationAction={destinationAction} | skippedPaths={fileResult.SkippedCount}");
+                $"BACKUP CREATED | source=\"{pair.SourceDirectory}\" | target=\"{pair.TargetDirectory}\" | backup=\"{fileResult.DestinationFileName}\" | destinationAction={destinationAction} | skippedFiles={fileResult.SkippedCount}");
 
             return (fileResult, destinationAction);
         }
@@ -1710,6 +1747,31 @@ namespace EasyVersionBackup
 
                 _settings.LastUsedVersionsByPair[pairKey] =
                     version;
+
+                SourceCleanupResult sourceCleanupResult =
+                    new SourceCleanupResult();
+
+                string sourceCleanupErrorMessage =
+                    string.Empty;
+
+                if (pair.SourceCleanupEnabled)
+                {
+                    try
+                    {
+                        sourceCleanupResult =
+                            await Task.Run(
+                                () => SourceCleanupService.Apply(
+                                    pair));
+                    }
+                    catch (Exception cleanupException)
+                    {
+                        sourceCleanupErrorMessage =
+                            cleanupException.Message;
+
+                        BackupLogger.WriteLine(
+                            $"SOURCE CLEANUP ERROR | source=\"{pair.SourceDirectory}\" | error=\"{cleanupException.Message}\"");
+                    }
+                }
 
                 int purgedForPair = 0;
                 List<string> purgedPaths =
@@ -1767,6 +1829,25 @@ namespace EasyVersionBackup
                             fileResult.SkippedPaths));
                 }
 
+                if (sourceCleanupResult.DeletedCount > 0)
+                {
+                    statusMessages.Add(
+                        $"{sourceCleanupResult.DeletedCount} source file(s) deleted after backup.");
+                }
+
+                if (sourceCleanupResult.FailedPaths.Count > 0)
+                {
+                    statusMessages.Add(
+                        $"{sourceCleanupResult.FailedPaths.Count} source file(s) could not be deleted.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(
+                    sourceCleanupErrorMessage))
+                {
+                    statusMessages.Add(
+                        $"Source cleanup was not completed: {sourceCleanupErrorMessage}");
+                }
+
                 if (purgedForPair > 0)
                 {
                     statusMessages.Add(
@@ -1782,7 +1863,8 @@ namespace EasyVersionBackup
 
                 SetBackupStatus(
                     pair,
-                    fileResult.SkippedCount == 0 &&
+                    sourceCleanupResult.FailedPaths.Count == 0 &&
+                    string.IsNullOrWhiteSpace(sourceCleanupErrorMessage) &&
                     !retentionCanceled
                         ? BackupPathStatus.StatusOk
                         : BackupPathStatus.StatusWarning,
@@ -1840,18 +1922,33 @@ namespace EasyVersionBackup
         }
 
         private string FormatSkippedFilesMessage(
-            int skippedPaths,
-            List<string> skippedPathList)
+            int skippedFiles,
+            List<string> skippedFileList)
         {
-            if (skippedPathList.Count == 0)
+            if (skippedFileList.Count == 0)
             {
-                return $"{skippedPaths} paths skipped.";
+                return $"{skippedFiles} file(s) skipped.";
             }
 
-            return $"{skippedPaths} paths skipped:{Environment.NewLine}" +
+            int skippedFolderCount =
+                skippedFileList
+                    .Select(filePath =>
+                        Path.GetDirectoryName(filePath) ??
+                        string.Empty)
+                    .Where(directoryPath =>
+                        !string.IsNullOrWhiteSpace(directoryPath))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count();
+
+            string folderText =
+                skippedFolderCount == 1
+                    ? "1 folder"
+                    : $"{skippedFolderCount} folders";
+
+            return $"{skippedFiles} file(s) skipped in {folderText}:{Environment.NewLine}" +
                 string.Join(
                     Environment.NewLine,
-                    skippedPathList);
+                    skippedFileList);
         }
         
         
@@ -1956,6 +2053,23 @@ namespace EasyVersionBackup
                     continue;
                 }
 
+                if (pair.SourceCleanupEnabled &&
+                    !SourceCleanupService.TryValidateSettings(
+                        pair,
+                        out _,
+                        out string sourceCleanupValidationError))
+                {
+                    SetBackupStatus(
+                        pair,
+                        BackupPathStatus.StatusError,
+                        sourceCleanupValidationError);
+
+                    SaveSettings();
+                    RefreshBackupInfoColumn();
+                    failedBackups++;
+                    continue;
+                }
+
                 try
                 {
                     if (!Directory.Exists(
@@ -2020,7 +2134,7 @@ namespace EasyVersionBackup
 
             notifyIconMain.BalloonTipText =
                 successfulBackups > 0
-                    ? $"Auto-Backup finished. Successful: {successfulBackups}, failed: {failedBackups}, canceled: {canceledBackups}, skipped paths: {skippedPaths}.{BackupHelper.FormatDestinationActionSummary(destinationActions)}{BackupHelper.FormatRetentionSummary(purgedBackups)}"
+                    ? $"Auto-Backup finished. Successful: {successfulBackups}, failed: {failedBackups}, canceled: {canceledBackups}, skipped files: {skippedPaths}.{BackupHelper.FormatDestinationActionSummary(destinationActions)}{BackupHelper.FormatRetentionSummary(purgedBackups)}"
                     : $"Auto-Backup failed. Successful: 0, failed: {failedBackups}, canceled: {canceledBackups}.";
 
             notifyIconMain.BalloonTipIcon =
@@ -2731,6 +2845,12 @@ namespace EasyVersionBackup
                     pair.RetentionKeepDaysCount = dialog.ResultRetentionKeepDaysCount;
                     pair.RetentionMode = dialog.ResultRetentionMode;
                     pair.RetentionExcludedTags = new List<string>(dialog.ResultRetentionExcludedTags);
+                    pair.SourceCleanupEnabled = dialog.ResultSourceCleanupEnabled;
+                    pair.SourceCleanupRelativeDirectory = dialog.ResultSourceCleanupRelativeDirectory;
+                    pair.SourceCleanupFileExtensions = new List<string>(dialog.ResultSourceCleanupFileExtensions);
+                    pair.SourceCleanupMode = dialog.ResultSourceCleanupMode;
+                    pair.SourceCleanupKeepLastCount = dialog.ResultSourceCleanupKeepLastCount;
+                    pair.SourceCleanupKeepAfterDate = dialog.ResultSourceCleanupKeepAfterDate;
 
                     SaveSettings();
                     RestartAutoBackupCountdown();

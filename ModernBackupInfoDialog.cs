@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -8,13 +8,18 @@ namespace EasyVersionBackup
 {
     public sealed class ModernBackupInfoDialog : Form
     {
-        private readonly Label labelBackupInfo = new Label();
+        private readonly TextBox textBoxBackupInfo = new TextBox();
+        private readonly ModernTheme.ModernScrollBar verticalScrollBarBackupInfo;
         private readonly DataGridView dataGridViewBackupLog = new DataGridView();
         private readonly Label labelLogFilePath = new Label();
         private readonly Button buttonOk = new Button();
         private readonly ModernTheme.ModernScrollBar verticalScrollBarBackupLog;
         private readonly ModernTheme.ModernScrollBar horizontalScrollBarBackupLog;
         private bool isUpdatingScrollBars;
+        private bool isUpdatingBackupInfoScrollBar;
+
+        private const int EmGetFirstVisibleLine = 0x00CE;
+        private const int EmLineScroll = 0x00B6;
 
         public Size DialogSize { get; private set; }
 
@@ -36,6 +41,14 @@ namespace EasyVersionBackup
 
         public ModernBackupInfoDialog(Form owner, string backupInfoText, List<BackupLogEntry> logEntries, Size savedDialogSize)
         {
+            verticalScrollBarBackupInfo = new ModernTheme.ModernScrollBar
+            {
+                Name = "verticalScrollBarBackupInfo",
+                Orientation = Orientation.Vertical,
+                Width = ModernTheme.DataGridViewScrollBarSize,
+                Visible = false
+            };
+
             verticalScrollBarBackupLog = new ModernTheme.ModernScrollBar
             {
                 Name = "verticalScrollBarBackupLog",
@@ -72,13 +85,16 @@ namespace EasyVersionBackup
             InitializeLogFilePathLabel();
             InitializeDialogButtons();
 
-            Controls.Add(labelBackupInfo);
+            Controls.Add(textBoxBackupInfo);
+            Controls.Add(verticalScrollBarBackupInfo);
             Controls.Add(dataGridViewBackupLog);
             Controls.Add(verticalScrollBarBackupLog);
             Controls.Add(horizontalScrollBarBackupLog);
             Controls.Add(labelLogFilePath);
             Controls.Add(buttonOk);
 
+            verticalScrollBarBackupInfo.ScrollValueChanged += verticalScrollBarBackupInfo_ScrollValueChanged;
+            textBoxBackupInfo.MouseWheel += textBoxBackupInfo_MouseWheel;
             verticalScrollBarBackupLog.ScrollValueChanged += verticalScrollBarBackupLog_ScrollValueChanged;
             horizontalScrollBarBackupLog.ScrollValueChanged += horizontalScrollBarBackupLog_ScrollValueChanged;
             dataGridViewBackupLog.Scroll += dataGridViewBackupLog_Scroll;
@@ -94,6 +110,22 @@ namespace EasyVersionBackup
             AcceptButton = buttonOk;
 
             ApplyDialogLayout();
+        }
+
+        protected override bool ProcessCmdKey(
+            ref Message msg,
+            Keys keyData)
+        {
+            if (keyData == Keys.Escape)
+            {
+                DialogResult = DialogResult.Cancel;
+                Close();
+                return true;
+            }
+
+            return base.ProcessCmdKey(
+                ref msg,
+                keyData);
         }
 
         private Size GetInitialClientSize(Size savedDialogSize)
@@ -210,13 +242,19 @@ namespace EasyVersionBackup
 
         private void InitializeBackupInfoLabel(string backupInfoText)
         {
-            labelBackupInfo.AutoSize = false;
-            labelBackupInfo.BorderStyle = BorderStyle.FixedSingle;
-            labelBackupInfo.BackColor = ModernTheme.TitleBarBackColor;
-            labelBackupInfo.ForeColor = ModernTheme.TextColor;
-            labelBackupInfo.TextAlign = ContentAlignment.MiddleLeft;
-            labelBackupInfo.Padding = new Padding(6, 0, 6, 0);
-            labelBackupInfo.Text = backupInfoText;
+            textBoxBackupInfo.Multiline = true;
+            textBoxBackupInfo.ReadOnly = true;
+            textBoxBackupInfo.ScrollBars = ScrollBars.None;
+            textBoxBackupInfo.WordWrap = false;
+            textBoxBackupInfo.BorderStyle = BorderStyle.FixedSingle;
+            textBoxBackupInfo.BackColor = ModernTheme.TitleBarBackColor;
+            textBoxBackupInfo.ForeColor = ModernTheme.TextColor;
+            textBoxBackupInfo.Font = new Font(
+                ModernTheme.FontFamilyName,
+                ModernTheme.DefaultFontSize);
+            textBoxBackupInfo.Text = backupInfoText;
+            textBoxBackupInfo.TabStop = false;
+            textBoxBackupInfo.WordWrap = false;
         }
 
         private void InitializeBackupLogGrid(List<BackupLogEntry> logEntries)
@@ -301,12 +339,28 @@ namespace EasyVersionBackup
 
         private Bitmap CreateStatusIcon(string severity)
         {
-            Color color = GetStatusColor(severity);
             Bitmap bitmap = new Bitmap(16, 16);
 
             using Graphics graphics = Graphics.FromImage(bitmap);
             graphics.Clear(Color.Transparent);
-            ModernTheme.DrawBackupInfoStatusIcon(graphics, new Rectangle(0, 0, 16, 16), color);
+
+            if (string.Equals(
+                    severity,
+                    BackupLogger.LogSeverityCleanup,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                ModernTheme.DrawBackupInfoCleanupStatusIcon(
+                    graphics,
+                    new Rectangle(0, 0, 16, 16));
+            }
+            else
+            {
+                Color color = GetStatusColor(severity);
+                ModernTheme.DrawBackupInfoStatusIcon(
+                    graphics,
+                    new Rectangle(0, 0, 16, 16),
+                    color);
+            }
 
             return bitmap;
         }
@@ -321,6 +375,11 @@ namespace EasyVersionBackup
             if (string.Equals(severity, BackupLogger.LogSeverityWarning, StringComparison.OrdinalIgnoreCase))
             {
                 return ModernTheme.BackupInfoWarningColor;
+            }
+
+            if (string.Equals(severity, BackupLogger.LogSeverityCleanup, StringComparison.OrdinalIgnoreCase))
+            {
+                return ModernTheme.BackupInfoCleanupColor;
             }
 
             return ModernTheme.BackupInfoDefaultColor;
@@ -360,8 +419,20 @@ namespace EasyVersionBackup
             int margin = ModernTheme.BackupInfoDialogMargin;
             int scrollBarSize = ModernTheme.DataGridViewScrollBarSize;
 
-            labelBackupInfo.Location = new Point(margin, ModernTheme.BackupInfoDialogInfoTop);
-            labelBackupInfo.Size = new Size(ClientSize.Width - (margin * 2), ModernTheme.BackupInfoDialogInfoHeight);
+            textBoxBackupInfo.Location = new Point(margin, ModernTheme.BackupInfoDialogInfoTop);
+            textBoxBackupInfo.Size = new Size(
+                ClientSize.Width - (margin * 2) - scrollBarSize,
+                ModernTheme.BackupInfoDialogInfoHeight);
+
+            verticalScrollBarBackupInfo.Location = new Point(
+                textBoxBackupInfo.Right,
+                textBoxBackupInfo.Top);
+            verticalScrollBarBackupInfo.Size = new Size(
+                scrollBarSize,
+                textBoxBackupInfo.Height);
+            verticalScrollBarBackupInfo.BringToFront();
+
+            UpdateBackupInfoScrollBar();
 
             ModernTheme.PositionSingleDialogButton(this, buttonOk, true);
 
@@ -370,7 +441,7 @@ namespace EasyVersionBackup
                 Math.Max(0, buttonOk.Left - margin - ModernTheme.BackupInfoDialogSpacing),
                 buttonOk.Height);
 
-            int gridTop = labelBackupInfo.Bottom + ModernTheme.BackupInfoDialogSpacing;
+            int gridTop = textBoxBackupInfo.Bottom + ModernTheme.BackupInfoDialogSpacing;
             int gridBottom = labelLogFilePath.Top - ModernTheme.BackupInfoDialogSpacing;
             int gridWidth = Math.Max(
                 ModernTheme.BackupInfoDialogTextColumnMinimumWidth,
@@ -442,6 +513,95 @@ namespace EasyVersionBackup
             {
                 return 0;
             }
+        }
+
+        private void UpdateBackupInfoScrollBar()
+        {
+            if (isUpdatingBackupInfoScrollBar)
+            {
+                return;
+            }
+
+            isUpdatingBackupInfoScrollBar = true;
+
+            try
+            {
+                int lineCount = Math.Max(1, textBoxBackupInfo.Lines.Length);
+                int visibleLineCount = Math.Max(
+                    1,
+                    textBoxBackupInfo.ClientSize.Height /
+                    Math.Max(1, textBoxBackupInfo.Font.Height));
+
+                int maximum = Math.Max(0, lineCount - visibleLineCount);
+
+                verticalScrollBarBackupInfo.Minimum = 0;
+                verticalScrollBarBackupInfo.Maximum = maximum;
+                verticalScrollBarBackupInfo.LargeChange = visibleLineCount;
+                verticalScrollBarBackupInfo.Visible = maximum > 0;
+
+                int firstVisibleLine = SendMessage(
+                    textBoxBackupInfo.Handle,
+                    EmGetFirstVisibleLine,
+                    0,
+                    0).ToInt32();
+
+                verticalScrollBarBackupInfo.Value =
+                    Math.Min(maximum, Math.Max(0, firstVisibleLine));
+            }
+            finally
+            {
+                isUpdatingBackupInfoScrollBar = false;
+            }
+        }
+
+        private void verticalScrollBarBackupInfo_ScrollValueChanged(
+            object? sender,
+            EventArgs e)
+        {
+            if (isUpdatingBackupInfoScrollBar)
+            {
+                return;
+            }
+
+            int firstVisibleLine = SendMessage(
+                textBoxBackupInfo.Handle,
+                EmGetFirstVisibleLine,
+                0,
+                0).ToInt32();
+
+            int lineDifference =
+                verticalScrollBarBackupInfo.Value -
+                firstVisibleLine;
+
+            if (lineDifference != 0)
+            {
+                SendMessage(
+                    textBoxBackupInfo.Handle,
+                    EmLineScroll,
+                    0,
+                    lineDifference);
+            }
+
+            UpdateBackupInfoScrollBar();
+        }
+
+        private void textBoxBackupInfo_MouseWheel(
+            object? sender,
+            MouseEventArgs e)
+        {
+            if (!verticalScrollBarBackupInfo.Visible)
+            {
+                return;
+            }
+
+            int scrollLines = Math.Max(
+                1,
+                SystemInformation.MouseWheelScrollLines);
+
+            verticalScrollBarBackupInfo.Value +=
+                e.Delta > 0
+                    ? -scrollLines
+                    : scrollLines;
         }
 
         private void verticalScrollBarBackupLog_ScrollValueChanged(object? sender, EventArgs e)
@@ -526,10 +686,15 @@ namespace EasyVersionBackup
         {
             if (string.Equals(severity, BackupLogger.LogSeverityError, StringComparison.OrdinalIgnoreCase))
             {
-                return 3;
+                return 4;
             }
 
             if (string.Equals(severity, BackupLogger.LogSeverityWarning, StringComparison.OrdinalIgnoreCase))
+            {
+                return 3;
+            }
+
+            if (string.Equals(severity, BackupLogger.LogSeverityCleanup, StringComparison.OrdinalIgnoreCase))
             {
                 return 2;
             }

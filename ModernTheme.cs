@@ -1,4 +1,4 @@
-// Design-Rule / UI standards:
+﻿// Design-Rule / UI standards:
 // This file defines the shared visual values for the application.
 // Forms should reuse these values to keep layout, spacing, colors, sizes, and fonts consistent.
 // 03.05.2026 /dc
@@ -27,6 +27,7 @@ namespace EasyVersionBackup
         public static readonly Color BackupInfoDefaultColor = Color.FromArgb(0, 120, 215);
         public static readonly Color BackupInfoOkColor = Color.FromArgb(0, 160, 80);
         public static readonly Color BackupInfoWarningColor = Color.FromArgb(230, 180, 0);
+        public static readonly Color BackupInfoCleanupColor = Color.FromArgb(128, 0, 160);
         public static readonly Color BackupInfoErrorColor = Color.FromArgb(200, 0, 0);
         public static readonly Color BackupInfoTextColor = Color.White;
         public static readonly Color ActiveExclusionColor = Color.LimeGreen;
@@ -437,6 +438,31 @@ namespace EasyVersionBackup
             int centerX = bounds.Left + bounds.Width / 2;
             graphics.FillEllipse(iconBrush, centerX - 1, bounds.Top + 3, 2, 2);
             graphics.FillRectangle(iconBrush, centerX - 1, bounds.Top + 7, 2, bounds.Height - 10);
+
+            graphics.SmoothingMode = previousSmoothingMode;
+        }
+
+        public static void DrawBackupInfoCleanupStatusIcon(Graphics graphics, Rectangle bounds)
+        {
+            System.Drawing.Drawing2D.SmoothingMode previousSmoothingMode = graphics.SmoothingMode;
+            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            using SolidBrush circleBrush = new SolidBrush(BackupInfoCleanupColor);
+            graphics.FillEllipse(circleBrush, bounds);
+
+            using Font iconFont = new Font(
+                FontFamilyName,
+                8F,
+                FontStyle.Bold,
+                GraphicsUnit.Point);
+
+            using SolidBrush iconBrush = new SolidBrush(BackupInfoTextColor);
+
+            SizeF textSize = graphics.MeasureString("C", iconFont);
+            float textX = bounds.Left + (bounds.Width - textSize.Width) / 2F;
+            float textY = bounds.Top + (bounds.Height - textSize.Height) / 2F - 0.5F;
+
+            graphics.DrawString("C", iconFont, iconBrush, textX, textY);
 
             graphics.SmoothingMode = previousSmoothingMode;
         }

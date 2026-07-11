@@ -1,4 +1,4 @@
-// Design-Rule / UI consistency:
+﻿// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // 03.05.2026 /dc
@@ -1339,7 +1339,15 @@ namespace EasyVersionBackup
                         : new List<string>(),
                     ExcludedPaths = pair.ExcludedPaths != null
                         ? new List<string>(pair.ExcludedPaths)
-                        : new List<string>()
+                        : new List<string>(),
+                    SourceCleanupEnabled = pair.SourceCleanupEnabled,
+                    SourceCleanupRelativeDirectory = pair.SourceCleanupRelativeDirectory,
+                    SourceCleanupFileExtensions = pair.SourceCleanupFileExtensions != null
+                        ? new List<string>(pair.SourceCleanupFileExtensions)
+                        : new List<string>(),
+                    SourceCleanupMode = pair.SourceCleanupMode,
+                    SourceCleanupKeepLastCount = pair.SourceCleanupKeepLastCount,
+                    SourceCleanupKeepAfterDate = pair.SourceCleanupKeepAfterDate
                 });
             }
 

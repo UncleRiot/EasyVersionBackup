@@ -1,4 +1,4 @@
-// Design-Rule / UI consistency:
+﻿// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // 03.05.2026 /dc
@@ -524,6 +524,8 @@ namespace EasyVersionBackup
 
         private void buttonOk_Click(object sender, EventArgs e)
         {
+            dataGridViewVersions.EndEdit();
+
             ResultItems.Clear();
 
             IgnoreCopyErrors = checkBoxIgnoreCopyErrors.Checked;

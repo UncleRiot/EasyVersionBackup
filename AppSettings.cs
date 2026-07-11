@@ -1,10 +1,10 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace EasyVersionBackup
 {
     public class AppSettings
     {
-        public int SettingsSchemaVersion { get; set; } = 2;
+        public int SettingsSchemaVersion { get; set; } = 3;
         public bool ZipDestinationFiles { get; set; } = true;
         public string DefaultVersioning { get; set; } = "0.0.1";
         public bool AutoIncrementVersion { get; set; } = true;
@@ -61,5 +61,11 @@ namespace EasyVersionBackup
         public string RetentionMode { get; set; } = "Any";
         public List<string> RetentionExcludedTags { get; set; } = new List<string>();
         public List<string> ExcludedPaths { get; set; } = new List<string>();
+        public bool SourceCleanupEnabled { get; set; } = false;
+        public string SourceCleanupRelativeDirectory { get; set; } = string.Empty;
+        public List<string> SourceCleanupFileExtensions { get; set; } = new List<string>();
+        public string SourceCleanupMode { get; set; } = "KeepLast";
+        public int SourceCleanupKeepLastCount { get; set; } = 10;
+        public string SourceCleanupKeepAfterDate { get; set; } = string.Empty;
     }
 }

@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 
 
@@ -86,9 +87,7 @@ namespace EasyVersionBackup
                 .Replace(Path.AltDirectorySeparatorChar, '\\')
                 .Trim('\\');
 
-            string pathName = Path.GetFileName(fullPath);
-            string[] relativeParts = relativePath
-                .Split(new[] { '\\' }, StringSplitOptions.RemoveEmptyEntries);
+            bool isDirectory = Directory.Exists(fullPath);
 
             foreach (string excludedPath in excludedPaths)
             {
@@ -97,63 +96,38 @@ namespace EasyVersionBackup
                     continue;
                 }
 
-                string normalizedExcludedPath = excludedPath.Trim()
-                    .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+                string normalizedExclusion = excludedPath.Trim()
+                    .Replace(Path.AltDirectorySeparatorChar, '\\')
+                    .Replace(Path.DirectorySeparatorChar, '\\');
 
-                bool endsWithDirectorySeparator = normalizedExcludedPath.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal);
-                string normalizedExcludedPathWithoutSlash = normalizedExcludedPath.TrimEnd(Path.DirectorySeparatorChar);
+                bool directoryOnly = normalizedExclusion.EndsWith("\\", StringComparison.Ordinal);
+                normalizedExclusion = normalizedExclusion.TrimEnd('\\');
 
-                if (endsWithDirectorySeparator && !Directory.Exists(fullPath))
+                if (string.IsNullOrWhiteSpace(normalizedExclusion) ||
+                    normalizedExclusion.Contains('?'))
                 {
                     continue;
                 }
 
-                if (string.IsNullOrWhiteSpace(normalizedExcludedPathWithoutSlash))
+                if (directoryOnly && !isDirectory)
                 {
                     continue;
                 }
 
-                if (normalizedExcludedPathWithoutSlash.Contains('?'))
+                if (Path.IsPathRooted(normalizedExclusion))
                 {
-                    continue;
-                }
-
-                if (normalizedExcludedPathWithoutSlash.Contains('*'))
-                {
-                    string wildcardPattern = "^" + Regex.Escape(normalizedExcludedPathWithoutSlash)
-                        .Replace("\\*", ".*") + "$";
-
-                    if (Regex.IsMatch(relativePath, wildcardPattern, RegexOptions.IgnoreCase))
+                    if (normalizedExclusion.Contains('*'))
                     {
-                        return true;
+                        continue;
                     }
 
-                    if (Regex.IsMatch(pathName, wildcardPattern, RegexOptions.IgnoreCase))
-                    {
-                        return true;
-                    }
+                    string fullExcludedPath = Path.GetFullPath(normalizedExclusion)
+                        .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-                    foreach (string relativePart in relativeParts)
-                    {
-                        if (Regex.IsMatch(relativePart, wildcardPattern, RegexOptions.IgnoreCase))
-                        {
-                            return true;
-                        }
-                    }
-
-                    continue;
-                }
-
-                if (Path.IsPathRooted(normalizedExcludedPathWithoutSlash))
-                {
-                    string fullExcludedPath = Path.GetFullPath(normalizedExcludedPathWithoutSlash).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-                    if (string.Equals(fullPath, fullExcludedPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-
-                    if (fullPath.StartsWith(fullExcludedPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(fullPath, fullExcludedPath, StringComparison.OrdinalIgnoreCase) ||
+                        fullPath.StartsWith(
+                            fullExcludedPath + Path.DirectorySeparatorChar,
+                            StringComparison.OrdinalIgnoreCase))
                     {
                         return true;
                     }
@@ -161,42 +135,32 @@ namespace EasyVersionBackup
                     continue;
                 }
 
-                if (normalizedExcludedPathWithoutSlash.Contains(Path.DirectorySeparatorChar))
+                bool extensionShorthand =
+                    normalizedExclusion.StartsWith(".", StringComparison.Ordinal) &&
+                    !normalizedExclusion.Contains('\\') &&
+                    normalizedExclusion.IndexOf('*') < 0;
+
+                if (extensionShorthand)
                 {
-                    string normalizedRelativeExclusion = normalizedExcludedPathWithoutSlash.Trim(Path.DirectorySeparatorChar);
-
-                    if (string.Equals(relativePath, normalizedRelativeExclusion, StringComparison.OrdinalIgnoreCase))
+                    if (isDirectory)
                     {
-                        return true;
+                        continue;
                     }
 
-                    if (relativePath.StartsWith(normalizedRelativeExclusion + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-
-                    if (relativePath.EndsWith(Path.DirectorySeparatorChar + normalizedRelativeExclusion, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-
-                    if (relativePath.Contains(Path.DirectorySeparatorChar + normalizedRelativeExclusion + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-
-                    continue;
+                    normalizedExclusion = "*" + normalizedExclusion;
                 }
 
-                foreach (string relativePart in relativeParts)
-                {
-                    if (string.Equals(relativePart, normalizedExcludedPathWithoutSlash, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-                }
+                bool containsDirectorySeparator =
+                    normalizedExclusion.Contains('\\');
 
-                if (!endsWithDirectorySeparator && string.Equals(pathName, normalizedExcludedPathWithoutSlash, StringComparison.OrdinalIgnoreCase))
+                string regexPattern = BuildExclusionRegex(
+                    normalizedExclusion,
+                    containsDirectorySeparator);
+
+                if (Regex.IsMatch(
+                        relativePath,
+                        regexPattern,
+                        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
                 {
                     return true;
                 }
@@ -204,6 +168,71 @@ namespace EasyVersionBackup
 
             return false;
         }
+
+        private static string BuildExclusionRegex(
+            string exclusion,
+            bool anchoredToSourceRoot)
+        {
+            StringBuilder regexBuilder = new StringBuilder();
+
+            if (anchoredToSourceRoot)
+            {
+                regexBuilder.Append("^");
+            }
+            else
+            {
+                regexBuilder.Append(@"(?:^|\\)");
+            }
+
+            for (int index = 0; index < exclusion.Length; index++)
+            {
+                char currentCharacter = exclusion[index];
+
+                if (currentCharacter == '*')
+                {
+                    bool isDoubleWildcard =
+                        index + 1 < exclusion.Length &&
+                        exclusion[index + 1] == '*';
+
+                    if (isDoubleWildcard)
+                    {
+                        bool followedBySeparator =
+                            index + 2 < exclusion.Length &&
+                            exclusion[index + 2] == '\\';
+
+                        if (followedBySeparator)
+                        {
+                            regexBuilder.Append(@"(?:.*\\)?");
+                            index += 2;
+                        }
+                        else
+                        {
+                            regexBuilder.Append(".*");
+                            index++;
+                        }
+
+                        continue;
+                    }
+
+                    regexBuilder.Append(@"[^\\]*");
+                    continue;
+                }
+
+                if (currentCharacter == '\\')
+                {
+                    regexBuilder.Append(@"\\");
+                    continue;
+                }
+
+                regexBuilder.Append(
+                    Regex.Escape(
+                        currentCharacter.ToString()));
+            }
+
+            regexBuilder.Append("$");
+            return regexBuilder.ToString();
+        }
+
 
         public static string NormalizeDirectoryPath(string path)
         {

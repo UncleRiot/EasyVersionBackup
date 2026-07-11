@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -29,10 +29,12 @@ namespace EasyVersionBackup
         private readonly ComboBox comboBoxRetentionMode;
         private readonly Label labelRetentionExclusions;
         private readonly CheckedListBox checkedListBoxRetentionExclusions;
+        private readonly Button buttonSourceCleanup;
         private readonly Button buttonOk;
         private readonly Button buttonCancel;
         private readonly ToolTip toolTip = new ToolTip();
         private readonly bool zipRetentionAvailable;
+        private readonly string sourceDirectory;
         private readonly System.Collections.Generic.List<string> originalRetentionExcludedTags;
 
 
@@ -46,10 +48,17 @@ namespace EasyVersionBackup
         public int ResultRetentionKeepDaysCount { get; private set; }
         public string ResultRetentionMode { get; private set; }
         public System.Collections.Generic.List<string> ResultRetentionExcludedTags { get; private set; }
+        public bool ResultSourceCleanupEnabled { get; private set; }
+        public string ResultSourceCleanupRelativeDirectory { get; private set; }
+        public System.Collections.Generic.List<string> ResultSourceCleanupFileExtensions { get; private set; }
+        public string ResultSourceCleanupMode { get; private set; }
+        public int ResultSourceCleanupKeepLastCount { get; private set; }
+        public string ResultSourceCleanupKeepAfterDate { get; private set; }
 
         public BackupPairSettingsDialog(Form owner, BackupPathPair pair, string defaultVersioning, bool zipRetentionAvailable, System.Collections.Generic.List<string> availableTags)
         {
             this.zipRetentionAvailable = zipRetentionAvailable;
+            sourceDirectory = pair.SourceDirectory;
             originalRetentionExcludedTags = pair.RetentionExcludedTags != null
                 ? new System.Collections.Generic.List<string>(pair.RetentionExcludedTags)
                 : new System.Collections.Generic.List<string>();
@@ -69,6 +78,16 @@ namespace EasyVersionBackup
             ResultRetentionExcludedTags = pair.RetentionExcludedTags != null
                 ? new System.Collections.Generic.List<string>(pair.RetentionExcludedTags)
                 : new System.Collections.Generic.List<string>();
+            ResultSourceCleanupEnabled = pair.SourceCleanupEnabled;
+            ResultSourceCleanupRelativeDirectory = pair.SourceCleanupRelativeDirectory ?? string.Empty;
+            ResultSourceCleanupFileExtensions = pair.SourceCleanupFileExtensions != null
+                ? new System.Collections.Generic.List<string>(pair.SourceCleanupFileExtensions)
+                : new System.Collections.Generic.List<string>();
+            ResultSourceCleanupMode = SourceCleanupService.NormalizeMode(pair.SourceCleanupMode);
+            ResultSourceCleanupKeepLastCount = pair.SourceCleanupKeepLastCount < 1
+                ? 10
+                : pair.SourceCleanupKeepLastCount;
+            ResultSourceCleanupKeepAfterDate = pair.SourceCleanupKeepAfterDate ?? string.Empty;
 
             Color retentionTextColor = zipRetentionAvailable
                 ? ModernTheme.TextColor
@@ -81,8 +100,8 @@ namespace EasyVersionBackup
             Icon = owner.Icon;
             Text = "Backup Pair Settings";
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(420, 485);
-            MinimumSize = new Size(420, 485);
+            ClientSize = new Size(420, 545);
+            MinimumSize = new Size(420, 545);
             FormBorderStyle = FormBorderStyle.None;
             BackColor = ModernTheme.WindowBackColor;
             Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
@@ -215,7 +234,7 @@ namespace EasyVersionBackup
             {
                 Name = "comboBoxDefaultVersioning",
                 Location = new Point(ModernTheme.SettingsControlLeft, GetDialogRowTop(0)),
-                Size = new Size(ModernTheme.SettingsComboBoxWidth, ModernTheme.SettingsControlHeight),
+                Size = new Size(ModernTheme.SettingsComboBoxWidth, 30),
                 DropDownStyle = ComboBoxStyle.DropDown,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = ModernTheme.TitleBarBackColor,
@@ -326,6 +345,23 @@ namespace EasyVersionBackup
                 }
             }
 
+            Label labelSourceCleanup = CreateLabel("labelSourceCleanup", "Source cleanup", 11);
+
+            buttonSourceCleanup = new Button
+            {
+                Name = "buttonSourceCleanup",
+                Text = ResultSourceCleanupEnabled ? "Configured" : "Configure...",
+                Location = new Point(ModernTheme.SettingsControlLeft, GetDialogRowTop(11)),
+                Size = new Size(ModernTheme.SettingsComboBoxWidth, 30),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = ModernTheme.ControlBackColor,
+                ForeColor = ModernTheme.TextColor,
+                Cursor = Cursors.Hand,
+                UseVisualStyleBackColor = false
+            };
+            buttonSourceCleanup.FlatAppearance.BorderColor = ModernTheme.AccentColor;
+            buttonSourceCleanup.Click += buttonSourceCleanup_Click;
+
             buttonOk = ModernTheme.CreateDialogPrimaryButton("buttonOk", "OK");
             buttonCancel = ModernTheme.CreateDialogSecondaryButton("buttonCancel", "Cancel", DialogResult.Cancel);
             ModernTheme.PositionDialogButtons(this, buttonOk, buttonCancel, true);
@@ -364,6 +400,8 @@ namespace EasyVersionBackup
             Controls.Add(comboBoxRetentionMode);
             Controls.Add(labelRetentionExclusions);
             Controls.Add(checkedListBoxRetentionExclusions);
+            Controls.Add(labelSourceCleanup);
+            Controls.Add(buttonSourceCleanup);
             Controls.Add(buttonOk);
             Controls.Add(buttonCancel);
 
@@ -468,8 +506,53 @@ namespace EasyVersionBackup
             base.WndProc(ref m);
         }
 
+        private void buttonSourceCleanup_Click(object? sender, EventArgs e)
+        {
+            BackupPathPair cleanupPair = new BackupPathPair
+            {
+                SourceDirectory = sourceDirectory,
+                SourceCleanupEnabled = ResultSourceCleanupEnabled,
+                SourceCleanupRelativeDirectory = ResultSourceCleanupRelativeDirectory,
+                SourceCleanupFileExtensions = new System.Collections.Generic.List<string>(ResultSourceCleanupFileExtensions),
+                SourceCleanupMode = ResultSourceCleanupMode,
+                SourceCleanupKeepLastCount = ResultSourceCleanupKeepLastCount,
+                SourceCleanupKeepAfterDate = ResultSourceCleanupKeepAfterDate
+            };
+
+            using SourceCleanupSettingsDialog dialog =
+                new SourceCleanupSettingsDialog(
+                    this,
+                    cleanupPair);
+
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            ResultSourceCleanupEnabled =
+                dialog.ResultEnabled;
+            ResultSourceCleanupRelativeDirectory =
+                dialog.ResultRelativeDirectory;
+            ResultSourceCleanupFileExtensions =
+                new System.Collections.Generic.List<string>(
+                    dialog.ResultFileExtensions);
+            ResultSourceCleanupMode =
+                dialog.ResultMode;
+            ResultSourceCleanupKeepLastCount =
+                dialog.ResultKeepLastCount;
+            ResultSourceCleanupKeepAfterDate =
+                dialog.ResultKeepAfterDate;
+
+            buttonSourceCleanup.Text =
+                ResultSourceCleanupEnabled
+                    ? "Configured"
+                    : "Configure...";
+        }
+
         private void buttonOk_Click(object? sender, EventArgs e)
         {
+            comboBoxDefaultVersioning.DroppedDown = false;
+
             string versioning = comboBoxDefaultVersioning.Text.Trim();
 
             if (!VersionPatternHelper.IsValidVersioningValue(versioning))
