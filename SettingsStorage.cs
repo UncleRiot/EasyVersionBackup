@@ -16,10 +16,11 @@ namespace EasyVersionBackup
         private static readonly string SettingsFilePath =
             Path.Combine(SettingsDirectoryPath, "EasyVersionBackup.settings.json");
 
-        private static readonly string LegacySettingsFilePath =
+        private static readonly string PreviousUserProfileSettingsFilePath =
             Path.Combine(
-                AppContext.BaseDirectory,
-                "Settings",
+                Environment.GetFolderPath(
+                    Environment.SpecialFolder.LocalApplicationData),
+                "EasyVersionBackup",
                 "EasyVersionBackup.settings.json");
 
         public static string LastLoadErrorMessage { get; private set; } = string.Empty;
@@ -31,8 +32,8 @@ namespace EasyVersionBackup
             string sourceSettingsFilePath =
                 File.Exists(SettingsFilePath)
                     ? SettingsFilePath
-                    : File.Exists(LegacySettingsFilePath)
-                        ? LegacySettingsFilePath
+                    : File.Exists(PreviousUserProfileSettingsFilePath)
+                        ? PreviousUserProfileSettingsFilePath
                         : SettingsFilePath;
 
             try
@@ -55,7 +56,7 @@ namespace EasyVersionBackup
 
                 if (string.Equals(
                         sourceSettingsFilePath,
-                        LegacySettingsFilePath,
+                        PreviousUserProfileSettingsFilePath,
                         StringComparison.OrdinalIgnoreCase))
                 {
                     try
@@ -65,7 +66,7 @@ namespace EasyVersionBackup
                     catch (Exception migrationException)
                     {
                         LastLoadErrorMessage =
-                            $"Settings were loaded from the legacy application directory, but could not be migrated to the user profile.{Environment.NewLine}{migrationException.Message}";
+                            $"Settings were loaded from the previous user-profile location, but could not be migrated to the application Settings directory.{Environment.NewLine}{migrationException.Message}";
                     }
                 }
 
@@ -475,21 +476,9 @@ namespace EasyVersionBackup
 
         private static string GetSettingsDirectoryPath()
         {
-            string localApplicationDataDirectory =
-                Environment.GetFolderPath(
-                    Environment.SpecialFolder.LocalApplicationData);
-
-            if (string.IsNullOrWhiteSpace(
-                localApplicationDataDirectory))
-            {
-                return Path.Combine(
-                    AppContext.BaseDirectory,
-                    "Settings");
-            }
-
             return Path.Combine(
-                localApplicationDataDirectory,
-                "EasyVersionBackup");
+                AppContext.BaseDirectory,
+                "Settings");
         }
 
         private static AppSettings CreateDefaultSettings()
