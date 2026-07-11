@@ -25,7 +25,7 @@ namespace EasyVersionBackup
         public const string LogLevelVerbose = "Verbose";
 
         public const string LogSeverityInfo = "Info";
-        public const string LogSeverityCleanup = "Sourc-Cleanup";
+        public const string LogSeverityCleanup = "Source Cleanup";
         public const string LogSeverityWarning = "Warnung";
         public const string LogSeverityError = "Fehler";
 

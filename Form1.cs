@@ -160,7 +160,22 @@ namespace EasyVersionBackup
                 return;
             }
 
-            e.ToolTipText = GetConfiguredPathActionColumnToolTipText(e.ColumnIndex);
+            string columnName =
+                dataGridViewConfiguredPaths.Columns[e.ColumnIndex].Name;
+
+            if (e.RowIndex >= 0 &&
+                columnName == "ColumnConfiguredSourceSettings" &&
+                e.RowIndex < _settings.BackupPathPairs.Count)
+            {
+                e.ToolTipText =
+                    GetConfiguredSettingsToolTipText(
+                        _settings.BackupPathPairs[e.RowIndex]);
+                return;
+            }
+
+            e.ToolTipText =
+                GetConfiguredPathActionColumnToolTipText(
+                    e.ColumnIndex);
         }
         private string GetConfiguredPathActionColumnToolTipText(int columnIndex)
         {
@@ -187,6 +202,120 @@ namespace EasyVersionBackup
             }
 
             return string.Empty;
+        }
+
+        private string GetConfiguredSettingsToolTipText(
+            BackupPathPair pair)
+        {
+            bool retentionActive =
+                IsRetentionActive(pair);
+            bool sourceCleanupActive =
+                IsSourceCleanupActive(pair);
+
+            List<string> lines =
+                new List<string>
+                {
+                    "Backup pair settings",
+                    string.Empty,
+                    $"Retention: {(retentionActive ? "Active" : "Inactive")}"
+                };
+
+            if (retentionActive)
+            {
+                if (pair.RetentionKeepLastEnabled)
+                {
+                    lines.Add(
+                        $"Keep last backups: {pair.RetentionKeepLastCount}");
+                }
+
+                if (pair.RetentionKeepDaysEnabled)
+                {
+                    lines.Add(
+                        $"Keep backups for: {pair.RetentionKeepDaysCount} days");
+                }
+
+                if (pair.RetentionKeepLastEnabled &&
+                    pair.RetentionKeepDaysEnabled)
+                {
+                    string retentionMode =
+                        string.Equals(
+                            pair.RetentionMode,
+                            BackupHelper.RetentionModeAll,
+                            StringComparison.OrdinalIgnoreCase)
+                            ? "AND"
+                            : "OR";
+
+                    lines.Add(
+                        $"Retention mode: {retentionMode}");
+                }
+
+                string retentionExclusions =
+                    pair.RetentionExcludedTags != null &&
+                    pair.RetentionExcludedTags.Any(tag =>
+                        !string.IsNullOrWhiteSpace(tag))
+                        ? string.Join(
+                            ", ",
+                            pair.RetentionExcludedTags.Where(tag =>
+                                !string.IsNullOrWhiteSpace(tag)))
+                        : "None";
+
+                lines.Add(
+                    $"Retention exclusions: {retentionExclusions}");
+            }
+
+            lines.Add(string.Empty);
+            lines.Add(
+                $"Source cleanup: {(sourceCleanupActive ? "Active" : "Inactive")}");
+
+            if (sourceCleanupActive)
+            {
+                string cleanupRules =
+                    pair.SourceCleanupFileExtensions != null &&
+                    pair.SourceCleanupFileExtensions.Any(rule =>
+                        !string.IsNullOrWhiteSpace(rule))
+                        ? string.Join(
+                            ", ",
+                            pair.SourceCleanupFileExtensions.Where(rule =>
+                                !string.IsNullOrWhiteSpace(rule)))
+                        : "None";
+
+                lines.Add(
+                    $"Files to clean up: {cleanupRules}");
+
+                if (string.Equals(
+                        pair.SourceCleanupMode,
+                        SourceCleanupService.ModeKeepAfterDate,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    lines.Add(
+                        $"Files before: {pair.SourceCleanupKeepAfterDate}");
+                }
+                else
+                {
+                    lines.Add(
+                        $"Keep newest files: {pair.SourceCleanupKeepLastCount}");
+                }
+            }
+
+            return string.Join(
+                Environment.NewLine,
+                lines);
+        }
+
+        private static bool IsRetentionActive(
+            BackupPathPair pair)
+        {
+            return pair.RetentionKeepLastEnabled ||
+                pair.RetentionKeepDaysEnabled;
+        }
+
+        private static bool IsSourceCleanupActive(
+            BackupPathPair pair)
+        {
+            return pair.SourceCleanupEnabled &&
+                pair.SourceCleanupFileExtensions != null &&
+                pair.SourceCleanupFileExtensions.Any(rule =>
+                    !string.IsNullOrWhiteSpace(rule));
         }
 
 
@@ -1038,7 +1167,8 @@ namespace EasyVersionBackup
                     row.Cells["ColumnConfiguredAutoBackupTimer"].Value = string.Empty;
                     row.Cells["ColumnConfiguredSourceDirectory"].Value = pair.SourceDirectory;
                     row.Cells["ColumnConfiguredSourceBrowse"].ToolTipText = "Browse source directory";
-                    row.Cells["ColumnConfiguredSourceSettings"].ToolTipText = "Backup pair settings";
+                    row.Cells["ColumnConfiguredSourceSettings"].ToolTipText =
+                        GetConfiguredSettingsToolTipText(pair);
                     row.Cells["ColumnConfiguredSourceExclusions"].ToolTipText = "Edit excluded source paths";
                     row.Cells["ColumnConfiguredTargetDirectory"].Value = pair.TargetDirectory;
                     row.Cells["ColumnConfiguredTargetBrowse"].ToolTipText = "Browse target directory";
@@ -2854,6 +2984,16 @@ namespace EasyVersionBackup
 
                     SaveSettings();
                     RestartAutoBackupCountdown();
+
+                    DataGridViewCell settingsCell =
+                        dataGridViewConfiguredPaths.Rows[e.RowIndex]
+                            .Cells["ColumnConfiguredSourceSettings"];
+
+                    settingsCell.ToolTipText =
+                        GetConfiguredSettingsToolTipText(pair);
+
+                    dataGridViewConfiguredPaths.InvalidateCell(
+                        settingsCell);
                 }
             }
 
@@ -2958,7 +3098,23 @@ namespace EasyVersionBackup
 
             if (columnName == "ColumnConfiguredSourceSettings")
             {
-                DrawConfiguredSettingsIcon(e.Graphics, e.CellBounds, outlineColor, 1.1F);
+                bool retentionActive =
+                    e.RowIndex < _settings.BackupPathPairs.Count &&
+                    IsRetentionActive(
+                        _settings.BackupPathPairs[e.RowIndex]);
+
+                bool sourceCleanupActive =
+                    e.RowIndex < _settings.BackupPathPairs.Count &&
+                    IsSourceCleanupActive(
+                        _settings.BackupPathPairs[e.RowIndex]);
+
+                DrawConfiguredSettingsIcon(
+                    e.Graphics,
+                    e.CellBounds,
+                    outlineColor,
+                    1.1F,
+                    retentionActive,
+                    sourceCleanupActive);
             }
 
             if (columnName == "ColumnConfiguredSourceExclusions")
@@ -2972,9 +3128,41 @@ namespace EasyVersionBackup
             e.Handled = true;
         }
         
-        private void DrawConfiguredSettingsIcon(Graphics graphics, Rectangle cellBounds, Color outlineColor, float penWidth)
+        private void DrawConfiguredSettingsIcon(
+            Graphics graphics,
+            Rectangle cellBounds,
+            Color outlineColor,
+            float penWidth,
+            bool retentionActive = false,
+            bool sourceCleanupActive = false)
         {
-            ModernTheme.DrawSettingsIcon(graphics, cellBounds, outlineColor, penWidth);
+            ModernTheme.DrawSettingsIcon(
+                graphics,
+                cellBounds,
+                outlineColor,
+                penWidth);
+
+            if (retentionActive)
+            {
+                ModernTheme.DrawSettingsStatusMarker(
+                    graphics,
+                    cellBounds,
+                    "R",
+                    ModernTheme.ActiveRetentionColor,
+                    ModernTheme.BackupInfoTextColor,
+                    true);
+            }
+
+            if (sourceCleanupActive)
+            {
+                ModernTheme.DrawSettingsStatusMarker(
+                    graphics,
+                    cellBounds,
+                    "C",
+                    ModernTheme.ActiveSourceCleanupColor,
+                    ModernTheme.DarkTextColor,
+                    false);
+            }
         }
 
         private void DrawConfiguredBrowseIcon(Graphics graphics, Rectangle cellBounds, Color outlineColor)

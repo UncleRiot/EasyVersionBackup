@@ -501,11 +501,11 @@ namespace EasyVersionBackup
             DataGridViewTextBoxColumn columnRule =
                 new DataGridViewTextBoxColumn
                 {
-                    HeaderText = "Cleanup rule",
+                    HeaderText = "Files to clean up",
                     Name = "ColumnRule",
                     Width = 180,
                     ToolTipText =
-                        ".sav or Saved\\SaveGames\\.sav"
+                        "Enter a file type such as .sav, or a source-relative rule such as Saved\\SaveGames\\.sav."
                 };
 
             DataGridViewTextBoxColumn columnAffectedFiles =
@@ -575,7 +575,7 @@ namespace EasyVersionBackup
             comboBoxKeepMode.Items.Add(
                 "Newest files");
             comboBoxKeepMode.Items.Add(
-                "Files from date");
+                "Files before");
             comboBoxKeepMode.SelectedIndex =
                 ResultMode ==
                 SourceCleanupService.ModeKeepAfterDate
@@ -583,6 +583,10 @@ namespace EasyVersionBackup
                     : 0;
             comboBoxKeepMode.SelectedIndexChanged +=
                 comboBoxKeepMode_SelectedIndexChanged;
+
+            toolTipRules.SetToolTip(
+                comboBoxKeepMode,
+                "Files modified before the selected date are deleted. Files modified on or after the selected date are kept.");
 
             numericUpDownKeepLast.Name =
                 "numericUpDownKeepLast";

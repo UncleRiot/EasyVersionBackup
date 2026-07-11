@@ -221,6 +221,13 @@ namespace EasyVersionBackup
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
+            PictureBox pictureBoxRetentionHint = CreateHintIcon(
+                "pictureBoxRetentionHint",
+                "Controls automatic deletion of older backups (destination directory) after a successful backup.",
+                new Point(
+                    labelRetentionHeader.Right + ModernTheme.SettingsHintSpacing,
+                    GetDialogLabelTop(4) + 1));
+
             labelKeepLast = CreateLabel("labelKeepLast", "Keep last backups", 5);
             labelKeepLast.ForeColor = retentionTextColor;
 
@@ -304,6 +311,17 @@ namespace EasyVersionBackup
             comboBoxRetentionMode.Items.Add("AND");
             comboBoxRetentionMode.SelectedIndex = ResultRetentionMode == BackupHelper.RetentionModeAll ? 1 : 0;
 
+            PictureBox pictureBoxRetentionModeHint = CreateHintIcon(
+                "pictureBoxRetentionModeHint",
+                "OR:" + Environment.NewLine +
+                "A backup is deleted when at least one enabled retention rule allows deletion." +
+                Environment.NewLine + Environment.NewLine +
+                "AND:" + Environment.NewLine +
+                "A backup is deleted only when all enabled retention rules allow deletion.",
+                new Point(
+                    comboBoxRetentionMode.Right + ModernTheme.SettingsHintSpacing,
+                    GetDialogLabelTop(7) + 1));
+
             if (!zipRetentionAvailable)
             {
                 ModernTheme.ApplyInactiveComboBoxStyle(comboBoxRetentionMode);
@@ -323,6 +341,16 @@ namespace EasyVersionBackup
                 ForeColor = retentionTextColor,
                 Enabled = zipRetentionAvailable
             };
+
+            PictureBox pictureBoxRetentionExclusionsHint = CreateHintIcon(
+                "pictureBoxRetentionExclusionsHint",
+                "Backups containing a selected tag are never deleted by retention." +
+                Environment.NewLine + Environment.NewLine +
+                "Example:" + Environment.NewLine +
+                "Selecting “Final” protects backups tagged “Final”.",
+                new Point(
+                    checkedListBoxRetentionExclusions.Right + ModernTheme.SettingsHintSpacing,
+                    GetDialogLabelTop(8) + 1));
 
             if (availableTags != null)
             {
@@ -389,6 +417,7 @@ namespace EasyVersionBackup
             Controls.Add(textBoxAutoBackupTimer);
             Controls.Add(pictureBoxAutoBackupTimerHint);
             Controls.Add(labelRetentionHeader);
+            Controls.Add(pictureBoxRetentionHint);
             Controls.Add(labelKeepLast);
             Controls.Add(checkBoxKeepLast);
             Controls.Add(textBoxKeepLast);
@@ -398,8 +427,10 @@ namespace EasyVersionBackup
             Controls.Add(labelKeepDaysUnit);
             Controls.Add(labelRetentionMode);
             Controls.Add(comboBoxRetentionMode);
+            Controls.Add(pictureBoxRetentionModeHint);
             Controls.Add(labelRetentionExclusions);
             Controls.Add(checkedListBoxRetentionExclusions);
+            Controls.Add(pictureBoxRetentionExclusionsHint);
             Controls.Add(labelSourceCleanup);
             Controls.Add(buttonSourceCleanup);
             Controls.Add(buttonOk);

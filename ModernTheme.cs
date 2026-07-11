@@ -31,6 +31,8 @@ namespace EasyVersionBackup
         public static readonly Color BackupInfoErrorColor = Color.FromArgb(200, 0, 0);
         public static readonly Color BackupInfoTextColor = Color.White;
         public static readonly Color ActiveExclusionColor = Color.LimeGreen;
+        public static readonly Color ActiveRetentionColor = Color.FromArgb(196, 43, 28);
+        public static readonly Color ActiveSourceCleanupColor = Color.FromArgb(0, 200, 220);
         // public static readonly Color DisabledTextColor = WindowBorderColor;
         public static readonly Color DisabledTextColor = Color.FromArgb(92, 104, 112);
         public static readonly Color DisabledControlBackColor = Color.FromArgb(32, 43, 56);
@@ -425,6 +427,282 @@ namespace EasyVersionBackup
 
             graphics.SmoothingMode = previousSmoothingMode;
         }
+        public static void DrawSettingsIcon(
+            Graphics graphics,
+            Rectangle bounds,
+            Color outlineColor,
+            float penWidth,
+            Color fillColor)
+        {
+            System.Drawing.Drawing2D.SmoothingMode previousSmoothingMode =
+                graphics.SmoothingMode;
+
+            graphics.SmoothingMode =
+                System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            int left = bounds.Left + (bounds.Width - 18) / 2;
+            int top = bounds.Top + (bounds.Height - 19) / 2;
+
+            Point[] gearPoints =
+            {
+                new Point(left + 7, top),
+                new Point(left + 11, top),
+                new Point(left + 11, top + 3),
+                new Point(left + 12, top + 4),
+                new Point(left + 15, top + 2),
+                new Point(left + 17, top + 4),
+                new Point(left + 15, top + 7),
+                new Point(left + 16, top + 8),
+                new Point(left + 18, top + 8),
+                new Point(left + 18, top + 10),
+                new Point(left + 16, top + 10),
+                new Point(left + 15, top + 12),
+                new Point(left + 17, top + 15),
+                new Point(left + 15, top + 17),
+                new Point(left + 12, top + 15),
+                new Point(left + 11, top + 16),
+                new Point(left + 11, top + 19),
+                new Point(left + 7, top + 19),
+                new Point(left + 7, top + 16),
+                new Point(left + 6, top + 15),
+                new Point(left + 3, top + 17),
+                new Point(left + 1, top + 15),
+                new Point(left + 3, top + 12),
+                new Point(left + 2, top + 10),
+                new Point(left, top + 10),
+                new Point(left, top + 8),
+                new Point(left + 2, top + 8),
+                new Point(left + 3, top + 7),
+                new Point(left + 1, top + 4),
+                new Point(left + 3, top + 2),
+                new Point(left + 6, top + 4),
+                new Point(left + 7, top + 3)
+            };
+
+            using SolidBrush fillBrush = new SolidBrush(fillColor);
+            graphics.FillPolygon(fillBrush, gearPoints);
+
+            using Pen pen = new Pen(outlineColor, penWidth)
+            {
+                StartCap = System.Drawing.Drawing2D.LineCap.Square,
+                EndCap = System.Drawing.Drawing2D.LineCap.Square,
+                LineJoin = System.Drawing.Drawing2D.LineJoin.Miter
+            };
+
+            graphics.DrawPolygon(pen, gearPoints);
+
+            using SolidBrush centerBrush =
+                new SolidBrush(WindowBackColor);
+
+            graphics.FillEllipse(
+                centerBrush,
+                left + 6,
+                top + 6,
+                6,
+                6);
+
+            graphics.DrawEllipse(
+                pen,
+                left + 6,
+                top + 6,
+                6,
+                6);
+
+            graphics.SmoothingMode = previousSmoothingMode;
+        }
+
+        public static void DrawSettingsIcon(
+            Graphics graphics,
+            Rectangle bounds,
+            Color outlineColor,
+            float penWidth,
+            Color leftFillColor,
+            Color rightFillColor)
+        {
+            System.Drawing.Drawing2D.SmoothingMode previousSmoothingMode =
+                graphics.SmoothingMode;
+
+            graphics.SmoothingMode =
+                System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            int left = bounds.Left + (bounds.Width - 18) / 2;
+            int top = bounds.Top + (bounds.Height - 19) / 2;
+
+            Point[] gearPoints =
+            {
+                new Point(left + 7, top),
+                new Point(left + 11, top),
+                new Point(left + 11, top + 3),
+                new Point(left + 12, top + 4),
+                new Point(left + 15, top + 2),
+                new Point(left + 17, top + 4),
+                new Point(left + 15, top + 7),
+                new Point(left + 16, top + 8),
+                new Point(left + 18, top + 8),
+                new Point(left + 18, top + 10),
+                new Point(left + 16, top + 10),
+                new Point(left + 15, top + 12),
+                new Point(left + 17, top + 15),
+                new Point(left + 15, top + 17),
+                new Point(left + 12, top + 15),
+                new Point(left + 11, top + 16),
+                new Point(left + 11, top + 19),
+                new Point(left + 7, top + 19),
+                new Point(left + 7, top + 16),
+                new Point(left + 6, top + 15),
+                new Point(left + 3, top + 17),
+                new Point(left + 1, top + 15),
+                new Point(left + 3, top + 12),
+                new Point(left + 2, top + 10),
+                new Point(left, top + 10),
+                new Point(left, top + 8),
+                new Point(left + 2, top + 8),
+                new Point(left + 3, top + 7),
+                new Point(left + 1, top + 4),
+                new Point(left + 3, top + 2),
+                new Point(left + 6, top + 4),
+                new Point(left + 7, top + 3)
+            };
+
+            System.Drawing.Drawing2D.GraphicsState graphicsState =
+                graphics.Save();
+
+            using System.Drawing.Drawing2D.GraphicsPath gearPath =
+                new System.Drawing.Drawing2D.GraphicsPath();
+
+            gearPath.AddPolygon(gearPoints);
+            graphics.SetClip(gearPath);
+
+            using SolidBrush leftFillBrush =
+                new SolidBrush(leftFillColor);
+            using SolidBrush rightFillBrush =
+                new SolidBrush(rightFillColor);
+
+            graphics.FillRectangle(
+                leftFillBrush,
+                left,
+                top,
+                9,
+                19);
+
+            graphics.FillRectangle(
+                rightFillBrush,
+                left + 9,
+                top,
+                9,
+                19);
+
+            graphics.Restore(graphicsState);
+
+            using Pen pen = new Pen(outlineColor, penWidth)
+            {
+                StartCap =
+                    System.Drawing.Drawing2D.LineCap.Square,
+                EndCap =
+                    System.Drawing.Drawing2D.LineCap.Square,
+                LineJoin =
+                    System.Drawing.Drawing2D.LineJoin.Miter
+            };
+
+            graphics.DrawPolygon(pen, gearPoints);
+
+            using SolidBrush centerBrush =
+                new SolidBrush(WindowBackColor);
+
+            graphics.FillEllipse(
+                centerBrush,
+                left + 6,
+                top + 6,
+                6,
+                6);
+
+            graphics.DrawEllipse(
+                pen,
+                left + 6,
+                top + 6,
+                6,
+                6);
+
+            graphics.SmoothingMode = previousSmoothingMode;
+        }
+
+        public static void DrawSettingsStatusMarker(
+            Graphics graphics,
+            Rectangle bounds,
+            string markerText,
+            Color markerColor,
+            Color markerTextColor,
+            bool topLeft)
+        {
+            System.Drawing.Drawing2D.SmoothingMode previousSmoothingMode =
+                graphics.SmoothingMode;
+
+            graphics.SmoothingMode =
+                System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            const int markerSize = 11;
+
+            int gearLeft =
+                bounds.Left +
+                (bounds.Width - 18) / 2;
+
+            int gearTop =
+                bounds.Top +
+                (bounds.Height - 19) / 2;
+
+            int markerLeft =
+                topLeft
+                    ? gearLeft - 4
+                    : gearLeft + 11;
+
+            int markerTop =
+                topLeft
+                    ? gearTop - 3
+                    : gearTop + 12;
+
+            Rectangle markerBounds =
+                new Rectangle(
+                    markerLeft,
+                    markerTop,
+                    markerSize,
+                    markerSize);
+
+            using SolidBrush markerBrush =
+                new SolidBrush(markerColor);
+
+            graphics.FillEllipse(
+                markerBrush,
+                markerBounds);
+
+            using Pen markerOutlinePen =
+                new Pen(WindowBackColor, 1F);
+
+            graphics.DrawEllipse(
+                markerOutlinePen,
+                markerBounds);
+
+            using Font markerFont =
+                new Font(
+                    FontFamilyName,
+                    6.5F,
+                    FontStyle.Bold,
+                    GraphicsUnit.Point);
+
+            TextRenderer.DrawText(
+                graphics,
+                markerText,
+                markerFont,
+                markerBounds,
+                markerTextColor,
+                TextFormatFlags.HorizontalCenter |
+                TextFormatFlags.VerticalCenter |
+                TextFormatFlags.NoPadding |
+                TextFormatFlags.SingleLine);
+
+            graphics.SmoothingMode =
+                previousSmoothingMode;
+        }
+
         public static void DrawBackupInfoStatusIcon(Graphics graphics, Rectangle bounds, Color color)
         {
             System.Drawing.Drawing2D.SmoothingMode previousSmoothingMode = graphics.SmoothingMode;
