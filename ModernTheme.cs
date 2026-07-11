@@ -21,6 +21,9 @@ namespace EasyVersionBackup
         public static readonly Color TextColor = Color.FromArgb(199, 213, 224);
         public static readonly Color DarkTextColor = Color.FromArgb(23, 26, 33);
         public static readonly Color CloseButtonHoverColor = Color.FromArgb(196, 43, 28);
+        public static readonly Color DestructiveActionColor = Color.FromArgb(196, 43, 28);
+        public static readonly Color DestructiveActionHoverColor = Color.FromArgb(220, 58, 42);
+        public static readonly Color DestructiveActionPressedColor = Color.FromArgb(154, 32, 22);
         // window color settings end
 
         // status color settings start

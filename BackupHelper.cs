@@ -743,7 +743,21 @@ namespace EasyVersionBackup
             return GetRetentionPurgeCandidates(
                 pair,
                 zipDestinationFiles,
-                DateTime.UtcNow)
+                DateTime.UtcNow,
+                0)
+                .Select(file => file.FullName)
+                .ToList();
+        }
+
+        public static List<string> GetRetentionPurgePreviewPathsForNextBackup(
+            BackupPathPair pair,
+            bool zipDestinationFiles)
+        {
+            return GetRetentionPurgeCandidates(
+                pair,
+                zipDestinationFiles,
+                DateTime.UtcNow,
+                1)
                 .Select(file => file.FullName)
                 .ToList();
         }
@@ -751,7 +765,8 @@ namespace EasyVersionBackup
         private static List<FileInfo> GetRetentionPurgeCandidates(
             BackupPathPair pair,
             bool zipDestinationFiles,
-            DateTime nowUtc)
+            DateTime nowUtc,
+            int additionalNewestBackupCount)
         {
             List<FileInfo> purgeCandidates = new List<FileInfo>();
 
@@ -793,7 +808,8 @@ namespace EasyVersionBackup
                 -Math.Max(1, pair.RetentionKeepDaysCount));
 
             string retentionMode = NormalizeRetentionMode(pair.RetentionMode);
-            int newestRelevantBackupNumber = 0;
+            int newestRelevantBackupNumber =
+                Math.Max(0, additionalNewestBackupCount);
 
             foreach (FileInfo file in backupFiles)
             {

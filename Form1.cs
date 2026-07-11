@@ -1593,16 +1593,6 @@ namespace EasyVersionBackup
                         ignoreErrorsByPair[dialogPair] =
                             versionForm.IgnoreCopyErrors;
 
-                        if (!VersionPatternHelper.IsDatePattern(
-                                dialogPair.Versioning) &&
-                            !string.Equals(
-                                dialogPair.Versioning,
-                                selectedVersion,
-                                StringComparison.Ordinal))
-                        {
-                            dialogPair.Versioning =
-                                selectedVersion;
-                        }
                     }
 
                     SaveSettings();
@@ -1637,6 +1627,20 @@ namespace EasyVersionBackup
 
                         destinationActions.Add(
                             runResult.DestinationAction);
+
+                        string selectedVersion =
+                            versionsByPair[pair];
+
+                        if (!VersionPatternHelper.IsDatePattern(
+                                pair.Versioning) &&
+                            !string.Equals(
+                                pair.Versioning,
+                                selectedVersion,
+                                StringComparison.Ordinal))
+                        {
+                            pair.Versioning =
+                                selectedVersion;
+                        }
                     }
                     else if (runResult.Canceled)
                     {
@@ -1669,13 +1673,33 @@ namespace EasyVersionBackup
                 notifyIconMain.BalloonTipTitle =
                     "EasyVersionBackup";
 
-                notifyIconMain.BalloonTipText =
-                    $"Backup finished. Successful: {successfulBackups}, failed: {failedBackups}, canceled: {canceledBackups}, skipped files: {skippedPaths}.{BackupHelper.FormatDestinationActionSummary(destinationActions)}{BackupHelper.FormatRetentionSummary(purgedBackups)}";
+                bool onlyCanceled =
+                    successfulBackups == 0 &&
+                    failedBackups == 0 &&
+                    canceledBackups > 0;
 
-                notifyIconMain.BalloonTipIcon =
-                    failedBackups > 0
-                        ? ToolTipIcon.Warning
-                        : ToolTipIcon.None;
+                if (onlyCanceled)
+                {
+                    notifyIconMain.BalloonTipText =
+                        canceledBackups == 1
+                            ? "Backup canceled. No files were created or deleted."
+                            : $"Backups canceled: {canceledBackups}. No files were created or deleted.";
+
+                    notifyIconMain.BalloonTipIcon =
+                        ToolTipIcon.Info;
+                }
+                else
+                {
+                    notifyIconMain.BalloonTipText =
+                        $"Backup finished. Successful: {successfulBackups}, failed: {failedBackups}, canceled: {canceledBackups}, skipped files: {skippedPaths}.{BackupHelper.FormatDestinationActionSummary(destinationActions)}{BackupHelper.FormatRetentionSummary(purgedBackups)}";
+
+                    notifyIconMain.BalloonTipIcon =
+                        failedBackups > 0
+                            ? ToolTipIcon.Warning
+                            : canceledBackups > 0
+                                ? ToolTipIcon.Info
+                                : ToolTipIcon.None;
+                }
 
                 notifyIconMain.ShowBalloonTip(5000);
             }
@@ -1861,6 +1885,35 @@ namespace EasyVersionBackup
 
             try
             {
+                DialogResult retentionDialogResult =
+                    DialogResult.Yes;
+
+                if (ShouldRunRetentionForPair(pair))
+                {
+                    List<string> purgePreviewPaths =
+                        BackupHelper.GetRetentionPurgePreviewPathsForNextBackup(
+                            pair,
+                            _settings.ZipDestinationFiles);
+
+                    retentionDialogResult =
+                        TryConfirmRetentionWarningDialogue(
+                            pair,
+                            purgePreviewPaths);
+
+                    if (retentionDialogResult ==
+                        DialogResult.Cancel)
+                    {
+                        SetBackupStatus(
+                            pair,
+                            BackupPathStatus.StatusWarning,
+                            "Backup canceled by user before any files were created or deleted.");
+
+                        runResult.Canceled = true;
+                        logResult = "CANCELED";
+                        return runResult;
+                    }
+                }
+
                 (
                     BackupFileOperationResult fileResult,
                     string destinationAction
@@ -1907,40 +1960,21 @@ namespace EasyVersionBackup
                 List<string> purgedPaths =
                     new List<string>();
 
-                bool retentionCanceled = false;
-
-                if (ShouldRunRetentionForPair(pair))
+                if (ShouldRunRetentionForPair(pair) &&
+                    retentionDialogResult ==
+                    DialogResult.Yes)
                 {
-                    List<string> purgePreviewPaths =
+                    List<string> actualPurgePaths =
                         BackupHelper.GetRetentionPurgePreviewPaths(
                             pair,
                             _settings.ZipDestinationFiles);
 
-                    DialogResult retentionDialogResult =
-                        TryConfirmRetentionWarningDialogue(
+                    purgedForPair =
+                        BackupHelper.ApplyRetention(
                             pair,
-                            purgePreviewPaths);
-
-                    if (retentionDialogResult ==
-                        DialogResult.Cancel)
-                    {
-                        retentionCanceled = true;
-                    }
-                    else if (retentionDialogResult ==
-                        DialogResult.Yes)
-                    {
-                        purgedForPair =
-                            BackupHelper.ApplyRetention(
-                                pair,
-                                _settings.ZipDestinationFiles,
-                                purgePreviewPaths,
-                                out purgedPaths);
-                    }
-                    else
-                    {
-                        BackupHelper.ApplyRetentionDisabled(
+                            _settings.ZipDestinationFiles,
+                            actualPurgePaths,
                             out purgedPaths);
-                    }
                 }
                 else
                 {
@@ -1985,17 +2019,10 @@ namespace EasyVersionBackup
                             purgedPaths));
                 }
 
-                if (retentionCanceled)
-                {
-                    statusMessages.Add(
-                        "Backup was created, but retention was canceled.");
-                }
-
                 SetBackupStatus(
                     pair,
                     sourceCleanupResult.FailedPaths.Count == 0 &&
-                    string.IsNullOrWhiteSpace(sourceCleanupErrorMessage) &&
-                    !retentionCanceled
+                    string.IsNullOrWhiteSpace(sourceCleanupErrorMessage)
                         ? BackupPathStatus.StatusOk
                         : BackupPathStatus.StatusWarning,
                     string.Join(
@@ -2013,9 +2040,7 @@ namespace EasyVersionBackup
                     purgedForPair;
                 runResult.DestinationAction =
                     destinationAction;
-                logResult = retentionCanceled
-                    ? "SUCCESS_WITH_RETENTION_CANCELED"
-                    : "SUCCESS";
+                logResult = "SUCCESS";
             }
             catch (OperationCanceledException exception)
             {
@@ -3467,27 +3492,255 @@ namespace EasyVersionBackup
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
-            TextBox textBoxPurgePreview = new TextBox
+            Panel panelPurgePreview = new Panel
             {
-                Name = "textBoxPurgePreview",
-                Text = string.Join(Environment.NewLine, purgePreviewLines),
+                Name = "panelPurgePreview",
                 Location = new Point(18, 86),
                 Size = new Size(form.ClientSize.Width - 36, 350),
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                Multiline = true,
-                ReadOnly = true,
-                WordWrap = false,
-                ScrollBars = ScrollBars.Both,
                 BackColor = ModernTheme.ControlBackColor,
-                ForeColor = ModernTheme.TextColor,
                 BorderStyle = BorderStyle.FixedSingle
             };
+
+            Panel panelPurgePreviewViewport = new Panel
+            {
+                Name = "panelPurgePreviewViewport",
+                Location = Point.Empty,
+                BackColor = ModernTheme.ControlBackColor
+            };
+
+            Label labelPurgePreviewContent = new Label
+            {
+                Name = "labelPurgePreviewContent",
+                Text = string.Join(Environment.NewLine, purgePreviewLines),
+                AutoSize = false,
+                Location = new Point(4, 4),
+                BackColor = ModernTheme.ControlBackColor,
+                ForeColor = ModernTheme.TextColor,
+                Font = form.Font,
+                TextAlign = ContentAlignment.TopLeft
+            };
+
+            ModernTheme.ModernScrollBar verticalPurgePreviewScrollBar =
+                new ModernTheme.ModernScrollBar
+                {
+                    Name = "verticalPurgePreviewScrollBar",
+                    Orientation = Orientation.Vertical,
+                    Width = ModernTheme.DataGridViewScrollBarSize,
+                    Visible = false
+                };
+
+            ModernTheme.ModernScrollBar horizontalPurgePreviewScrollBar =
+                new ModernTheme.ModernScrollBar
+                {
+                    Name = "horizontalPurgePreviewScrollBar",
+                    Orientation = Orientation.Horizontal,
+                    Height = ModernTheme.DataGridViewScrollBarSize,
+                    Visible = false
+                };
+
+            panelPurgePreviewViewport.Controls.Add(
+                labelPurgePreviewContent);
+            panelPurgePreview.Controls.Add(
+                panelPurgePreviewViewport);
+            panelPurgePreview.Controls.Add(
+                verticalPurgePreviewScrollBar);
+            panelPurgePreview.Controls.Add(
+                horizontalPurgePreviewScrollBar);
+
+            void UpdatePurgePreviewContentPosition()
+            {
+                labelPurgePreviewContent.Location =
+                    new Point(
+                        4 - horizontalPurgePreviewScrollBar.Value,
+                        4 - verticalPurgePreviewScrollBar.Value);
+            }
+
+            void UpdatePurgePreviewLayout()
+            {
+                int scrollBarSize =
+                    ModernTheme.DataGridViewScrollBarSize;
+
+                string[] previewLines =
+                    purgePreviewLines.Count == 0
+                        ? new[] { string.Empty }
+                        : purgePreviewLines.ToArray();
+
+                int contentWidth =
+                    previewLines
+                        .Select(line =>
+                            TextRenderer.MeasureText(
+                                line,
+                                labelPurgePreviewContent.Font,
+                                Size.Empty,
+                                TextFormatFlags.NoPadding |
+                                TextFormatFlags.NoPrefix)
+                                .Width)
+                        .DefaultIfEmpty(0)
+                        .Max() + 8;
+
+                int contentHeight =
+                    previewLines.Length *
+                    labelPurgePreviewContent.Font.Height + 8;
+
+                int availableWidth =
+                    Math.Max(
+                        1,
+                        panelPurgePreview.ClientSize.Width);
+
+                int availableHeight =
+                    Math.Max(
+                        1,
+                        panelPurgePreview.ClientSize.Height);
+
+                bool horizontalVisible =
+                    contentWidth > availableWidth;
+                bool verticalVisible =
+                    contentHeight > availableHeight;
+
+                if (verticalVisible)
+                {
+                    availableWidth -= scrollBarSize;
+                }
+
+                if (horizontalVisible)
+                {
+                    availableHeight -= scrollBarSize;
+                }
+
+                if (!horizontalVisible &&
+                    contentWidth > availableWidth)
+                {
+                    horizontalVisible = true;
+                    availableHeight -= scrollBarSize;
+                }
+
+                if (!verticalVisible &&
+                    contentHeight > availableHeight)
+                {
+                    verticalVisible = true;
+                    availableWidth -= scrollBarSize;
+                }
+
+                availableWidth =
+                    Math.Max(1, availableWidth);
+                availableHeight =
+                    Math.Max(1, availableHeight);
+
+                panelPurgePreviewViewport.Location =
+                    Point.Empty;
+                panelPurgePreviewViewport.Size =
+                    new Size(
+                        availableWidth,
+                        availableHeight);
+
+                verticalPurgePreviewScrollBar.Location =
+                    new Point(
+                        availableWidth,
+                        0);
+                verticalPurgePreviewScrollBar.Size =
+                    new Size(
+                        scrollBarSize,
+                        availableHeight);
+                verticalPurgePreviewScrollBar.Minimum = 0;
+                verticalPurgePreviewScrollBar.Maximum =
+                    Math.Max(
+                        0,
+                        contentHeight - availableHeight);
+                verticalPurgePreviewScrollBar.LargeChange =
+                    availableHeight;
+                verticalPurgePreviewScrollBar.Visible =
+                    verticalVisible;
+
+                horizontalPurgePreviewScrollBar.Location =
+                    new Point(
+                        0,
+                        availableHeight);
+                horizontalPurgePreviewScrollBar.Size =
+                    new Size(
+                        availableWidth,
+                        scrollBarSize);
+                horizontalPurgePreviewScrollBar.Minimum = 0;
+                horizontalPurgePreviewScrollBar.Maximum =
+                    Math.Max(
+                        0,
+                        contentWidth - availableWidth);
+                horizontalPurgePreviewScrollBar.LargeChange =
+                    availableWidth;
+                horizontalPurgePreviewScrollBar.Visible =
+                    horizontalVisible;
+
+                labelPurgePreviewContent.Size =
+                    new Size(
+                        Math.Max(
+                            contentWidth,
+                            availableWidth - 8),
+                        Math.Max(
+                            contentHeight,
+                            availableHeight - 8));
+
+                UpdatePurgePreviewContentPosition();
+            }
+
+            verticalPurgePreviewScrollBar.ScrollValueChanged +=
+                (sender, e) =>
+                    UpdatePurgePreviewContentPosition();
+
+            horizontalPurgePreviewScrollBar.ScrollValueChanged +=
+                (sender, e) =>
+                    UpdatePurgePreviewContentPosition();
+
+            panelPurgePreviewViewport.MouseWheel +=
+                (sender, e) =>
+                {
+                    if (!verticalPurgePreviewScrollBar.Visible)
+                    {
+                        return;
+                    }
+
+                    int scrollStep =
+                        Math.Max(
+                            labelPurgePreviewContent.Font.Height,
+                            SystemInformation.MouseWheelScrollLines *
+                            labelPurgePreviewContent.Font.Height);
+
+                    verticalPurgePreviewScrollBar.Value +=
+                        e.Delta > 0
+                            ? -scrollStep
+                            : scrollStep;
+                };
+
+            labelPurgePreviewContent.MouseWheel +=
+                (sender, e) =>
+                {
+                    if (!verticalPurgePreviewScrollBar.Visible)
+                    {
+                        return;
+                    }
+
+                    int scrollStep =
+                        Math.Max(
+                            labelPurgePreviewContent.Font.Height,
+                            SystemInformation.MouseWheelScrollLines *
+                            labelPurgePreviewContent.Font.Height);
+
+                    verticalPurgePreviewScrollBar.Value +=
+                        e.Delta > 0
+                            ? -scrollStep
+                            : scrollStep;
+                };
+
+            panelPurgePreview.Resize +=
+                (sender, e) =>
+                    UpdatePurgePreviewLayout();
+
+            UpdatePurgePreviewLayout();
 
             Button buttonCancel = new Button
             {
                 Text = "Cancel",
                 Size = new Size(100, 28),
-                Location = new Point(form.ClientSize.Width - 454, 470),
+                Location = new Point(form.ClientSize.Width - 470, 470),
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
                 DialogResult = DialogResult.Cancel,
                 FlatStyle = FlatStyle.Flat,
@@ -3506,9 +3759,9 @@ namespace EasyVersionBackup
 
             Button buttonContinueWithoutPurging = new Button
             {
-                Text = "Continue (without purging)",
-                Size = new Size(190, 28),
-                Location = new Point(form.ClientSize.Width - 348, 470),
+                Text = "Continue without deleting",
+                Size = new Size(206, 30),
+                Location = new Point(form.ClientSize.Width - 364, 469),
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
                 DialogResult = DialogResult.No,
                 FlatStyle = FlatStyle.Flat,
@@ -3527,14 +3780,14 @@ namespace EasyVersionBackup
 
             Button buttonContinuePurge = new Button
             {
-                Text = "Continue (purge)",
-                Size = new Size(146, 28),
-                Location = new Point(form.ClientSize.Width - 152, 470),
+                Text = "Delete backups",
+                Size = new Size(146, 30),
+                Location = new Point(form.ClientSize.Width - 152, 469),
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
                 DialogResult = DialogResult.Yes,
                 FlatStyle = FlatStyle.Flat,
-                BackColor = ModernTheme.AccentColor,
-                ForeColor = ModernTheme.DarkTextColor,
+                BackColor = ModernTheme.DestructiveActionColor,
+                ForeColor = Color.White,
                 Cursor = Cursors.Hand,
                 TextAlign = ContentAlignment.MiddleCenter,
                 UseCompatibleTextRendering = true,
@@ -3542,12 +3795,12 @@ namespace EasyVersionBackup
             };
 
             buttonContinuePurge.FlatAppearance.BorderSize = 0;
-            buttonContinuePurge.FlatAppearance.MouseOverBackColor = ModernTheme.AccentHoverColor;
-            buttonContinuePurge.FlatAppearance.MouseDownBackColor = ModernTheme.ControlBackColor;
+            buttonContinuePurge.FlatAppearance.MouseOverBackColor = ModernTheme.DestructiveActionHoverColor;
+            buttonContinuePurge.FlatAppearance.MouseDownBackColor = ModernTheme.DestructiveActionPressedColor;
 
             form.Controls.Add(panelModernTitleBar);
             form.Controls.Add(labelMessage);
-            form.Controls.Add(textBoxPurgePreview);
+            form.Controls.Add(panelPurgePreview);
             form.Controls.Add(buttonCancel);
             form.Controls.Add(buttonContinueWithoutPurging);
             form.Controls.Add(buttonContinuePurge);
