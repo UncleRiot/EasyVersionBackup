@@ -20,6 +20,29 @@ namespace EasyVersionBackup
         public int SkippedCount => SkippedPaths.Count;
     }
 
+    public enum BackupFileProgressArea
+    {
+        Source,
+        Target
+    }
+
+    public sealed class BackupFileProgress
+    {
+        public BackupFileProgressArea Area { get; }
+        public int Percentage { get; }
+        public bool IsIndeterminate { get; }
+
+        public BackupFileProgress(
+            BackupFileProgressArea area,
+            int percentage,
+            bool isIndeterminate)
+        {
+            Area = area;
+            Percentage = Math.Max(0, Math.Min(100, percentage));
+            IsIndeterminate = isIndeterminate;
+        }
+    }
+
     public static class BackupFileService
     {
         public static BackupFileOperationResult CreateBackup(
@@ -29,7 +52,8 @@ namespace EasyVersionBackup
             bool overwriteExisting,
             List<string> excludedPaths,
             bool ignoreAllErrors,
-            Func<string, Exception, BackupFileErrorAction>? errorHandler)
+            Func<string, Exception, BackupFileErrorAction>? errorHandler,
+            Action<BackupFileProgress>? progressHandler = null)
         {
             if (string.IsNullOrWhiteSpace(sourceDirectory))
             {
@@ -65,13 +89,20 @@ namespace EasyVersionBackup
 
             try
             {
+                progressHandler?.Invoke(
+                    new BackupFileProgress(
+                        BackupFileProgressArea.Source,
+                        3,
+                        true));
+
                 if (createZip)
                 {
                     CreateZipFromDirectory(
                         fullSourceDirectory,
                         temporaryPath,
                         excludedPaths ?? new List<string>(),
-                        state);
+                        state,
+                        progressHandler);
                 }
                 else
                 {
@@ -79,8 +110,15 @@ namespace EasyVersionBackup
                         fullSourceDirectory,
                         temporaryPath,
                         excludedPaths ?? new List<string>(),
-                        state);
+                        state,
+                        progressHandler);
                 }
+
+                progressHandler?.Invoke(
+                    new BackupFileProgress(
+                        BackupFileProgressArea.Target,
+                        98,
+                        true));
 
                 PublishTemporaryBackup(
                     temporaryPath,
@@ -109,10 +147,14 @@ namespace EasyVersionBackup
             string sourceDirectory,
             string destinationDirectory,
             List<string> excludedPaths,
-            BackupFileOperationState state)
+            BackupFileOperationState state,
+            Action<BackupFileProgress>? progressHandler)
         {
             SourceTree sourceTree = EnumerateSourceTree(sourceDirectory, excludedPaths, state);
             Directory.CreateDirectory(destinationDirectory);
+
+            long totalBytes = GetTotalFileSize(sourceTree.Files);
+            long processedBytes = 0;
 
             foreach (string directoryPath in sourceTree.Directories)
             {
@@ -144,6 +186,18 @@ namespace EasyVersionBackup
                 {
                     continue;
                 }
+
+                processedBytes += GetFileSize(filePath);
+
+                progressHandler?.Invoke(
+                    new BackupFileProgress(
+                        BackupFileProgressArea.Target,
+                        CalculateProgressPercentage(
+                            processedBytes,
+                            totalBytes,
+                            10,
+                            95),
+                        false));
             }
         }
 
@@ -151,9 +205,14 @@ namespace EasyVersionBackup
             string sourceDirectory,
             string zipPath,
             List<string> excludedPaths,
-            BackupFileOperationState state)
+            BackupFileOperationState state,
+            Action<BackupFileProgress>? progressHandler)
         {
             SourceTree sourceTree = EnumerateSourceTree(sourceDirectory, excludedPaths, state);
+            long totalBytes = GetTotalFileSize(sourceTree.Files);
+            long stagedBytes = 0;
+            long archivedBytes = 0;
+
             string stagingDirectory = Path.Combine(
                 Path.GetTempPath(),
                 "EasyVersionBackup",
@@ -209,6 +268,21 @@ namespace EasyVersionBackup
                         continue;
                     }
 
+                    long currentFileSize =
+                        GetFileSize(stagedFilePath);
+
+                    stagedBytes += currentFileSize;
+
+                    progressHandler?.Invoke(
+                        new BackupFileProgress(
+                            BackupFileProgressArea.Source,
+                            CalculateProgressPercentage(
+                                stagedBytes,
+                                totalBytes,
+                                10,
+                                45),
+                            false));
+
                     try
                     {
                         string relativeFilePath = Path.GetRelativePath(sourceDirectory, filePath)
@@ -242,6 +316,18 @@ namespace EasyVersionBackup
 
                         using Stream entryStream = entry.Open();
                         stagedStream.CopyTo(entryStream);
+
+                        archivedBytes += currentFileSize;
+
+                        progressHandler?.Invoke(
+                            new BackupFileProgress(
+                                BackupFileProgressArea.Target,
+                                CalculateProgressPercentage(
+                                    archivedBytes,
+                                    totalBytes,
+                                    45,
+                                    95),
+                                false));
                     }
                     finally
                     {
@@ -410,6 +496,56 @@ namespace EasyVersionBackup
                     throw;
                 }
             }
+        }
+
+        private static long GetTotalFileSize(
+            IEnumerable<string> filePaths)
+        {
+            long totalBytes = 0;
+
+            foreach (string filePath in filePaths)
+            {
+                totalBytes += GetFileSize(filePath);
+            }
+
+            return totalBytes;
+        }
+
+        private static long GetFileSize(string filePath)
+        {
+            try
+            {
+                return Math.Max(
+                    0,
+                    new FileInfo(filePath).Length);
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static int CalculateProgressPercentage(
+            long processedBytes,
+            long totalBytes,
+            int minimumPercentage,
+            int maximumPercentage)
+        {
+            if (totalBytes <= 0)
+            {
+                return maximumPercentage;
+            }
+
+            double ratio = Math.Min(
+                1D,
+                Math.Max(
+                    0D,
+                    processedBytes / (double)totalBytes));
+
+            return minimumPercentage +
+                (int)Math.Round(
+                    (maximumPercentage - minimumPercentage) *
+                    ratio);
         }
 
         private static string BuildTemporaryPath(string destinationPath)

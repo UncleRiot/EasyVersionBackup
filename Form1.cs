@@ -32,6 +32,14 @@ namespace EasyVersionBackup
         private bool _isApplyingWindowSettings;
         private bool _isBackupRunning;
         private bool _isExplicitExitRequested;
+        private readonly Dictionary<string, BackupProgressDisplayState> _backupProgressByPair =
+            new Dictionary<string, BackupProgressDisplayState>(
+                StringComparer.OrdinalIgnoreCase);
+        private readonly System.Windows.Forms.Timer _backupProgressAnimationTimer =
+            new System.Windows.Forms.Timer
+            {
+                Interval = 100
+            };
 
         private Panel? _modernTitleBarPanel;
         private Label? _modernTitleLabel;
@@ -47,6 +55,14 @@ namespace EasyVersionBackup
         private string _baseWindowTitle = string.Empty;
 
 
+
+        private sealed class BackupProgressDisplayState
+        {
+            public BackupFileProgressArea Area { get; set; }
+            public int Percentage { get; set; }
+            public bool IsIndeterminate { get; set; }
+            public int PulseOffset { get; set; }
+        }
 
         public Form1(bool startMinimizedToSystray = false)
         {
@@ -136,6 +152,9 @@ namespace EasyVersionBackup
             _autoBackupCountdownTimer.Interval = TitleRefreshIntervalMilliseconds;
             _autoBackupCountdownTimer.Tick += autoBackupCountdownTimer_Tick;
 
+            _backupProgressAnimationTimer.Tick +=
+                backupProgressAnimationTimer_Tick;
+
             LoadSettings();
 
             _isApplyingWindowSettings = true;
@@ -153,6 +172,231 @@ namespace EasyVersionBackup
             RefreshConfiguredPaths();
             RestartAutoBackupCountdown();
         }
+        private void BeginBackupProgress(
+            BackupPathPair pair)
+        {
+            ReportBackupProgress(
+                pair,
+                new BackupFileProgress(
+                    BackupFileProgressArea.Source,
+                    1,
+                    true));
+        }
+
+        private void ReportBackupProgress(
+            BackupPathPair pair,
+            BackupFileProgress progress)
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(
+                    new Action(
+                        () => ReportBackupProgress(
+                            pair,
+                            progress)));
+                return;
+            }
+
+            string pairKey =
+                SettingsStorage.CreatePairKey(
+                    pair.SourceDirectory,
+                    pair.TargetDirectory);
+
+            if (!_backupProgressByPair.TryGetValue(
+                    pairKey,
+                    out BackupProgressDisplayState? state))
+            {
+                state =
+                    new BackupProgressDisplayState();
+
+                _backupProgressByPair[pairKey] =
+                    state;
+            }
+
+            state.Area = progress.Area;
+            state.Percentage =
+                Math.Max(
+                    state.Percentage,
+                    progress.Percentage);
+            state.IsIndeterminate =
+                progress.IsIndeterminate;
+
+            if (!_backupProgressAnimationTimer.Enabled)
+            {
+                _backupProgressAnimationTimer.Start();
+            }
+
+            InvalidateBackupProgressRow(pair);
+            RefreshAutoBackupTimerColumn();
+        }
+
+        private void EndBackupProgress(
+            BackupPathPair pair)
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(
+                    new Action(
+                        () => EndBackupProgress(pair)));
+                return;
+            }
+
+            string pairKey =
+                SettingsStorage.CreatePairKey(
+                    pair.SourceDirectory,
+                    pair.TargetDirectory);
+
+            _backupProgressByPair.Remove(pairKey);
+
+            if (_backupProgressByPair.Count == 0)
+            {
+                _backupProgressAnimationTimer.Stop();
+            }
+
+            InvalidateBackupProgressRow(pair);
+            RefreshAutoBackupTimerColumn();
+        }
+
+        private void backupProgressAnimationTimer_Tick(
+            object? sender,
+            EventArgs e)
+        {
+            foreach (BackupProgressDisplayState state in
+                     _backupProgressByPair.Values)
+            {
+                if (state.IsIndeterminate)
+                {
+                    state.PulseOffset =
+                        (state.PulseOffset + 12) % 240;
+                }
+            }
+
+            dataGridViewConfiguredPaths.Invalidate();
+        }
+
+        private bool TryGetBackupProgressForRow(
+            int rowIndex,
+            out BackupProgressDisplayState? state)
+        {
+            state = null;
+
+            if (rowIndex < 0 ||
+                rowIndex >= _settings.BackupPathPairs.Count)
+            {
+                return false;
+            }
+
+            BackupPathPair pair =
+                _settings.BackupPathPairs[rowIndex];
+
+            string pairKey =
+                SettingsStorage.CreatePairKey(
+                    pair.SourceDirectory,
+                    pair.TargetDirectory);
+
+            return _backupProgressByPair.TryGetValue(
+                pairKey,
+                out state);
+        }
+
+        private void InvalidateBackupProgressRow(
+            BackupPathPair pair)
+        {
+            int rowIndex =
+                _settings.BackupPathPairs.IndexOf(pair);
+
+            if (rowIndex < 0 ||
+                rowIndex >= dataGridViewConfiguredPaths.Rows.Count)
+            {
+                return;
+            }
+
+            dataGridViewConfiguredPaths.InvalidateRow(
+                rowIndex);
+        }
+
+        private void PaintBackupProgressCell(
+            DataGridViewCellPaintingEventArgs e,
+            BackupProgressDisplayState state)
+        {
+            e.PaintBackground(
+                e.CellBounds,
+                true);
+
+            Rectangle contentBounds =
+                Rectangle.Inflate(
+                    e.CellBounds,
+                    -1,
+                    -1);
+
+            if (state.IsIndeterminate)
+            {
+                int pulseWidth =
+                    Math.Max(
+                        24,
+                        contentBounds.Width / 4);
+
+                int travelWidth =
+                    contentBounds.Width +
+                    pulseWidth;
+
+                int pulseLeft =
+                    contentBounds.Left -
+                    pulseWidth +
+                    (state.PulseOffset %
+                     Math.Max(1, travelWidth));
+
+                Rectangle pulseBounds =
+                    new Rectangle(
+                        pulseLeft,
+                        contentBounds.Top,
+                        pulseWidth,
+                        contentBounds.Height);
+
+                using SolidBrush pulseBrush =
+                    new SolidBrush(
+                        ModernTheme.BackupProgressPulseColor);
+
+                e.Graphics.FillRectangle(
+                    pulseBrush,
+                    Rectangle.Intersect(
+                        contentBounds,
+                        pulseBounds));
+            }
+            else
+            {
+                int fillWidth =
+                    (int)Math.Round(
+                        contentBounds.Width *
+                        state.Percentage /
+                        100D);
+
+                if (fillWidth > 0)
+                {
+                    using SolidBrush progressBrush =
+                        new SolidBrush(
+                            ModernTheme.BackupProgressFillColor);
+
+                    e.Graphics.FillRectangle(
+                        progressBrush,
+                        new Rectangle(
+                            contentBounds.Left,
+                            contentBounds.Top,
+                            fillWidth,
+                            contentBounds.Height));
+                }
+            }
+
+            e.Paint(
+                e.CellBounds,
+                DataGridViewPaintParts.Border |
+                DataGridViewPaintParts.ContentForeground |
+                DataGridViewPaintParts.ErrorIcon |
+                DataGridViewPaintParts.Focus);
+
+            e.Handled = true;
+        }
+
         private void dataGridViewConfiguredPaths_CellToolTipTextNeeded(object? sender, DataGridViewCellToolTipTextNeededEventArgs e)
         {
             if (e.ColumnIndex < 0)
@@ -1763,7 +2007,8 @@ namespace EasyVersionBackup
             BackupPathPair pair,
             string version,
             string tag,
-            bool ignoreCopyErrors)
+            bool ignoreCopyErrors,
+            Action<BackupFileProgress>? progressHandler)
         {
             string sourceName =
                 new DirectoryInfo(pair.SourceDirectory).Name;
@@ -1859,7 +2104,8 @@ namespace EasyVersionBackup
                         overwriteExisting,
                         pair.ExcludedPaths,
                         ignoreCopyErrors,
-                        ShowFileErrorActionDialog));
+                        ShowFileErrorActionDialog,
+                        progressHandler));
 
             BackupLogger.WriteLine(
                 $"BACKUP CREATED | source=\"{pair.SourceDirectory}\" | target=\"{pair.TargetDirectory}\" | backup=\"{fileResult.DestinationFileName}\" | destinationAction={destinationAction} | skippedFiles={fileResult.SkippedCount}");
@@ -1885,6 +2131,8 @@ namespace EasyVersionBackup
 
             try
             {
+                BeginBackupProgress(pair);
+
                 DialogResult retentionDialogResult =
                     DialogResult.Yes;
 
@@ -1921,7 +2169,11 @@ namespace EasyVersionBackup
                     pair,
                     version,
                     tag,
-                    ignoreCopyErrors);
+                    ignoreCopyErrors,
+                    progress =>
+                        ReportBackupProgress(
+                            pair,
+                            progress));
 
                 string pairKey =
                     SettingsStorage.CreatePairKey(
@@ -1939,6 +2191,13 @@ namespace EasyVersionBackup
 
                 if (pair.SourceCleanupEnabled)
                 {
+                    ReportBackupProgress(
+                        pair,
+                        new BackupFileProgress(
+                            BackupFileProgressArea.Source,
+                            90,
+                            true));
+
                     try
                     {
                         sourceCleanupResult =
@@ -1964,6 +2223,13 @@ namespace EasyVersionBackup
                     retentionDialogResult ==
                     DialogResult.Yes)
                 {
+                    ReportBackupProgress(
+                        pair,
+                        new BackupFileProgress(
+                            BackupFileProgressArea.Target,
+                            97,
+                            true));
+
                     List<string> actualPurgePaths =
                         BackupHelper.GetRetentionPurgePreviewPaths(
                             pair,
@@ -2066,6 +2332,8 @@ namespace EasyVersionBackup
             }
             finally
             {
+                EndBackupProgress(pair);
+
                 BackupLogger.WriteLine(
                     $"{backupKind} BACKUP END | source=\"{pair.SourceDirectory}\" | target=\"{pair.TargetDirectory}\" | result={logResult}");
 
@@ -2401,6 +2669,23 @@ namespace EasyVersionBackup
 
                 BackupPathPair pair =
                     _settings.BackupPathPairs[i];
+
+                string progressPairKey =
+                    SettingsStorage.CreatePairKey(
+                        pair.SourceDirectory,
+                        pair.TargetDirectory);
+
+                if (_backupProgressByPair.TryGetValue(
+                        progressPairKey,
+                        out BackupProgressDisplayState? progressState))
+                {
+                    row.Cells[
+                        "ColumnConfiguredAutoBackupTimer"
+                    ].Value =
+                        $"{progressState.Percentage} %";
+
+                    continue;
+                }
 
                 if (!_settings.AutoBackupEnabled ||
                     !pair.IsEnabled ||
@@ -3100,6 +3385,22 @@ namespace EasyVersionBackup
 
             if (e.RowIndex < 0)
             {
+                return;
+            }
+
+            if ((columnName == "ColumnConfiguredSourceDirectory" ||
+                 columnName == "ColumnConfiguredTargetDirectory") &&
+                TryGetBackupProgressForRow(
+                    e.RowIndex,
+                    out BackupProgressDisplayState? progressState) &&
+                ((columnName == "ColumnConfiguredSourceDirectory" &&
+                  progressState.Area == BackupFileProgressArea.Source) ||
+                 (columnName == "ColumnConfiguredTargetDirectory" &&
+                  progressState.Area == BackupFileProgressArea.Target)))
+            {
+                PaintBackupProgressCell(
+                    e,
+                    progressState);
                 return;
             }
 
