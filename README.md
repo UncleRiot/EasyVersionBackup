@@ -1,3 +1,8 @@
+> [!WARNING]
+> This software can permanently delete source and destination data.
+> Read the [Data-Loss Warning and Disclaimer](DISCLAIMER.md) before use.
+
+
 # EasyVersionBackup
 
 EasyVersionBackup is a lightweight Windows tool for creating versioned backups of folders. 
