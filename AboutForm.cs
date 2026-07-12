@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Windows.Forms;
 using System.Threading;
@@ -62,7 +62,7 @@ namespace EasyVersionBackup
             FormBorderStyle = FormBorderStyle.None;
             MaximizeBox = false;
             MinimizeBox = false;
-            ClientSize = new Size(475, 315);
+            ClientSize = new Size(475, 340);
             BackColor = ModernTheme.WindowBackColor;
             Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
             DoubleBuffered = true;
@@ -196,12 +196,28 @@ namespace EasyVersionBackup
                 OpenUrl(linkLabelGithub.Text);
             };
 
+            LinkLabel linkLabelHelp = new LinkLabel
+            {
+                Text = "Help/Documentation",
+                AutoSize = true,
+                Location = new Point(130, 192),
+                LinkColor = ModernTheme.AccentColor,
+                ActiveLinkColor = ModernTheme.AccentHoverColor,
+                VisitedLinkColor = ModernTheme.AccentColor,
+                BackColor = Color.Transparent
+            };
+
+            linkLabelHelp.LinkClicked += (sender, e) =>
+            {
+                OpenUrl("https://github.com/UncleRiot/EasyVersionBackup/wiki");
+            };
+
             Label labelKoFiText = new Label
             {
                 Text = "EasyVersionBackup is free to use." + Environment.NewLine +
                        "If this tool saves you time, you can support development here:",
                 AutoSize = false,
-                Location = new Point(20, 205),
+                Location = new Point(20, 230),
                 Size = new Size(430, 40),
                 ForeColor = ModernTheme.TextColor,
                 BackColor = Color.Transparent
@@ -212,7 +228,7 @@ namespace EasyVersionBackup
                 Name = "pictureBoxKoFi",
                 Image = CreateKoFiImage(),
                 Size = new Size(179, 42),
-                Location = new Point(20, 251),
+                Location = new Point(20, 276),
                 SizeMode = PictureBoxSizeMode.StretchImage,
                 BackColor = Color.Transparent,
                 Cursor = Cursors.Hand
@@ -227,7 +243,7 @@ namespace EasyVersionBackup
             {
                 Text = "OK",
                 Size = ModernTheme.DialogButtonSize,
-                Location = new Point(388, 276),
+                Location = new Point(388, 301),
                 DialogResult = DialogResult.OK,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = ModernTheme.AccentColor,
@@ -250,6 +266,7 @@ namespace EasyVersionBackup
             Controls.Add(labelVersion);
             Controls.Add(linkLabelUpdate);
             Controls.Add(linkLabelGithub);
+            Controls.Add(linkLabelHelp);
             Controls.Add(labelKoFiText);
             Controls.Add(pictureBoxKoFi);
             Controls.Add(buttonOk);

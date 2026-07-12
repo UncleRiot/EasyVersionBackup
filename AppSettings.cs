@@ -14,6 +14,7 @@ namespace EasyVersionBackup
         public bool StartWithWindows { get; set; } = false;
         public bool IgnoreCopyErrors { get; set; } = false;
         public bool AutoPurgeEnabled { get; set; } = false;
+        public bool SourceCleanupEnabled { get; set; } = false;
         public bool ShowRetentionWarningDialogue { get; set; } = true;
         public string BackupDestinationConflictHandling { get; set; } = "Ask";
         public bool AutoBackupEnabled { get; set; } = false;

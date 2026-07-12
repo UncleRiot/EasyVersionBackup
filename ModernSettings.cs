@@ -40,6 +40,7 @@ namespace EasyVersionBackup
         private readonly CheckBox checkBoxIgnoreCopyErrors;
         private readonly CheckBox checkBoxZipDestinationFiles;
         private readonly CheckBox checkBoxAutoPurgeEnabled;
+        private readonly CheckBox checkBoxSourceCleanupEnabled;
         private readonly CheckBox checkBoxShowRetentionWarningDialogue;
         private readonly CheckBox checkBoxAutoBackupEnabled;
         private readonly TextBox textBoxAutoBackupInterval;
@@ -148,6 +149,7 @@ namespace EasyVersionBackup
             checkBoxZipDestinationFiles = CreateCheckBox("checkBoxZipDestinationFiles", 3);
             checkBoxAutoPurgeEnabled = CreateCheckBox("checkBoxAutoPurgeEnabled", 6);
             checkBoxShowRetentionWarningDialogue = CreateCheckBox("checkBoxShowRetentionWarningDialogue", 7);
+            checkBoxSourceCleanupEnabled = CreateCheckBox("checkBoxSourceCleanupEnabled", 8);
 
             textBoxAutoBackupInterval = new TextBox
             {
@@ -228,6 +230,8 @@ namespace EasyVersionBackup
             Label labelAutoPurgeEnabled = CreateLabel("labelAutoPurgeEnabled", "Retention", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(6)), new Size(ModernTheme.SettingsLabelWidth, 20));
             labelAutoPurgeEnabled.ForeColor = ModernTheme.BackupInfoErrorColor;
             Label labelShowRetentionWarningDialogue = CreateLabel("labelShowRetentionWarningDialogue", "Show warning dialogue", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(7)), new Size(ModernTheme.SettingsLabelWidth, 20));
+            Label labelSourceCleanupEnabled = CreateLabel("labelSourceCleanupEnabled", "Source cleanup", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(8)), new Size(ModernTheme.SettingsLabelWidth, 20));
+            labelSourceCleanupEnabled.ForeColor = ModernTheme.BackupInfoErrorColor;
 
             PictureBox pictureBoxDefaultVersioningHint = CreateSettingsHintIcon(
                 "pictureBoxDefaultVersioningHint",
@@ -267,6 +271,17 @@ namespace EasyVersionBackup
             pictureBoxAutoPurgeHint.Left = checkBoxAutoPurgeEnabled.Right + ModernTheme.SettingsHintSpacing;
             pictureBoxAutoPurgeHint.Top = checkBoxAutoPurgeEnabled.Top + (checkBoxAutoPurgeEnabled.Height - pictureBoxAutoPurgeHint.Height) / 2;
 
+            PictureBox pictureBoxSourceCleanupHint = CreateSettingsHintIcon(
+                "pictureBoxSourceCleanupHint",
+                "Experimental feature!" + Environment.NewLine +
+                "Source Cleanup can permanently and unintentionally delete source files after a successful backup." + Environment.NewLine +
+                "Deleted source data cannot be restored by EasyVersionBackup." + Environment.NewLine +
+                "Its use is expressly discouraged." + Environment.NewLine +
+                "Only enable this if you understand the risk of permanent data loss.");
+
+            pictureBoxSourceCleanupHint.Left = checkBoxSourceCleanupEnabled.Right + ModernTheme.SettingsHintSpacing;
+            pictureBoxSourceCleanupHint.Top = checkBoxSourceCleanupEnabled.Top + (checkBoxSourceCleanupEnabled.Height - pictureBoxSourceCleanupHint.Height) / 2;
+
             Button buttonExportSettings = CreateToolButton("buttonExportSettings", "Export Settings", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsRowTop(0)));
             Button buttonImportSettings = CreateToolButton("buttonImportSettings", "Import Settings", new Point(buttonExportSettings.Right + ModernTheme.ToolbarButtonSpacing, buttonExportSettings.Top));
 
@@ -286,6 +301,7 @@ namespace EasyVersionBackup
             settingsToolTip.SetToolTip(checkBoxZipDestinationFiles, "Create one ZIP archive instead of a backup directory");
             settingsToolTip.SetToolTip(comboBoxLogLevel, "Minimal = smallest log, Normal = useful decisions, Verbose = every file entry");
             settingsToolTip.SetToolTip(checkBoxAutoPurgeEnabled, "Experimental feature. Permanently deletes old ZIP backups. Use at your own risk.");
+            settingsToolTip.SetToolTip(checkBoxSourceCleanupEnabled, "Experimental feature. Can permanently and unintentionally delete source files. Its use is expressly discouraged.");
             settingsToolTip.SetToolTip(checkBoxShowRetentionWarningDialogue, "Ask for confirmation before Retention deletes old ZIP backups.");
             settingsToolTip.SetToolTip(buttonExportSettings, "Export current settings to " + ToolsHelper.SettingsFileName);
             settingsToolTip.SetToolTip(buttonImportSettings, "Import settings from " + ToolsHelper.SettingsFileName);
@@ -303,6 +319,7 @@ namespace EasyVersionBackup
 
             checkBoxAutoBackupEnabled.CheckedChanged += checkBoxAutoBackupEnabled_CheckedChanged;
             checkBoxAutoPurgeEnabled.CheckedChanged += checkBoxAutoPurgeEnabled_CheckedChanged;
+            checkBoxSourceCleanupEnabled.CheckedChanged += checkBoxSourceCleanupEnabled_CheckedChanged;
 
             Panel tabPageGeneral = CreateTabPage("tabPageGeneral");
             tabPageGeneral.Controls.Add(labelDefaultVersioning);
@@ -323,6 +340,9 @@ namespace EasyVersionBackup
             tabPageGeneral.Controls.Add(pictureBoxAutoPurgeHint);
             tabPageGeneral.Controls.Add(labelShowRetentionWarningDialogue);
             tabPageGeneral.Controls.Add(checkBoxShowRetentionWarningDialogue);
+            tabPageGeneral.Controls.Add(labelSourceCleanupEnabled);
+            tabPageGeneral.Controls.Add(checkBoxSourceCleanupEnabled);
+            tabPageGeneral.Controls.Add(pictureBoxSourceCleanupHint);
 
             Panel tabPageBackup = CreateTabPage("tabPageBackup");
             tabPageBackup.Controls.Add(labelIgnoreCopyErrors);
@@ -758,6 +778,7 @@ namespace EasyVersionBackup
             checkBoxIgnoreCopyErrors.Checked = settings.IgnoreCopyErrors;
             checkBoxZipDestinationFiles.Checked = settings.ZipDestinationFiles;
             checkBoxAutoPurgeEnabled.Checked = settings.AutoPurgeEnabled;
+            checkBoxSourceCleanupEnabled.Checked = settings.SourceCleanupEnabled;
             checkBoxShowRetentionWarningDialogue.Checked = settings.ShowRetentionWarningDialogue;
             checkBoxAutoBackupEnabled.Checked = settings.AutoBackupEnabled;
             textBoxAutoBackupInterval.Text = AutoBackupIntervalHelper.Format(GetAutoBackupIntervalSeconds(settings));
@@ -795,6 +816,7 @@ namespace EasyVersionBackup
             settings.IgnoreCopyErrors = checkBoxIgnoreCopyErrors.Checked;
             settings.ZipDestinationFiles = checkBoxZipDestinationFiles.Checked;
             settings.AutoPurgeEnabled = checkBoxAutoPurgeEnabled.Checked;
+            settings.SourceCleanupEnabled = checkBoxSourceCleanupEnabled.Checked;
             settings.ShowRetentionWarningDialogue = checkBoxShowRetentionWarningDialogue.Checked;
             settings.BackupDestinationConflictHandling = BackupHelper.NormalizeDestinationConflictHandling(comboBoxBackupDestinationConflictHandling.Text);
             settings.LogLevel = BackupLogger.NormalizeLogLevel(comboBoxLogLevel.Text);
@@ -830,6 +852,28 @@ namespace EasyVersionBackup
             }
         }
 
+        private void checkBoxSourceCleanupEnabled_CheckedChanged(
+            object? sender,
+            EventArgs e)
+        {
+            if (_isApplyingSettingsToUi ||
+                !checkBoxSourceCleanupEnabled.Checked)
+            {
+                return;
+            }
+
+            DialogResult confirmationResult =
+                ModernConfirmationDialog.ShowExperimentalDataLossConfirmation(
+                    this,
+                    "Source Cleanup",
+                    "permanently deletes source files from the original source folder after a successful backup.");
+
+            if (confirmationResult != DialogResult.OK)
+            {
+                checkBoxSourceCleanupEnabled.Checked = false;
+            }
+        }
+
         private void UpdateRetentionWarningDialogueControls()
         {
             checkBoxShowRetentionWarningDialogue.Enabled = checkBoxAutoPurgeEnabled.Checked;
@@ -846,9 +890,13 @@ namespace EasyVersionBackup
 
         private bool ShowAutoPurgeSafetyConfirmation()
         {
-            using AutoPurgeSafetyConfirmationDialog form = new AutoPurgeSafetyConfirmationDialog(this);
+            DialogResult confirmationResult =
+                ModernConfirmationDialog.ShowExperimentalDataLossConfirmation(
+                    this,
+                    "Retention",
+                    "permanently deletes older backup files after a successful backup.");
 
-            return form.ShowDialog(this) == DialogResult.Yes;
+            return confirmationResult == DialogResult.OK;
         }
 
         private sealed class AutoPurgeSafetyConfirmationDialog : Form
@@ -1293,6 +1341,7 @@ namespace EasyVersionBackup
                 StartWithWindows = settings.StartWithWindows,
                 IgnoreCopyErrors = settings.IgnoreCopyErrors,
                 AutoPurgeEnabled = settings.AutoPurgeEnabled,
+                SourceCleanupEnabled = settings.SourceCleanupEnabled,
                 ShowRetentionWarningDialogue = settings.ShowRetentionWarningDialogue,
                 BackupDestinationConflictHandling = settings.BackupDestinationConflictHandling,
                 LogLevel = BackupLogger.NormalizeLogLevel(settings.LogLevel),

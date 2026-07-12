@@ -349,11 +349,28 @@ namespace EasyVersionBackup
             checkBoxEnabled.Checked =
                 ResultEnabled;
             checkBoxEnabled.ForeColor =
-                ModernTheme.TextColor;
+                Color.Red;
             checkBoxEnabled.BackColor =
                 Color.Transparent;
 
+            PictureBox pictureBoxSourceCleanupHint =
+                CreateHintIcon(
+                    "pictureBoxSourceCleanupHint",
+                    "Warning: Source Cleanup is an experimental feature and its use is expressly discouraged. It may permanently and unintentionally delete source files from the original folder after a successful backup. Deleted source data cannot be restored by EasyVersionBackup. Enable it only if you fully understand the risk and have verified an independent, complete, and readable backup.",
+                    new Point(
+                        checkBoxEnabled.Left +
+                        20 +
+                        TextRenderer.MeasureText(
+                            checkBoxEnabled.Text,
+                            checkBoxEnabled.Font,
+                            Size.Empty,
+                            TextFormatFlags.NoPadding).Width +
+                        6,
+                        checkBoxEnabled.Top + 3));
+
             Controls.Add(checkBoxEnabled);
+            Controls.Add(pictureBoxSourceCleanupHint);
+            pictureBoxSourceCleanupHint.BringToFront();
         }
 
         private void InitializeToolbarButtons()
@@ -639,6 +656,21 @@ namespace EasyVersionBackup
             object? sender,
             EventArgs e)
         {
+            if (checkBoxEnabled.Checked)
+            {
+                DialogResult confirmationResult =
+                    ModernConfirmationDialog.ShowExperimentalDataLossConfirmation(
+                        this,
+                        "Source Cleanup",
+                        "permanently deletes source files from the original source folder after a successful backup.");
+
+                if (confirmationResult != DialogResult.OK)
+                {
+                    checkBoxEnabled.Checked = false;
+                    return;
+                }
+            }
+
             UpdateEnabledState();
         }
 
@@ -879,6 +911,168 @@ namespace EasyVersionBackup
 
             DialogResult = DialogResult.OK;
             Close();
+        }
+
+        private PictureBox CreateHintIcon(
+            string name,
+            string hintText,
+            Point location)
+        {
+            PictureBox pictureBox = new PictureBox
+            {
+                Name = name,
+                Location = location,
+                Size = new Size(18, 18),
+                Image = CreateHintIconBitmap(),
+                SizeMode = PictureBoxSizeMode.CenterImage,
+                Cursor = Cursors.Help,
+                BackColor = Color.Transparent
+            };
+
+            string wrappedHintText =
+                WrapHintText(
+                    hintText,
+                    300);
+
+            toolTipRules.SetToolTip(
+                pictureBox,
+                wrappedHintText);
+
+            pictureBox.Click += (sender, e) =>
+            {
+                toolTipRules.Hide(
+                    pictureBox);
+                toolTipRules.Show(
+                    wrappedHintText,
+                    pictureBox,
+                    pictureBox.Width + 5,
+                    0,
+                    8000);
+            };
+
+            return pictureBox;
+        }
+
+        private string WrapHintText(
+            string hintText,
+            int maximumWidth)
+        {
+            string[] words =
+                hintText.Split(
+                    ' ',
+                    StringSplitOptions.RemoveEmptyEntries);
+
+            System.Text.StringBuilder result =
+                new System.Text.StringBuilder();
+            System.Text.StringBuilder currentLine =
+                new System.Text.StringBuilder();
+
+            foreach (string word in words)
+            {
+                string candidate =
+                    currentLine.Length == 0
+                        ? word
+                        : currentLine + " " + word;
+
+                int candidateWidth =
+                    TextRenderer.MeasureText(
+                        candidate,
+                        Font,
+                        Size.Empty,
+                        TextFormatFlags.NoPadding).Width;
+
+                if (candidateWidth > maximumWidth &&
+                    currentLine.Length > 0)
+                {
+                    if (result.Length > 0)
+                    {
+                        result.AppendLine();
+                    }
+
+                    result.Append(
+                        currentLine);
+                    currentLine.Clear();
+                    currentLine.Append(
+                        word);
+                }
+                else
+                {
+                    if (currentLine.Length > 0)
+                    {
+                        currentLine.Append(
+                            ' ');
+                    }
+
+                    currentLine.Append(
+                        word);
+                }
+            }
+
+            if (currentLine.Length > 0)
+            {
+                if (result.Length > 0)
+                {
+                    result.AppendLine();
+                }
+
+                result.Append(
+                    currentLine);
+            }
+
+            return result.ToString();
+        }
+
+        private Bitmap CreateHintIconBitmap()
+        {
+            Bitmap bitmap =
+                new Bitmap(
+                    18,
+                    18);
+
+            using Graphics graphics =
+                Graphics.FromImage(
+                    bitmap);
+            graphics.Clear(
+                Color.Transparent);
+
+            using SolidBrush brush =
+                new SolidBrush(
+                    ModernTheme.AccentColor);
+            graphics.FillEllipse(
+                brush,
+                1,
+                1,
+                16,
+                16);
+
+            using Font font =
+                new Font(
+                    ModernTheme.FontFamilyName,
+                    ModernTheme.SettingsHintIconFontSize,
+                    FontStyle.Regular);
+            Size textSize =
+                TextRenderer.MeasureText(
+                    "?",
+                    font);
+
+            int x =
+                (18 - textSize.Width) / 2 +
+                ModernTheme.SettingsHintIconTextOffsetX;
+            int y =
+                (18 - textSize.Height) / 2 +
+                ModernTheme.SettingsHintIconTextOffsetY;
+
+            TextRenderer.DrawText(
+                graphics,
+                "?",
+                font,
+                new Point(
+                    x,
+                    y),
+                ModernTheme.DarkTextColor,
+                TextFormatFlags.NoPadding);
+
+            return bitmap;
         }
 
         protected override void OnFormClosing(

@@ -17,6 +17,7 @@ namespace EasyVersionBackup
         private readonly Label labelTitle;
         private readonly Label labelDefaultVersioning;
         private readonly Label labelRetentionHeader;
+        private readonly CheckBox checkBoxRetentionEnabled;
         private readonly Label labelKeepLast;
         private readonly Label labelKeepDays;
         private readonly Label labelKeepDaysUnit;
@@ -34,6 +35,7 @@ namespace EasyVersionBackup
         private readonly Button buttonCancel;
         private readonly ToolTip toolTip = new ToolTip();
         private readonly bool zipRetentionAvailable;
+        private readonly bool sourceCleanupAvailable;
         private readonly string sourceDirectory;
         private readonly System.Collections.Generic.List<string> originalRetentionExcludedTags;
 
@@ -55,9 +57,10 @@ namespace EasyVersionBackup
         public int ResultSourceCleanupKeepLastCount { get; private set; }
         public string ResultSourceCleanupKeepAfterDate { get; private set; }
 
-        public BackupPairSettingsDialog(Form owner, BackupPathPair pair, string defaultVersioning, bool zipRetentionAvailable, System.Collections.Generic.List<string> availableTags)
+        public BackupPairSettingsDialog(Form owner, BackupPathPair pair, string defaultVersioning, bool zipRetentionAvailable, bool sourceCleanupAvailable, System.Collections.Generic.List<string> availableTags)
         {
             this.zipRetentionAvailable = zipRetentionAvailable;
+            this.sourceCleanupAvailable = sourceCleanupAvailable;
             sourceDirectory = pair.SourceDirectory;
             originalRetentionExcludedTags = pair.RetentionExcludedTags != null
                 ? new System.Collections.Generic.List<string>(pair.RetentionExcludedTags)
@@ -70,9 +73,13 @@ namespace EasyVersionBackup
             ResultIgnoreCopyErrors = pair.IgnoreCopyErrors;
             ResultSkipDialogs = pair.SkipDialogs;
             ResultAutoBackupIntervalSeconds = pair.AutoBackupIntervalSeconds < 1 ? 0 : pair.AutoBackupIntervalSeconds;
-            ResultRetentionKeepLastEnabled = pair.RetentionKeepLastEnabled;
+            ResultRetentionKeepLastEnabled =
+                zipRetentionAvailable &&
+                pair.RetentionKeepLastEnabled;
             ResultRetentionKeepLastCount = pair.RetentionKeepLastCount <= 0 ? 10 : pair.RetentionKeepLastCount;
-            ResultRetentionKeepDaysEnabled = pair.RetentionKeepDaysEnabled;
+            ResultRetentionKeepDaysEnabled =
+                zipRetentionAvailable &&
+                pair.RetentionKeepDaysEnabled;
             ResultRetentionKeepDaysCount = pair.RetentionKeepDaysCount <= 0 ? 14 : pair.RetentionKeepDaysCount;
             ResultRetentionMode = BackupHelper.NormalizeRetentionMode(pair.RetentionMode);
             ResultRetentionExcludedTags = pair.RetentionExcludedTags != null
@@ -90,7 +97,7 @@ namespace EasyVersionBackup
             ResultSourceCleanupKeepAfterDate = pair.SourceCleanupKeepAfterDate ?? string.Empty;
 
             Color retentionTextColor = zipRetentionAvailable
-                ? ModernTheme.TextColor
+                ? Color.Red
                 : ModernTheme.DisabledTextColor;
 
             Color retentionBackColor = zipRetentionAvailable
@@ -223,10 +230,37 @@ namespace EasyVersionBackup
 
             PictureBox pictureBoxRetentionHint = CreateHintIcon(
                 "pictureBoxRetentionHint",
-                "Controls automatic deletion of older backups (destination directory) after a successful backup.",
+                "Warning: Retention is an experimental feature and permanently deletes older backups from the destination directory after a successful backup. Deleted backups cannot be restored by EasyVersionBackup. Its use is expressly discouraged. Review all retention rules carefully and keep an independent, complete, and readable backup.",
                 new Point(
-                    labelRetentionHeader.Right + ModernTheme.SettingsHintSpacing,
+                    labelRetentionHeader.Left +
+                    TextRenderer.MeasureText(
+                        labelRetentionHeader.Text,
+                        labelRetentionHeader.Font,
+                        Size.Empty,
+                        TextFormatFlags.NoPadding).Width +
+                    6,
                     GetDialogLabelTop(4) + 1));
+
+            checkBoxRetentionEnabled =
+                CreateCheckBox(
+                    "checkBoxRetentionEnabled",
+                    4);
+            checkBoxRetentionEnabled.Checked =
+                zipRetentionAvailable &&
+                (ResultRetentionKeepLastEnabled ||
+                 ResultRetentionKeepDaysEnabled);
+            checkBoxRetentionEnabled.AutoCheck =
+                zipRetentionAvailable;
+            checkBoxRetentionEnabled.TabStop =
+                zipRetentionAvailable;
+            checkBoxRetentionEnabled.Cursor =
+                zipRetentionAvailable
+                    ? Cursors.Hand
+                    : Cursors.Default;
+            checkBoxRetentionEnabled.ForeColor =
+                retentionTextColor;
+            checkBoxRetentionEnabled.CheckedChanged +=
+                checkBoxRetentionEnabled_CheckedChanged;
 
             labelKeepLast = CreateLabel("labelKeepLast", "Keep last backups", 5);
             labelKeepLast.ForeColor = retentionTextColor;
@@ -374,6 +408,20 @@ namespace EasyVersionBackup
             }
 
             Label labelSourceCleanup = CreateLabel("labelSourceCleanup", "Source cleanup", 11);
+            labelSourceCleanup.ForeColor =
+                sourceCleanupAvailable
+                    ? Color.Red
+                    : ModernTheme.DisabledTextColor;
+
+            PictureBox pictureBoxSourceCleanupHint = CreateHintIcon(
+                "pictureBoxSourceCleanupHint",
+                "Warning: Source Cleanup permanently deletes files from the source folder after a successful backup. Deleted data cannot be restored by EasyVersionBackup and may be lost permanently. This is an experimental feature and its use is expressly discouraged. Verify an independent, readable backup before enabling it.",
+                new Point(
+                    labelSourceCleanup.Left +
+                    TextRenderer.MeasureText(
+                        labelSourceCleanup.Text,
+                        labelSourceCleanup.Font).Width,
+                    GetDialogLabelTop(11) + 1));
 
             buttonSourceCleanup = new Button
             {
@@ -383,9 +431,16 @@ namespace EasyVersionBackup
                 Size = new Size(ModernTheme.SettingsComboBoxWidth, 30),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = ModernTheme.ControlBackColor,
-                ForeColor = ModernTheme.TextColor,
-                Cursor = Cursors.Hand,
-                UseVisualStyleBackColor = false
+                ForeColor =
+                    sourceCleanupAvailable
+                        ? ModernTheme.TextColor
+                        : ModernTheme.DisabledTextColor,
+                Cursor =
+                    sourceCleanupAvailable
+                        ? Cursors.Hand
+                        : Cursors.Default,
+                UseVisualStyleBackColor = false,
+                Enabled = sourceCleanupAvailable
             };
             buttonSourceCleanup.FlatAppearance.BorderColor = ModernTheme.AccentColor;
             buttonSourceCleanup.Click += buttonSourceCleanup_Click;
@@ -417,7 +472,10 @@ namespace EasyVersionBackup
             Controls.Add(textBoxAutoBackupTimer);
             Controls.Add(pictureBoxAutoBackupTimerHint);
             Controls.Add(labelRetentionHeader);
+            Controls.Add(checkBoxRetentionEnabled);
             Controls.Add(pictureBoxRetentionHint);
+            pictureBoxRetentionHint.Visible = true;
+            pictureBoxRetentionHint.BringToFront();
             Controls.Add(labelKeepLast);
             Controls.Add(checkBoxKeepLast);
             Controls.Add(textBoxKeepLast);
@@ -432,12 +490,135 @@ namespace EasyVersionBackup
             Controls.Add(checkedListBoxRetentionExclusions);
             Controls.Add(pictureBoxRetentionExclusionsHint);
             Controls.Add(labelSourceCleanup);
+            Controls.Add(pictureBoxSourceCleanupHint);
             Controls.Add(buttonSourceCleanup);
             Controls.Add(buttonOk);
             Controls.Add(buttonCancel);
 
             AcceptButton = buttonOk;
             CancelButton = buttonCancel;
+
+            UpdateRetentionControlsState();
+        }
+
+        private void checkBoxRetentionEnabled_CheckedChanged(
+            object? sender,
+            EventArgs e)
+        {
+            if (checkBoxRetentionEnabled.Checked)
+            {
+                DialogResult confirmationResult =
+                    ModernConfirmationDialog.ShowExperimentalDataLossConfirmation(
+                        this,
+                        "Retention",
+                        "permanently deletes older backup files from the destination directory after a successful backup.");
+
+                if (confirmationResult != DialogResult.OK)
+                {
+                    checkBoxRetentionEnabled.Checked = false;
+                    return;
+                }
+            }
+            else
+            {
+                checkBoxKeepLast.Checked = false;
+                checkBoxKeepDays.Checked = false;
+            }
+
+            UpdateRetentionControlsState();
+        }
+
+        private void UpdateRetentionControlsState()
+        {
+            bool retentionEnabled =
+                zipRetentionAvailable &&
+                checkBoxRetentionEnabled.Checked;
+
+            labelKeepLast.ForeColor =
+                retentionEnabled
+                    ? Color.Red
+                    : ModernTheme.DisabledTextColor;
+            checkBoxKeepLast.AutoCheck =
+                retentionEnabled;
+            checkBoxKeepLast.TabStop =
+                retentionEnabled;
+            checkBoxKeepLast.Cursor =
+                retentionEnabled
+                    ? Cursors.Hand
+                    : Cursors.Default;
+
+            textBoxKeepLast.ReadOnly =
+                !retentionEnabled;
+            textBoxKeepLast.TabStop =
+                retentionEnabled;
+            textBoxKeepLast.BackColor =
+                retentionEnabled
+                    ? ModernTheme.TitleBarBackColor
+                    : ModernTheme.DisabledControlBackColor;
+            textBoxKeepLast.ForeColor =
+                retentionEnabled
+                    ? Color.Red
+                    : ModernTheme.DisabledTextColor;
+
+            labelKeepDays.ForeColor =
+                retentionEnabled
+                    ? Color.Red
+                    : ModernTheme.DisabledTextColor;
+            checkBoxKeepDays.AutoCheck =
+                retentionEnabled;
+            checkBoxKeepDays.TabStop =
+                retentionEnabled;
+            checkBoxKeepDays.Cursor =
+                retentionEnabled
+                    ? Cursors.Hand
+                    : Cursors.Default;
+
+            textBoxKeepDays.ReadOnly =
+                !retentionEnabled;
+            textBoxKeepDays.TabStop =
+                retentionEnabled;
+            textBoxKeepDays.BackColor =
+                retentionEnabled
+                    ? ModernTheme.TitleBarBackColor
+                    : ModernTheme.DisabledControlBackColor;
+            textBoxKeepDays.ForeColor =
+                retentionEnabled
+                    ? Color.Red
+                    : ModernTheme.DisabledTextColor;
+
+            labelKeepDaysUnit.ForeColor =
+                retentionEnabled
+                    ? Color.Red
+                    : ModernTheme.DisabledTextColor;
+            labelRetentionMode.ForeColor =
+                retentionEnabled
+                    ? Color.Red
+                    : ModernTheme.DisabledTextColor;
+            comboBoxRetentionMode.Enabled =
+                retentionEnabled;
+            comboBoxRetentionMode.BackColor =
+                retentionEnabled
+                    ? ModernTheme.TitleBarBackColor
+                    : ModernTheme.DisabledControlBackColor;
+            comboBoxRetentionMode.ForeColor =
+                retentionEnabled
+                    ? Color.Red
+                    : ModernTheme.DisabledTextColor;
+
+            labelRetentionExclusions.ForeColor =
+                retentionEnabled
+                    ? Color.Red
+                    : ModernTheme.DisabledTextColor;
+            checkedListBoxRetentionExclusions.Enabled =
+                retentionEnabled;
+            checkedListBoxRetentionExclusions.BackColor =
+                retentionEnabled
+                    ? ModernTheme.TitleBarBackColor
+                    : ModernTheme.DisabledControlBackColor;
+            checkedListBoxRetentionExclusions.ForeColor =
+                retentionEnabled
+                    ? Color.Red
+                    : ModernTheme.DisabledTextColor;
         }
 
         private int GetDialogRowTop(int rowIndex)
@@ -539,6 +720,11 @@ namespace EasyVersionBackup
 
         private void buttonSourceCleanup_Click(object? sender, EventArgs e)
         {
+            if (!sourceCleanupAvailable)
+            {
+                return;
+            }
+
             BackupPathPair cleanupPair = new BackupPathPair
             {
                 SourceDirectory = sourceDirectory,
@@ -619,6 +805,7 @@ namespace EasyVersionBackup
             }
 
             if (zipRetentionAvailable &&
+                checkBoxRetentionEnabled.Checked &&
                 checkBoxKeepLast.Checked &&
                 (!int.TryParse(
                     textBoxKeepLast.Text.Trim(),
@@ -633,6 +820,7 @@ namespace EasyVersionBackup
             }
 
             if (zipRetentionAvailable &&
+                checkBoxRetentionEnabled.Checked &&
                 checkBoxKeepDays.Checked &&
                 (!int.TryParse(
                     textBoxKeepDays.Text.Trim(),
@@ -658,6 +846,7 @@ namespace EasyVersionBackup
             if (zipRetentionAvailable)
             {
                 ResultRetentionKeepLastEnabled =
+                    checkBoxRetentionEnabled.Checked &&
                     checkBoxKeepLast.Checked;
 
                 ResultRetentionKeepLastCount =
@@ -668,6 +857,7 @@ namespace EasyVersionBackup
                         : 10;
 
                 ResultRetentionKeepDaysEnabled =
+                    checkBoxRetentionEnabled.Checked &&
                     checkBoxKeepDays.Checked;
 
                 ResultRetentionKeepDaysCount =
@@ -745,15 +935,97 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            toolTip.SetToolTip(pictureBox, hintText);
+            string wrappedHintText =
+                WrapHintText(
+                    hintText,
+                    300);
+
+            toolTip.SetToolTip(
+                pictureBox,
+                wrappedHintText);
 
             pictureBox.Click += (sender, e) =>
             {
-                toolTip.Hide(pictureBox);
-                toolTip.Show(hintText, pictureBox, pictureBox.Width + 5, 0, 8000);
+                toolTip.Hide(
+                    pictureBox);
+                toolTip.Show(
+                    wrappedHintText,
+                    pictureBox,
+                    pictureBox.Width + 5,
+                    0,
+                    8000);
             };
 
             return pictureBox;
+        }
+
+        private string WrapHintText(
+            string hintText,
+            int maximumWidth)
+        {
+            string[] words =
+                hintText.Split(
+                    ' ',
+                    StringSplitOptions.RemoveEmptyEntries);
+
+            System.Text.StringBuilder result =
+                new System.Text.StringBuilder();
+            System.Text.StringBuilder currentLine =
+                new System.Text.StringBuilder();
+
+            foreach (string word in words)
+            {
+                string candidate =
+                    currentLine.Length == 0
+                        ? word
+                        : currentLine + " " + word;
+
+                int candidateWidth =
+                    TextRenderer.MeasureText(
+                        candidate,
+                        Font,
+                        Size.Empty,
+                        TextFormatFlags.NoPadding).Width;
+
+                if (candidateWidth > maximumWidth &&
+                    currentLine.Length > 0)
+                {
+                    if (result.Length > 0)
+                    {
+                        result.AppendLine();
+                    }
+
+                    result.Append(
+                        currentLine);
+                    currentLine.Clear();
+                    currentLine.Append(
+                        word);
+                }
+                else
+                {
+                    if (currentLine.Length > 0)
+                    {
+                        currentLine.Append(
+                            ' ');
+                    }
+
+                    currentLine.Append(
+                        word);
+                }
+            }
+
+            if (currentLine.Length > 0)
+            {
+                if (result.Length > 0)
+                {
+                    result.AppendLine();
+                }
+
+                result.Append(
+                    currentLine);
+            }
+
+            return result.ToString();
         }
 
         private Bitmap CreateHintIconBitmap()

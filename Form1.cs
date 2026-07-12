@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -17,6 +18,7 @@ namespace EasyVersionBackup
     public partial class Form1 : Form
     {
         private AppSettings _settings = new AppSettings();
+        private AppSettings _lastLoggedSettingsSnapshot = new AppSettings();
         private readonly System.Windows.Forms.Timer _autoBackupCountdownTimer = new System.Windows.Forms.Timer();
         private readonly Dictionary<string, DateTime> _nextAutoBackupRunsByPair = new Dictionary<string, DateTime>();
         private bool _isRefreshingConfiguredPaths;
@@ -156,6 +158,9 @@ namespace EasyVersionBackup
                 backupProgressAnimationTimer_Tick;
 
             LoadSettings();
+            _lastLoggedSettingsSnapshot =
+                CloneSettings(
+                    _settings);
 
             _isApplyingWindowSettings = true;
 
@@ -546,17 +551,19 @@ namespace EasyVersionBackup
                 lines);
         }
 
-        private static bool IsRetentionActive(
+        private bool IsRetentionActive(
             BackupPathPair pair)
         {
-            return pair.RetentionKeepLastEnabled ||
-                pair.RetentionKeepDaysEnabled;
+            return _settings.AutoPurgeEnabled &&
+                (pair.RetentionKeepLastEnabled ||
+                 pair.RetentionKeepDaysEnabled);
         }
 
-        private static bool IsSourceCleanupActive(
+        private bool IsSourceCleanupActive(
             BackupPathPair pair)
         {
-            return pair.SourceCleanupEnabled &&
+            return _settings.SourceCleanupEnabled &&
+                pair.SourceCleanupEnabled &&
                 pair.SourceCleanupFileExtensions != null &&
                 pair.SourceCleanupFileExtensions.Any(rule =>
                     !string.IsNullOrWhiteSpace(rule));
@@ -1376,8 +1383,31 @@ namespace EasyVersionBackup
 
         private void SaveSettings()
         {
-            BackupLogger.SetLogLevel(_settings.LogLevel);
-            SettingsStorage.Save(_settings);
+            BackupLogger.SetLogLevel(
+                _settings.LogLevel);
+
+            SettingsStorage.Save(
+                _settings);
+
+            SystemLogger.WriteSettingsChanges(
+                _lastLoggedSettingsSnapshot,
+                _settings);
+
+            _lastLoggedSettingsSnapshot =
+                CloneSettings(
+                    _settings);
+        }
+
+        private static AppSettings CloneSettings(
+            AppSettings settings)
+        {
+            string json =
+                JsonSerializer.Serialize(
+                    settings);
+
+            return JsonSerializer.Deserialize<AppSettings>(
+                       json) ??
+                   new AppSettings();
         }
 
         private void RefreshConfiguredPaths()
@@ -2189,7 +2219,8 @@ namespace EasyVersionBackup
                 string sourceCleanupErrorMessage =
                     string.Empty;
 
-                if (pair.SourceCleanupEnabled)
+                if (_settings.SourceCleanupEnabled &&
+                    pair.SourceCleanupEnabled)
                 {
                     ReportBackupProgress(
                         pair,
@@ -2476,7 +2507,8 @@ namespace EasyVersionBackup
                     continue;
                 }
 
-                if (pair.SourceCleanupEnabled &&
+                if (_settings.SourceCleanupEnabled &&
+                    pair.SourceCleanupEnabled &&
                     !SourceCleanupService.TryValidateSettings(
                         pair,
                         out _,
@@ -3263,7 +3295,7 @@ namespace EasyVersionBackup
                     ? _settings.DefaultVersioning
                     : pair.Versioning;
 
-                using BackupPairSettingsDialog dialog = new BackupPairSettingsDialog(this, pair, _settings.DefaultVersioning, _settings.ZipDestinationFiles && _settings.AutoPurgeEnabled, _settings.Tags);
+                using BackupPairSettingsDialog dialog = new BackupPairSettingsDialog(this, pair, _settings.DefaultVersioning, _settings.ZipDestinationFiles && _settings.AutoPurgeEnabled, _settings.SourceCleanupEnabled, _settings.Tags);
 
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                 {
