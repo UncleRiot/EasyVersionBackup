@@ -222,15 +222,12 @@ namespace EasyVersionBackup
             return true;
         }
 
-        public static SourceCleanupResult Apply(
+        public static List<string> GetDeletePreviewPaths(
             BackupPathPair pair)
         {
-            SourceCleanupResult result =
-                new SourceCleanupResult();
-
             if (!pair.SourceCleanupEnabled)
             {
-                return result;
+                return new List<string>();
             }
 
             if (!TryValidateSettings(
@@ -269,10 +266,12 @@ namespace EasyVersionBackup
                              SearchOption.TopDirectoryOnly))
                 {
                     string fullPath =
-                        Path.GetFullPath(filePath);
+                        Path.GetFullPath(
+                            filePath);
 
                     candidatesByPath[fullPath] =
-                        new FileInfo(fullPath);
+                        new FileInfo(
+                            fullPath);
                 }
             }
 
@@ -300,36 +299,73 @@ namespace EasyVersionBackup
                             DateTimeKind.Local)
                         .ToUniversalTime();
 
-                filesToDelete = candidates.Where(
-                    fileInfo =>
+                filesToDelete =
+                    candidates.Where(fileInfo =>
                         fileInfo.LastWriteTimeUtc <
                         keepAfterDateUtc);
             }
             else
             {
-                filesToDelete = candidates.Skip(
-                    pair.SourceCleanupKeepLastCount);
+                filesToDelete =
+                    candidates.Skip(
+                        pair.SourceCleanupKeepLastCount);
             }
 
-            foreach (FileInfo fileInfo in filesToDelete)
+            return filesToDelete
+                .Select(fileInfo =>
+                    fileInfo.FullName)
+                .ToList();
+        }
+
+        public static SourceCleanupResult Apply(
+            BackupPathPair pair,
+            IReadOnlyCollection<string> approvedDeletePaths)
+        {
+            SourceCleanupResult result =
+                new SourceCleanupResult();
+
+            if (!pair.SourceCleanupEnabled)
             {
+                return result;
+            }
+
+            HashSet<string> approvedPaths =
+                approvedDeletePaths
+                    .Select(path =>
+                        Path.GetFullPath(path))
+                    .ToHashSet(
+                        StringComparer.OrdinalIgnoreCase);
+
+            foreach (string filePath in
+                     GetDeletePreviewPaths(pair))
+            {
+                string fullPath =
+                    Path.GetFullPath(
+                        filePath);
+
+                if (!approvedPaths.Contains(fullPath))
+                {
+                    continue;
+                }
+
                 try
                 {
-                    fileInfo.Delete();
+                    File.Delete(
+                        fullPath);
                     result.DeletedCount++;
                     result.DeletedPaths.Add(
-                        fileInfo.FullName);
+                        fullPath);
 
                     BackupLogger.WriteLine(
-                        $"SOURCE CLEANUP DELETE | source=\"{pair.SourceDirectory}\" | path=\"{fileInfo.FullName}\"");
+                        $"SOURCE CLEANUP DELETE | source=\"{pair.SourceDirectory}\" | path=\"{fullPath}\"");
                 }
                 catch (Exception exception)
                 {
                     result.FailedPaths.Add(
-                        fileInfo.FullName);
+                        fullPath);
 
                     BackupLogger.WriteLine(
-                        $"SOURCE CLEANUP ERROR | source=\"{pair.SourceDirectory}\" | path=\"{fileInfo.FullName}\" | error=\"{exception.Message}\"");
+                        $"SOURCE CLEANUP ERROR | source=\"{pair.SourceDirectory}\" | path=\"{fullPath}\" | error=\"{exception.Message}\"");
                 }
             }
 
@@ -432,14 +468,10 @@ namespace EasyVersionBackup
                 filePattern = "*" + filePattern;
             }
 
-            if (!filePattern.StartsWith(
-                    "*.",
-                    StringComparison.Ordinal) ||
-                !IsValidExtension(
-                    filePattern.Substring(1)))
+            if (!IsValidFilePattern(filePattern))
             {
                 errorMessage =
-                    "Use .sav for the source folder or Saved\\SaveGames\\.sav for a subfolder.";
+                    "Use .sav, G1R*.sav, Saved\\SaveGames\\.sav, or Saved\\SaveGames\\G1R*.sav.";
                 return false;
             }
 
@@ -447,33 +479,76 @@ namespace EasyVersionBackup
                 Path.GetDirectoryName(pattern) ??
                 string.Empty;
 
-            string[] pathParts =
-                relativeDirectory.Split(
-                    new[]
-                    {
-                        Path.DirectorySeparatorChar,
-                        Path.AltDirectorySeparatorChar
-                    },
-                    StringSplitOptions.RemoveEmptyEntries);
-
-            if (pathParts.Length == 0 ||
-                pathParts.Any(pathPart =>
-                    pathPart == "." ||
-                    pathPart == ".." ||
-                    pathPart.IndexOfAny(
-                        Path.GetInvalidFileNameChars()) >= 0))
+            if (!string.IsNullOrWhiteSpace(relativeDirectory))
             {
-                errorMessage =
-                    "The cleanup subfolder is invalid.";
-                return false;
+                string[] pathParts =
+                    relativeDirectory.Split(
+                        new[]
+                        {
+                            Path.DirectorySeparatorChar,
+                            Path.AltDirectorySeparatorChar
+                        },
+                        StringSplitOptions.RemoveEmptyEntries);
+
+                if (pathParts.Length == 0 ||
+                    pathParts.Any(pathPart =>
+                        pathPart == "." ||
+                        pathPart == ".." ||
+                        pathPart.IndexOfAny(
+                            Path.GetInvalidFileNameChars()) >= 0))
+                {
+                    errorMessage =
+                        "The cleanup subfolder is invalid.";
+                    return false;
+                }
             }
 
             normalizedPattern =
-                Path.Combine(
-                    relativeDirectory,
-                    filePattern);
+                string.IsNullOrWhiteSpace(relativeDirectory)
+                    ? filePattern
+                    : Path.Combine(
+                        relativeDirectory,
+                        filePattern);
 
             return true;
+        }
+
+        private static bool IsValidFilePattern(
+            string filePattern)
+        {
+            if (string.IsNullOrWhiteSpace(filePattern) ||
+                filePattern == "*" ||
+                filePattern == "*.*" ||
+                filePattern.Contains('?') ||
+                filePattern.Contains('/') ||
+                filePattern.Contains('\\') ||
+                filePattern.Contains(':'))
+            {
+                return false;
+            }
+
+            int wildcardCount =
+                filePattern.Count(character =>
+                    character == '*');
+
+            if (wildcardCount > 1)
+            {
+                return false;
+            }
+
+            foreach (char character in
+                     Path.GetInvalidFileNameChars())
+            {
+                if (character != '*' &&
+                    filePattern.Contains(character))
+                {
+                    return false;
+                }
+            }
+
+            return filePattern.Any(character =>
+                character != '*' &&
+                character != '.');
         }
 
         private static bool TryResolvePattern(

@@ -522,7 +522,7 @@ namespace EasyVersionBackup
                     Name = "ColumnRule",
                     Width = 180,
                     ToolTipText =
-                        "Enter a file type such as .sav, or a source-relative rule such as Saved\\SaveGames\\.sav."
+                        "Enter .sav for all matching files, G1R*.sav for a filename pattern, or a source-relative rule such as Saved\\SaveGames\\G1R*.sav."
                 };
 
             DataGridViewTextBoxColumn columnAffectedFiles =
@@ -549,7 +549,7 @@ namespace EasyVersionBackup
             {
                 Name = "labelExamples",
                 Text =
-                    "Examples: .sav = source folder only    |    Saved\\SaveGames\\.sav = this subfolder only",
+                    "Examples: .sav = all .sav files    |    G1R*.sav = matching filenames only",
                 Location = new Point(16, 332),
                 Size = new Size(588, 22),
                 ForeColor =
@@ -826,8 +826,10 @@ namespace EasyVersionBackup
                     Path.GetFileName(affectedPath);
 
                 row.Cells["ColumnAffectedFiles"].Value =
-                    directoryPath +
-                    Environment.NewLine +
+                    directoryPath.TrimEnd(
+                        Path.DirectorySeparatorChar,
+                        Path.AltDirectorySeparatorChar) +
+                    Path.DirectorySeparatorChar +
                     filePattern;
             }
             else

@@ -1,4 +1,4 @@
-// Design-Rule / UI consistency:
+﻿// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // 03.05.2026 /dc
@@ -18,6 +18,7 @@ namespace EasyVersionBackup
         private readonly TextBox textBoxSelectedPath = new TextBox();
         private readonly Button buttonOk = new Button();
         private readonly Button buttonCancel = new Button();
+        private bool requireExistingFile;
 
 
 
@@ -125,6 +126,32 @@ namespace EasyVersionBackup
             using ModernFolderBrowserDialog dialog = new ModernFolderBrowserDialog(title, initialPath);
 
             dialog.EnableFileNameSelection(initialFileName);
+
+            if (dialog.ShowDialog(owner) != DialogResult.OK)
+            {
+                selectedFilePath = string.Empty;
+                return false;
+            }
+
+            selectedFilePath = dialog.SelectedPath;
+            return true;
+        }
+
+        public static bool ShowExistingFile(
+            Form owner,
+            string title,
+            string initialPath,
+            string initialFileName,
+            out string selectedFilePath)
+        {
+            using ModernFolderBrowserDialog dialog =
+                new ModernFolderBrowserDialog(
+                    title,
+                    initialPath);
+
+            dialog.requireExistingFile = true;
+            dialog.EnableFileNameSelection(
+                initialFileName);
 
             if (dialog.ShowDialog(owner) != DialogResult.OK)
             {
@@ -635,7 +662,20 @@ namespace EasyVersionBackup
                         SelectedPath,
                         fileName);
 
-                if (File.Exists(selectedFilePath))
+                if (requireExistingFile)
+                {
+                    if (!File.Exists(selectedFilePath))
+                    {
+                        ModernMessageDialog.Show(
+                            this,
+                            "File not found",
+                            $"The selected file does not exist:{Environment.NewLine}{selectedFilePath}");
+
+                        DialogResult = DialogResult.None;
+                        return;
+                    }
+                }
+                else if (File.Exists(selectedFilePath))
                 {
                     DialogResult overwriteResult =
                         ModernConfirmationDialog.Show(

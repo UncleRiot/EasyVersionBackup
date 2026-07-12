@@ -279,8 +279,14 @@ namespace EasyVersionBackup
                 "Its use is expressly discouraged." + Environment.NewLine +
                 "Only enable this if you understand the risk of permanent data loss.");
 
-            pictureBoxSourceCleanupHint.Left = checkBoxSourceCleanupEnabled.Right + ModernTheme.SettingsHintSpacing;
-            pictureBoxSourceCleanupHint.Top = checkBoxSourceCleanupEnabled.Top + (checkBoxSourceCleanupEnabled.Height - pictureBoxSourceCleanupHint.Height) / 2;
+            pictureBoxSourceCleanupHint.Left =
+                checkBoxSourceCleanupEnabled.Left +
+                checkBoxSourceCleanupEnabled.Width +
+                ModernTheme.SettingsHintSpacing;
+            pictureBoxSourceCleanupHint.Top =
+                checkBoxSourceCleanupEnabled.Top +
+                (checkBoxSourceCleanupEnabled.Height -
+                 pictureBoxSourceCleanupHint.Height) / 2;
 
             Button buttonExportSettings = CreateToolButton("buttonExportSettings", "Export Settings", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsRowTop(0)));
             Button buttonImportSettings = CreateToolButton("buttonImportSettings", "Import Settings", new Point(buttonExportSettings.Right + ModernTheme.ToolbarButtonSpacing, buttonExportSettings.Top));
@@ -437,6 +443,7 @@ namespace EasyVersionBackup
             RepositionSettingsHint(tabPage, "pictureBoxDefaultVersioningHint", comboBoxDefaultVersioning);
             RepositionSettingsHint(tabPage, "pictureBoxAutoBackupTimerHint", textBoxAutoBackupInterval);
             RepositionSettingsHint(tabPage, "pictureBoxAutoPurgeHint", checkBoxAutoPurgeEnabled);
+            RepositionSettingsHint(tabPage, "pictureBoxSourceCleanupHint", checkBoxSourceCleanupEnabled);
         }
 
         private int GetDynamicSettingsControlLeft(Panel tabPage)
@@ -565,7 +572,12 @@ namespace EasyVersionBackup
                 return;
             }
 
-            if (!ModernFolderBrowserDialog.ShowFile(this, "Import Settings", string.Empty, ToolsHelper.SettingsFileName, out string importFilePath))
+            if (!ModernFolderBrowserDialog.ShowExistingFile(
+                    this,
+                    "Import Settings",
+                    string.Empty,
+                    ToolsHelper.SettingsFileName,
+                    out string importFilePath))
             {
                 return;
             }
@@ -817,6 +829,15 @@ namespace EasyVersionBackup
             settings.ZipDestinationFiles = checkBoxZipDestinationFiles.Checked;
             settings.AutoPurgeEnabled = checkBoxAutoPurgeEnabled.Checked;
             settings.SourceCleanupEnabled = checkBoxSourceCleanupEnabled.Checked;
+
+            if ((!ResultSettings.AutoPurgeEnabled &&
+                 settings.AutoPurgeEnabled) ||
+                (!ResultSettings.SourceCleanupEnabled &&
+                 settings.SourceCleanupEnabled))
+            {
+                settings.LastDataLossWarningUtc = null;
+            }
+
             settings.ShowRetentionWarningDialogue = checkBoxShowRetentionWarningDialogue.Checked;
             settings.BackupDestinationConflictHandling = BackupHelper.NormalizeDestinationConflictHandling(comboBoxBackupDestinationConflictHandling.Text);
             settings.LogLevel = BackupLogger.NormalizeLogLevel(comboBoxLogLevel.Text);
@@ -1342,6 +1363,9 @@ namespace EasyVersionBackup
                 IgnoreCopyErrors = settings.IgnoreCopyErrors,
                 AutoPurgeEnabled = settings.AutoPurgeEnabled,
                 SourceCleanupEnabled = settings.SourceCleanupEnabled,
+                InitialDisclaimerAccepted = settings.InitialDisclaimerAccepted,
+                LastDataLossWarningUtc = settings.LastDataLossWarningUtc,
+                DataLossWarningIntervalDays = settings.DataLossWarningIntervalDays,
                 ShowRetentionWarningDialogue = settings.ShowRetentionWarningDialogue,
                 BackupDestinationConflictHandling = settings.BackupDestinationConflictHandling,
                 LogLevel = BackupLogger.NormalizeLogLevel(settings.LogLevel),

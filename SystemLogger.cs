@@ -55,6 +55,23 @@ namespace EasyVersionBackup
                 $"EXPERIMENTAL FEATURE CONFIRMATION | feature=\"{Escape(featureName)}\" | enteredText=\"{Escape(enteredText)}\"");
         }
 
+        public static void WriteInitialDisclaimerConfirmation(
+            string enteredText)
+        {
+            WriteLine(
+                $"INITIAL DISCLAIMER ACCEPTED | enteredText=\"{Escape(enteredText)}\"");
+        }
+
+        public static void WriteRecurringDataLossWarning(
+            bool retentionEnabled,
+            bool sourceCleanupEnabled,
+            bool accepted,
+            string enteredText)
+        {
+            WriteLine(
+                $"RECURRING DATA-LOSS WARNING | retentionEnabled={retentionEnabled} | sourceCleanupEnabled={sourceCleanupEnabled} | accepted={accepted} | enteredText=\"{Escape(enteredText)}\"");
+        }
+
         private static void WriteBackupPairChanges(
             IReadOnlyList<BackupPathPair> previousPairs,
             IReadOnlyList<BackupPathPair> currentPairs)

@@ -45,6 +45,7 @@ namespace EasyVersionBackup
 
         private Panel? _modernTitleBarPanel;
         private Label? _modernTitleLabel;
+        private Label? _activeDataLossWarningLabel;
         
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern bool ReleaseCapture();
@@ -158,6 +159,46 @@ namespace EasyVersionBackup
                 backupProgressAnimationTimer_Tick;
 
             LoadSettings();
+
+            if (!_settings.InitialDisclaimerAccepted)
+            {
+                DialogResult disclaimerResult =
+                    ModernConfirmationDialog.ShowInitialDisclaimer(
+                        this);
+
+                if (disclaimerResult != DialogResult.OK)
+                {
+                    _isExplicitExitRequested = true;
+                    Shown += (sender, e) => Close();
+                    return;
+                }
+
+                _settings.InitialDisclaimerAccepted = true;
+                SettingsStorage.Save(
+                    _settings);
+            }
+
+            if (IsRecurringDataLossWarningDue())
+            {
+                DialogResult warningResult =
+                    ModernConfirmationDialog.ShowRecurringDataLossWarning(
+                        this,
+                        _settings.AutoPurgeEnabled,
+                        _settings.SourceCleanupEnabled);
+
+                if (warningResult != DialogResult.OK)
+                {
+                    _isExplicitExitRequested = true;
+                    Shown += (sender, e) => Close();
+                    return;
+                }
+
+                _settings.LastDataLossWarningUtc =
+                    DateTime.UtcNow;
+                SettingsStorage.Save(
+                    _settings);
+            }
+
             _lastLoggedSettingsSnapshot =
                 CloneSettings(
                     _settings);
@@ -925,6 +966,58 @@ namespace EasyVersionBackup
 
             Button buttonAbout = CreateToolbarButton("buttonAbout", "?", string.Empty, "About EasyVersionBackup", new Point(left, toolbarTop));
             buttonAbout.Click += helpToolStripMenuItem_Click;
+            left += buttonSize + buttonSpacing;
+
+            _activeDataLossWarningLabel = new Label
+            {
+                Name = "labelActiveDataLossWarning",
+                Text = "Retention/Cleanup active - Data loss possible!",
+                AutoSize = false,
+                Location = new Point(left, toolbarTop),
+                Size = new Size(286, buttonSize + 1),
+                BackColor = Color.Red,
+                ForeColor = Color.White,
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font(
+                    ModernTheme.FontFamilyName,
+                    ModernTheme.DefaultFontSize,
+                    FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Padding = new Padding(0, 4, 0, 0),
+                Visible = false
+            };
+
+            _mainToolTip.SetToolTip(
+                _activeDataLossWarningLabel,
+                "WARNING: Retention and Source Cleanup are" +
+                Environment.NewLine +
+                "experimental features." +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Software defects, incorrect configuration, or" +
+                Environment.NewLine +
+                "incorrect source and destination paths can cause" +
+                Environment.NewLine +
+                "permanent and irreversible data loss." +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Their use is strongly discouraged and should be" +
+                Environment.NewLine +
+                "limited to experimental purposes." +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Do not use these features for important or" +
+                Environment.NewLine +
+                "irreplaceable data." +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Before using them, always ensure that complete," +
+                Environment.NewLine +
+                "verified, and recoverable backups exist in a" +
+                Environment.NewLine +
+                "separate backup solution that EasyVersionBackup" +
+                Environment.NewLine +
+                "cannot modify or delete.");
 
             Controls.Add(buttonExit);
             Controls.Add(buttonAddConfiguredPath);
@@ -933,6 +1026,7 @@ namespace EasyVersionBackup
             Controls.Add(buttonMoveConfiguredPathDown);
             Controls.Add(buttonModernSettings);
             Controls.Add(buttonAbout);
+            Controls.Add(_activeDataLossWarningLabel);
 
             buttonExit.BringToFront();
             buttonAddConfiguredPath.BringToFront();
@@ -941,6 +1035,7 @@ namespace EasyVersionBackup
             buttonMoveConfiguredPathDown.BringToFront();
             buttonModernSettings.BringToFront();
             buttonAbout.BringToFront();
+            _activeDataLossWarningLabel.BringToFront();
             buttonBackup.BringToFront();
 
             if (_modernTitleBarPanel != null)
@@ -1398,6 +1493,58 @@ namespace EasyVersionBackup
                     _settings);
         }
 
+        private void UpdateActiveDataLossWarning()
+        {
+            if (_activeDataLossWarningLabel == null)
+            {
+                return;
+            }
+
+            bool retentionActive =
+                _settings.AutoPurgeEnabled &&
+                _settings.BackupPathPairs.Any(pair =>
+                    pair.RetentionKeepLastEnabled ||
+                    pair.RetentionKeepDaysEnabled);
+
+            bool sourceCleanupActive =
+                _settings.SourceCleanupEnabled &&
+                _settings.BackupPathPairs.Any(pair =>
+                    pair.SourceCleanupEnabled);
+
+            _activeDataLossWarningLabel.Visible =
+                retentionActive ||
+                sourceCleanupActive;
+
+            if (_activeDataLossWarningLabel.Visible)
+            {
+                _activeDataLossWarningLabel.BringToFront();
+            }
+        }
+
+        private bool IsRecurringDataLossWarningDue()
+        {
+            if (!_settings.AutoPurgeEnabled &&
+                !_settings.SourceCleanupEnabled)
+            {
+                return false;
+            }
+
+            int warningIntervalDays =
+                Math.Max(
+                    1,
+                    _settings.DataLossWarningIntervalDays);
+
+            if (!_settings.LastDataLossWarningUtc.HasValue)
+            {
+                return true;
+            }
+
+            return DateTime.UtcNow -
+                _settings.LastDataLossWarningUtc.Value.ToUniversalTime() >=
+                TimeSpan.FromDays(
+                    warningIntervalDays);
+        }
+
         private static AppSettings CloneSettings(
             AppSettings settings)
         {
@@ -1412,6 +1559,8 @@ namespace EasyVersionBackup
 
         private void RefreshConfiguredPaths()
         {
+            UpdateActiveDataLossWarning();
+
             _isRefreshingConfiguredPaths = true;
 
             try
@@ -2161,24 +2310,42 @@ namespace EasyVersionBackup
 
             try
             {
-                BeginBackupProgress(pair);
+                BeginBackupProgress(
+                    pair);
 
-                DialogResult retentionDialogResult =
-                    DialogResult.Yes;
+                List<string> sourceCleanupPreviewPaths =
+                    new List<string>();
+
+                if (_settings.SourceCleanupEnabled &&
+                    pair.SourceCleanupEnabled)
+                {
+                    sourceCleanupPreviewPaths =
+                        SourceCleanupService.GetDeletePreviewPaths(
+                            pair);
+                }
+
+                List<string> retentionPreviewPaths =
+                    new List<string>();
 
                 if (ShouldRunRetentionForPair(pair))
                 {
-                    List<string> purgePreviewPaths =
+                    retentionPreviewPaths =
                         BackupHelper.GetRetentionPurgePreviewPathsForNextBackup(
                             pair,
                             _settings.ZipDestinationFiles);
+                }
 
-                    retentionDialogResult =
-                        TryConfirmRetentionWarningDialogue(
+                bool applySourceCleanup =
+                    sourceCleanupPreviewPaths.Count > 0;
+
+                if (applySourceCleanup)
+                {
+                    DialogResult sourceCleanupConfirmationResult =
+                        TryConfirmSourceCleanupWarningDialogue(
                             pair,
-                            purgePreviewPaths);
+                            sourceCleanupPreviewPaths);
 
-                    if (retentionDialogResult ==
+                    if (sourceCleanupConfirmationResult ==
                         DialogResult.Cancel)
                     {
                         SetBackupStatus(
@@ -2190,6 +2357,38 @@ namespace EasyVersionBackup
                         logResult = "CANCELED";
                         return runResult;
                     }
+
+                    applySourceCleanup =
+                        sourceCleanupConfirmationResult ==
+                        DialogResult.Yes;
+                }
+
+                bool applyRetention =
+                    retentionPreviewPaths.Count > 0;
+
+                if (applyRetention)
+                {
+                    DialogResult retentionConfirmationResult =
+                        TryConfirmRetentionWarningDialogue(
+                            pair,
+                            retentionPreviewPaths);
+
+                    if (retentionConfirmationResult ==
+                        DialogResult.Cancel)
+                    {
+                        SetBackupStatus(
+                            pair,
+                            BackupPathStatus.StatusWarning,
+                            "Backup canceled by user before any files were created or deleted.");
+
+                        runResult.Canceled = true;
+                        logResult = "CANCELED";
+                        return runResult;
+                    }
+
+                    applyRetention =
+                        retentionConfirmationResult ==
+                        DialogResult.Yes;
                 }
 
                 (
@@ -2219,7 +2418,8 @@ namespace EasyVersionBackup
                 string sourceCleanupErrorMessage =
                     string.Empty;
 
-                if (_settings.SourceCleanupEnabled &&
+                if (applySourceCleanup &&
+                    _settings.SourceCleanupEnabled &&
                     pair.SourceCleanupEnabled)
                 {
                     ReportBackupProgress(
@@ -2234,7 +2434,8 @@ namespace EasyVersionBackup
                         sourceCleanupResult =
                             await Task.Run(
                                 () => SourceCleanupService.Apply(
-                                    pair));
+                                    pair,
+                                    sourceCleanupPreviewPaths));
                     }
                     catch (Exception cleanupException)
                     {
@@ -2250,9 +2451,8 @@ namespace EasyVersionBackup
                 List<string> purgedPaths =
                     new List<string>();
 
-                if (ShouldRunRetentionForPair(pair) &&
-                    retentionDialogResult ==
-                    DialogResult.Yes)
+                if (applyRetention &&
+                    ShouldRunRetentionForPair(pair))
                 {
                     ReportBackupProgress(
                         pair,
@@ -2319,7 +2519,8 @@ namespace EasyVersionBackup
                 SetBackupStatus(
                     pair,
                     sourceCleanupResult.FailedPaths.Count == 0 &&
-                    string.IsNullOrWhiteSpace(sourceCleanupErrorMessage)
+                    string.IsNullOrWhiteSpace(
+                        sourceCleanupErrorMessage)
                         ? BackupPathStatus.StatusOk
                         : BackupPathStatus.StatusWarning,
                     string.Join(
@@ -2363,7 +2564,8 @@ namespace EasyVersionBackup
             }
             finally
             {
-                EndBackupProgress(pair);
+                EndBackupProgress(
+                    pair);
 
                 BackupLogger.WriteLine(
                     $"{backupKind} BACKUP END | source=\"{pair.SourceDirectory}\" | target=\"{pair.TargetDirectory}\" | result={logResult}");
@@ -3325,6 +3527,7 @@ namespace EasyVersionBackup
                     pair.SourceCleanupKeepAfterDate = dialog.ResultSourceCleanupKeepAfterDate;
 
                     SaveSettings();
+                    UpdateActiveDataLossWarning();
                     RestartAutoBackupCountdown();
 
                     DataGridViewCell settingsCell =
@@ -3649,40 +3852,72 @@ namespace EasyVersionBackup
                 (pair.RetentionKeepLastEnabled || pair.RetentionKeepDaysEnabled);
         }
 
-        private DialogResult TryConfirmRetentionWarningDialogue(BackupPathPair pair, List<string> purgePreviewPaths)
+        private DialogResult TryConfirmSourceCleanupWarningDialogue(
+            BackupPathPair pair,
+            List<string> sourceCleanupPreviewPaths)
         {
-            if (!_settings.ShowRetentionWarningDialogue)
-            {
-                return DialogResult.Yes;
-            }
+            List<string> deletionPreviewLines =
+                new List<string>
+                {
+                    "SOURCE DIRECTORY:",
+                    pair.SourceDirectory,
+                    string.Empty
+                };
 
-            if (purgePreviewPaths.Count == 0)
-            {
-                return DialogResult.Yes;
-            }
+            deletionPreviewLines.AddRange(
+                sourceCleanupPreviewPaths.Select(
+                    FormatDeletionPreviewPath));
 
-            DialogResult result = ShowRetentionPurgeConfirmation(
-                "Retention warning",
-                purgePreviewPaths
-                    .Select(FormatRetentionPurgePreviewPath)
-                    .ToList());
+            DialogResult result =
+                ShowDeletionConfirmation(
+                    "Confirm Source Cleanup",
+                    "Source Cleanup will permanently and irreversibly delete these files from the source directory:",
+                    "Continue without Source Cleanup",
+                    "Continue (delete!)",
+                    deletionPreviewLines);
 
-            if (result == DialogResult.Yes)
-            {
-                return DialogResult.Yes;
-            }
+            BackupLogger.WriteLine(
+                $"SOURCE CLEANUP CONFIRMATION | source=\"{pair.SourceDirectory}\" | files={sourceCleanupPreviewPaths.Count} | result={result}");
 
-            if (result == DialogResult.No)
-            {
-                BackupLogger.WriteLine($"RETENTION SKIP | reason=user continued without purging | source={pair.SourceDirectory} | target={pair.TargetDirectory}");
-                return DialogResult.No;
-            }
-
-            BackupLogger.WriteLine($"RETENTION SKIP | reason=user canceled warning dialogue | source={pair.SourceDirectory} | target={pair.TargetDirectory}");
-            return DialogResult.Cancel;
+            return result;
         }
 
-        private DialogResult ShowRetentionPurgeConfirmation(string title, List<string> purgePreviewLines)
+        private DialogResult TryConfirmRetentionWarningDialogue(
+            BackupPathPair pair,
+            List<string> retentionPreviewPaths)
+        {
+            List<string> deletionPreviewLines =
+                new List<string>
+                {
+                    "DESTINATION DIRECTORY:",
+                    pair.TargetDirectory,
+                    string.Empty
+                };
+
+            deletionPreviewLines.AddRange(
+                retentionPreviewPaths.Select(
+                    FormatDeletionPreviewPath));
+
+            DialogResult result =
+                ShowDeletionConfirmation(
+                    "Confirm Retention Cleanup",
+                    "Retention will permanently and irreversibly delete these backup files from the destination directory:",
+                    "Continue without Destination Cleanup",
+                    "Continue (delete!)",
+                    deletionPreviewLines);
+
+            BackupLogger.WriteLine(
+                $"RETENTION CONFIRMATION | target=\"{pair.TargetDirectory}\" | files={retentionPreviewPaths.Count} | result={result}");
+
+            return result;
+        }
+
+        private DialogResult ShowDeletionConfirmation(
+            string title,
+            string warningText,
+            string continueWithoutText,
+            string deleteText,
+            List<string> purgePreviewLines)
         {
             using Form form = new Form();
 
@@ -3816,7 +4051,7 @@ namespace EasyVersionBackup
 
             Label labelMessage = new Label
             {
-                Text = "Retention will permanently delete these ZIP backups:",
+                Text = warningText,
                 AutoSize = false,
                 Location = new Point(18, 52),
                 Size = new Size(form.ClientSize.Width - 36, 28),
@@ -4073,7 +4308,7 @@ namespace EasyVersionBackup
             {
                 Text = "Cancel",
                 Size = new Size(100, 28),
-                Location = new Point(form.ClientSize.Width - 470, 470),
+                Location = new Point(form.ClientSize.Width - 549, 470),
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
                 DialogResult = DialogResult.Cancel,
                 FlatStyle = FlatStyle.Flat,
@@ -4090,11 +4325,11 @@ namespace EasyVersionBackup
             buttonCancel.FlatAppearance.MouseOverBackColor = ModernTheme.ControlHoverBackColor;
             buttonCancel.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
 
-            Button buttonContinueWithoutPurging = new Button
+            Button buttonContinueWithoutDeleting = new Button
             {
-                Text = "Continue without deleting",
-                Size = new Size(206, 30),
-                Location = new Point(form.ClientSize.Width - 364, 469),
+                Text = continueWithoutText,
+                Size = new Size(285, 30),
+                Location = new Point(form.ClientSize.Width - 443, 469),
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
                 DialogResult = DialogResult.No,
                 FlatStyle = FlatStyle.Flat,
@@ -4106,14 +4341,14 @@ namespace EasyVersionBackup
                 UseVisualStyleBackColor = false
             };
 
-            buttonContinueWithoutPurging.FlatAppearance.BorderColor = ModernTheme.AccentColor;
-            buttonContinueWithoutPurging.FlatAppearance.BorderSize = 1;
-            buttonContinueWithoutPurging.FlatAppearance.MouseOverBackColor = ModernTheme.ControlHoverBackColor;
-            buttonContinueWithoutPurging.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
+            buttonContinueWithoutDeleting.FlatAppearance.BorderColor = ModernTheme.AccentColor;
+            buttonContinueWithoutDeleting.FlatAppearance.BorderSize = 1;
+            buttonContinueWithoutDeleting.FlatAppearance.MouseOverBackColor = ModernTheme.ControlHoverBackColor;
+            buttonContinueWithoutDeleting.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
 
             Button buttonContinuePurge = new Button
             {
-                Text = "Delete backups",
+                Text = deleteText,
                 Size = new Size(146, 30),
                 Location = new Point(form.ClientSize.Width - 152, 469),
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
@@ -4135,7 +4370,7 @@ namespace EasyVersionBackup
             form.Controls.Add(labelMessage);
             form.Controls.Add(panelPurgePreview);
             form.Controls.Add(buttonCancel);
-            form.Controls.Add(buttonContinueWithoutPurging);
+            form.Controls.Add(buttonContinueWithoutDeleting);
             form.Controls.Add(buttonContinuePurge);
 
             form.AcceptButton = buttonContinuePurge;
@@ -4144,14 +4379,15 @@ namespace EasyVersionBackup
             return form.ShowDialog(this);
         }
 
-        private string FormatRetentionPurgePreviewPath(string purgePreviewPath)
+        private string FormatDeletionPreviewPath(
+            string deletionPreviewPath)
         {
-            if (File.Exists(purgePreviewPath))
+            if (File.Exists(deletionPreviewPath))
             {
-                return $"{purgePreviewPath} ({File.GetLastWriteTime(purgePreviewPath):yyyy-MM-dd HH:mm:ss})";
+                return $"{deletionPreviewPath} ({File.GetLastWriteTime(deletionPreviewPath):yyyy-MM-dd HH:mm:ss})";
             }
 
-            return $"{purgePreviewPath} (file not found)";
+            return $"{deletionPreviewPath} (file not found)";
         }
 
         private void Form1_Move(object sender, EventArgs e)

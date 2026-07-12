@@ -415,12 +415,15 @@ namespace EasyVersionBackup
 
             PictureBox pictureBoxSourceCleanupHint = CreateHintIcon(
                 "pictureBoxSourceCleanupHint",
-                "Warning: Source Cleanup permanently deletes files from the source folder after a successful backup. Deleted data cannot be restored by EasyVersionBackup and may be lost permanently. This is an experimental feature and its use is expressly discouraged. Verify an independent, readable backup before enabling it.",
+                "WARNING: Source Cleanup is an experimental feature and its use is strongly discouraged. It can permanently and unintentionally delete original source files after a successful backup. Deleted source data cannot be restored by EasyVersionBackup. Enable this feature only if you fully understand the risk of irreversible data loss and have verified an independent, complete, and readable backup.",
                 new Point(
                     labelSourceCleanup.Left +
                     TextRenderer.MeasureText(
                         labelSourceCleanup.Text,
-                        labelSourceCleanup.Font).Width,
+                        labelSourceCleanup.Font,
+                        Size.Empty,
+                        TextFormatFlags.NoPadding).Width +
+                    6,
                     GetDialogLabelTop(11) + 1));
 
             buttonSourceCleanup = new Button
@@ -491,6 +494,8 @@ namespace EasyVersionBackup
             Controls.Add(pictureBoxRetentionExclusionsHint);
             Controls.Add(labelSourceCleanup);
             Controls.Add(pictureBoxSourceCleanupHint);
+            pictureBoxSourceCleanupHint.Visible = true;
+            pictureBoxSourceCleanupHint.BringToFront();
             Controls.Add(buttonSourceCleanup);
             Controls.Add(buttonOk);
             Controls.Add(buttonCancel);

@@ -16,34 +16,20 @@ namespace EasyVersionBackup
         private static readonly string SettingsFilePath =
             Path.Combine(SettingsDirectoryPath, "EasyVersionBackup.settings.json");
 
-        private static readonly string PreviousUserProfileSettingsFilePath =
-            Path.Combine(
-                Environment.GetFolderPath(
-                    Environment.SpecialFolder.LocalApplicationData),
-                "EasyVersionBackup",
-                "EasyVersionBackup.settings.json");
-
         public static string LastLoadErrorMessage { get; private set; } = string.Empty;
 
         public static AppSettings Load()
         {
             LastLoadErrorMessage = string.Empty;
 
-            string sourceSettingsFilePath =
-                File.Exists(SettingsFilePath)
-                    ? SettingsFilePath
-                    : File.Exists(PreviousUserProfileSettingsFilePath)
-                        ? PreviousUserProfileSettingsFilePath
-                        : SettingsFilePath;
-
             try
             {
-                if (!File.Exists(sourceSettingsFilePath))
+                if (!File.Exists(SettingsFilePath))
                 {
                     return CreateDefaultSettings();
                 }
 
-                string json = File.ReadAllText(sourceSettingsFilePath);
+                string json = File.ReadAllText(SettingsFilePath);
                 AppSettings? settings = JsonSerializer.Deserialize<AppSettings>(json);
 
                 if (settings == null)
@@ -54,28 +40,12 @@ namespace EasyVersionBackup
                 ApplyLegacyMigrations(json, settings);
                 EnsureSettingsInitialized(settings);
 
-                if (string.Equals(
-                        sourceSettingsFilePath,
-                        PreviousUserProfileSettingsFilePath,
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    try
-                    {
-                        Save(settings);
-                    }
-                    catch (Exception migrationException)
-                    {
-                        LastLoadErrorMessage =
-                            $"Settings were loaded from the previous user-profile location, but could not be migrated to the application Settings directory.{Environment.NewLine}{migrationException.Message}";
-                    }
-                }
-
                 return settings;
             }
             catch (Exception exception)
             {
                 string backupPath = TryBackupInvalidSettingsFile(
-                    sourceSettingsFilePath);
+                    SettingsFilePath);
 
                 LastLoadErrorMessage = string.IsNullOrWhiteSpace(backupPath)
                     ? $"Settings could not be loaded. Default settings are being used.{Environment.NewLine}{exception.Message}"

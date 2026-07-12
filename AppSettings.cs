@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace EasyVersionBackup
 {
@@ -15,6 +16,9 @@ namespace EasyVersionBackup
         public bool IgnoreCopyErrors { get; set; } = false;
         public bool AutoPurgeEnabled { get; set; } = false;
         public bool SourceCleanupEnabled { get; set; } = false;
+        public bool InitialDisclaimerAccepted { get; set; } = false;
+        public DateTime? LastDataLossWarningUtc { get; set; }
+        public int DataLossWarningIntervalDays { get; set; } = 30;
         public bool ShowRetentionWarningDialogue { get; set; } = true;
         public string BackupDestinationConflictHandling { get; set; } = "Ask";
         public bool AutoBackupEnabled { get; set; } = false;
