@@ -290,9 +290,11 @@ namespace EasyVersionBackup
 
             Button buttonExportSettings = CreateToolButton("buttonExportSettings", "Export Settings", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsRowTop(0)));
             Button buttonImportSettings = CreateToolButton("buttonImportSettings", "Import Settings", new Point(buttonExportSettings.Right + ModernTheme.ToolbarButtonSpacing, buttonExportSettings.Top));
+            Button buttonDebugMode = CreateToolButton("buttonDebugMode", "Debug Mode", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsRowTop(1)));
 
             buttonExportSettings.Click += buttonExportSettings_Click;
             buttonImportSettings.Click += buttonImportSettings_Click;
+            buttonDebugMode.Click += buttonDebugMode_Click;
 
             settingsToolTip.SetToolTip(comboBoxDefaultVersioning, "Default version or date pattern for new backups");
             settingsToolTip.SetToolTip(checkBoxAutoIncrementVersion, "Automatically increment the suggested version");
@@ -311,6 +313,7 @@ namespace EasyVersionBackup
             settingsToolTip.SetToolTip(checkBoxShowRetentionWarningDialogue, "Ask for confirmation before Retention deletes old ZIP backups.");
             settingsToolTip.SetToolTip(buttonExportSettings, "Export current settings to " + ToolsHelper.SettingsFileName);
             settingsToolTip.SetToolTip(buttonImportSettings, "Import settings from " + ToolsHelper.SettingsFileName);
+            settingsToolTip.SetToolTip(buttonDebugMode, "Password-protected access to persistent Debug Mode safety overrides.");
             settingsToolTip.SetToolTip(textBoxTag, "New backup tag");
             settingsToolTip.SetToolTip(buttonAddTag, "Add tag");
             settingsToolTip.SetToolTip(buttonRemoveTag, "Remove selected tag");
@@ -376,6 +379,7 @@ namespace EasyVersionBackup
             Panel tabPageTools = CreateTabPage("tabPageTools");
             tabPageTools.Controls.Add(buttonExportSettings);
             tabPageTools.Controls.Add(buttonImportSettings);
+            tabPageTools.Controls.Add(buttonDebugMode);
 
             ApplyDynamicSettingsLayout(tabPageGeneral);
             ApplyDynamicSettingsLayout(tabPageBackup);
@@ -524,6 +528,14 @@ namespace EasyVersionBackup
             button.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
 
             return button;
+        }
+
+        private void buttonDebugMode_Click(
+            object? sender,
+            EventArgs e)
+        {
+            DebugMode.ShowAccessAndSettingsDialog(
+                this);
         }
 
         private void buttonExportSettings_Click(object? sender, EventArgs e)
@@ -867,9 +879,13 @@ namespace EasyVersionBackup
                 return;
             }
 
-            if (!ShowAutoPurgeSafetyConfirmation())
+            if (!DebugMode.Current.Enabled ||
+                !DebugMode.Current.SkipExperimentalActivationConfirmations)
             {
-                checkBoxAutoPurgeEnabled.Checked = false;
+                if (!ShowAutoPurgeSafetyConfirmation())
+                {
+                    checkBoxAutoPurgeEnabled.Checked = false;
+                }
             }
         }
 
@@ -883,15 +899,19 @@ namespace EasyVersionBackup
                 return;
             }
 
-            DialogResult confirmationResult =
-                ModernConfirmationDialog.ShowExperimentalDataLossConfirmation(
-                    this,
-                    "Source Cleanup",
-                    "permanently deletes source files from the original source folder after a successful backup.");
-
-            if (confirmationResult != DialogResult.OK)
+            if (!DebugMode.Current.Enabled ||
+                !DebugMode.Current.SkipExperimentalActivationConfirmations)
             {
-                checkBoxSourceCleanupEnabled.Checked = false;
+                DialogResult confirmationResult =
+                    ModernConfirmationDialog.ShowExperimentalDataLossConfirmation(
+                        this,
+                        "Source Cleanup",
+                        "permanently deletes source files from the original source folder after a successful backup.");
+
+                if (confirmationResult != DialogResult.OK)
+                {
+                    checkBoxSourceCleanupEnabled.Checked = false;
+                }
             }
         }
 

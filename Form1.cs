@@ -46,6 +46,7 @@ namespace EasyVersionBackup
         private Panel? _modernTitleBarPanel;
         private Label? _modernTitleLabel;
         private Label? _activeDataLossWarningLabel;
+        private Label? _debugModeWarningLabel;
         
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern bool ReleaseCapture();
@@ -160,7 +161,9 @@ namespace EasyVersionBackup
 
             LoadSettings();
 
-            if (!_settings.InitialDisclaimerAccepted)
+            if ((!DebugMode.Current.Enabled ||
+                 !DebugMode.Current.SkipInitialDisclaimer) &&
+                !_settings.InitialDisclaimerAccepted)
             {
                 DialogResult disclaimerResult =
                     ModernConfirmationDialog.ShowInitialDisclaimer(
@@ -178,7 +181,9 @@ namespace EasyVersionBackup
                     _settings);
             }
 
-            if (IsRecurringDataLossWarningDue())
+            if ((!DebugMode.Current.Enabled ||
+                 !DebugMode.Current.SkipRecurringDataLossWarning) &&
+                IsRecurringDataLossWarningDue())
             {
                 DialogResult warningResult =
                     ModernConfirmationDialog.ShowRecurringDataLossWarning(
@@ -954,13 +959,17 @@ namespace EasyVersionBackup
             {
                 using ModernSettings form = new ModernSettings(_settings);
 
-                if (form.ShowDialog(this) == DialogResult.OK)
+                DialogResult settingsResult =
+                    form.ShowDialog(this);
+
+                if (settingsResult == DialogResult.OK)
                 {
                     _settings = form.ResultSettings;
                     SaveSettings();
-                    RefreshConfiguredPaths();
                     RestartAutoBackupCountdown();
                 }
+
+                RefreshConfiguredPaths();
             };
             left += buttonSize + buttonSpacing;
 
@@ -1027,6 +1036,35 @@ namespace EasyVersionBackup
             Controls.Add(buttonModernSettings);
             Controls.Add(buttonAbout);
             Controls.Add(_activeDataLossWarningLabel);
+
+            _debugModeWarningLabel = new Label
+            {
+                Name = "labelDebugModeWarning",
+                Text = "Safety mode: Off",
+                AutoSize = true,
+                Location = new Point(
+                    _activeDataLossWarningLabel.Left,
+                    _activeDataLossWarningLabel.Top + 8),
+                BackColor = Color.Transparent,
+                ForeColor = ModernTheme.DisabledTextColor,
+                BorderStyle = BorderStyle.None,
+                Font = new Font(
+                    ModernTheme.FontFamilyName,
+                    ModernTheme.DefaultFontSize - 1,
+                    FontStyle.Regular),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Visible = false
+            };
+
+            _mainToolTip.SetToolTip(
+                _debugModeWarningLabel,
+                "Debug Mode is active." +
+                Environment.NewLine +
+                "One or more user-facing safety warnings or confirmations are disabled." +
+                Environment.NewLine +
+                "Technical deletion protections remain active.");
+
+            Controls.Add(_debugModeWarningLabel);
 
             buttonExit.BringToFront();
             buttonAddConfiguredPath.BringToFront();
@@ -1511,9 +1549,25 @@ namespace EasyVersionBackup
                 _settings.BackupPathPairs.Any(pair =>
                     pair.SourceCleanupEnabled);
 
+            bool debugModeActive =
+                DebugMode.Current.Enabled;
+
             _activeDataLossWarningLabel.Visible =
-                retentionActive ||
-                sourceCleanupActive;
+                !debugModeActive &&
+                !DebugMode.Current.HideActiveDataLossWarning &&
+                (retentionActive ||
+                 sourceCleanupActive);
+
+            if (_debugModeWarningLabel != null)
+            {
+                _debugModeWarningLabel.Visible =
+                    debugModeActive;
+
+                if (_debugModeWarningLabel.Visible)
+                {
+                    _debugModeWarningLabel.BringToFront();
+                }
+            }
 
             if (_activeDataLossWarningLabel.Visible)
             {
@@ -3856,6 +3910,15 @@ namespace EasyVersionBackup
             BackupPathPair pair,
             List<string> sourceCleanupPreviewPaths)
         {
+            if (DebugMode.Current.Enabled &&
+                DebugMode.Current.SkipDeletionConfirmationDialogs)
+            {
+                BackupLogger.WriteLine(
+                    $"SOURCE CLEANUP CONFIRMATION BYPASSED BY DEBUG MODE | source=\"{pair.SourceDirectory}\" | files={sourceCleanupPreviewPaths.Count}");
+
+                return DialogResult.Yes;
+            }
+
             List<string> deletionPreviewLines =
                 new List<string>
                 {
@@ -3886,6 +3949,15 @@ namespace EasyVersionBackup
             BackupPathPair pair,
             List<string> retentionPreviewPaths)
         {
+            if (DebugMode.Current.Enabled &&
+                DebugMode.Current.SkipDeletionConfirmationDialogs)
+            {
+                BackupLogger.WriteLine(
+                    $"RETENTION CONFIRMATION BYPASSED BY DEBUG MODE | target=\"{pair.TargetDirectory}\" | files={retentionPreviewPaths.Count}");
+
+                return DialogResult.Yes;
+            }
+
             List<string> deletionPreviewLines =
                 new List<string>
                 {
