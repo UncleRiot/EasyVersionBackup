@@ -24,6 +24,8 @@ namespace EasyVersionBackup
         public bool AutoBackupEnabled { get; set; } = false;
         public int AutoBackupIntervalSeconds { get; set; } = 900;
         public List<BackupPathPair> BackupPathPairs { get; set; } = new List<BackupPathPair>();
+        public Dictionary<string, List<string>> ExclusionTemplates { get; set; } = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, BackupPathPair> PairSettingsTemplates { get; set; } = new Dictionary<string, BackupPathPair>(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, string> LastUsedVersionsByPair { get; set; } = new Dictionary<string, string>();
         public Dictionary<string, BackupPathStatus> BackupStatusesByPair { get; set; } = new Dictionary<string, BackupPathStatus>();
         public int MainWindowWidth { get; set; } = 800;

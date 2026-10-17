@@ -1,6 +1,7 @@
 ﻿// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
+// Semantic Anchor: Preserve backup/UI behavior; drag/drop insertion uses a temporary row; template context actions retain existing settings behavior.
 // 03.05.2026 /dc
 
 
@@ -18,6 +19,12 @@ namespace EasyVersionBackup
     public partial class Form1 : Form
     {
         private AppSettings _settings = new AppSettings();
+        private Form? _dragPreview;
+        private int _dragGapRow = -1;
+        private DataGridViewRow? _dragGapPlaceholder;
+
+        private List<string>? _copiedExclusions;
+        private BackupPathPair? _copiedPairSettings;
         private AppSettings _lastLoggedSettingsSnapshot = new AppSettings();
         private readonly System.Windows.Forms.Timer _autoBackupCountdownTimer = new System.Windows.Forms.Timer();
         private readonly Dictionary<string, DateTime> _nextAutoBackupRunsByPair = new Dictionary<string, DateTime>();
@@ -46,6 +53,7 @@ namespace EasyVersionBackup
         private Panel? _modernTitleBarPanel;
         private Label? _modernTitleLabel;
         private Label? _activeDataLossWarningLabel;
+        private Label? _debugModeWarningLabel;
         
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern bool ReleaseCapture();
@@ -146,10 +154,12 @@ namespace EasyVersionBackup
             dataGridViewConfiguredPaths.CellPainting += dataGridViewConfiguredPaths_CellPainting;
             dataGridViewConfiguredPaths.CellToolTipTextNeeded += dataGridViewConfiguredPaths_CellToolTipTextNeeded;
             dataGridViewConfiguredPaths.MouseDown += dataGridViewConfiguredPaths_MouseDown;
+            dataGridViewConfiguredPaths.CellMouseDown += ConfiguredPaths_CellMouseDown;
             dataGridViewConfiguredPaths.MouseMove += dataGridViewConfiguredPaths_MouseMove;
             dataGridViewConfiguredPaths.MouseUp += dataGridViewConfiguredPaths_MouseUp;
             dataGridViewConfiguredPaths.DragOver += dataGridViewConfiguredPaths_DragOver;
             dataGridViewConfiguredPaths.DragDrop += dataGridViewConfiguredPaths_DragDrop;
+            dataGridViewConfiguredPaths.DragLeave += (_, _) => ClearConfiguredPathDragPreview();
             InitializeConfiguredPathsScrollBar();
 
             _autoBackupCountdownTimer.Interval = TitleRefreshIntervalMilliseconds;
@@ -160,7 +170,9 @@ namespace EasyVersionBackup
 
             LoadSettings();
 
-            if (!_settings.InitialDisclaimerAccepted)
+            if ((!DebugMode.Current.Enabled ||
+                 !DebugMode.Current.SkipInitialDisclaimer) &&
+                !_settings.InitialDisclaimerAccepted)
             {
                 DialogResult disclaimerResult =
                     ModernConfirmationDialog.ShowInitialDisclaimer(
@@ -174,27 +186,6 @@ namespace EasyVersionBackup
                 }
 
                 _settings.InitialDisclaimerAccepted = true;
-                SettingsStorage.Save(
-                    _settings);
-            }
-
-            if (IsRecurringDataLossWarningDue())
-            {
-                DialogResult warningResult =
-                    ModernConfirmationDialog.ShowRecurringDataLossWarning(
-                        this,
-                        _settings.AutoPurgeEnabled,
-                        _settings.SourceCleanupEnabled);
-
-                if (warningResult != DialogResult.OK)
-                {
-                    _isExplicitExitRequested = true;
-                    Shown += (sender, e) => Close();
-                    return;
-                }
-
-                _settings.LastDataLossWarningUtc =
-                    DateTime.UtcNow;
                 SettingsStorage.Save(
                     _settings);
             }
@@ -403,7 +394,7 @@ namespace EasyVersionBackup
                     new SolidBrush(
                         ModernTheme.BackupProgressPulseColor);
 
-                e.Graphics.FillRectangle(
+                e.Graphics?.FillRectangle(
                     pulseBrush,
                     Rectangle.Intersect(
                         contentBounds,
@@ -423,7 +414,7 @@ namespace EasyVersionBackup
                         new SolidBrush(
                             ModernTheme.BackupProgressFillColor);
 
-                    e.Graphics.FillRectangle(
+                    e.Graphics?.FillRectangle(
                         progressBrush,
                         new Rectangle(
                             contentBounds.Left,
@@ -954,13 +945,17 @@ namespace EasyVersionBackup
             {
                 using ModernSettings form = new ModernSettings(_settings);
 
-                if (form.ShowDialog(this) == DialogResult.OK)
+                DialogResult settingsResult =
+                    form.ShowDialog(this);
+
+                if (settingsResult == DialogResult.OK)
                 {
                     _settings = form.ResultSettings;
                     SaveSettings();
-                    RefreshConfiguredPaths();
                     RestartAutoBackupCountdown();
                 }
+
+                RefreshConfiguredPaths();
             };
             left += buttonSize + buttonSpacing;
 
@@ -971,53 +966,29 @@ namespace EasyVersionBackup
             _activeDataLossWarningLabel = new Label
             {
                 Name = "labelActiveDataLossWarning",
-                Text = "Retention/Cleanup active - Data loss possible!",
+                Text = "⚠  Retention / Source Cleanup active",
                 AutoSize = false,
                 Location = new Point(left, toolbarTop),
                 Size = new Size(286, buttonSize + 1),
-                BackColor = Color.Red,
-                ForeColor = Color.White,
-                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = ModernTheme.WindowBackColor,
+                ForeColor = ModernTheme.TextColor,
+                BorderStyle = BorderStyle.None,
                 Font = new Font(
                     ModernTheme.FontFamilyName,
                     ModernTheme.DefaultFontSize,
-                    FontStyle.Bold),
-                TextAlign = ContentAlignment.MiddleCenter,
-                Padding = new Padding(0, 4, 0, 0),
+                    FontStyle.Regular),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = Padding.Empty,
                 Visible = false
             };
 
             _mainToolTip.SetToolTip(
                 _activeDataLossWarningLabel,
-                "WARNING: Retention and Source Cleanup are" +
+                "Retention and/or Source Cleanup is enabled." +
                 Environment.NewLine +
-                "experimental features." +
+                "Review the configured retention and cleanup settings" +
                 Environment.NewLine +
-                Environment.NewLine +
-                "Software defects, incorrect configuration, or" +
-                Environment.NewLine +
-                "incorrect source and destination paths can cause" +
-                Environment.NewLine +
-                "permanent and irreversible data loss." +
-                Environment.NewLine +
-                Environment.NewLine +
-                "Their use is strongly discouraged and should be" +
-                Environment.NewLine +
-                "limited to experimental purposes." +
-                Environment.NewLine +
-                Environment.NewLine +
-                "Do not use these features for important or" +
-                Environment.NewLine +
-                "irreplaceable data." +
-                Environment.NewLine +
-                Environment.NewLine +
-                "Before using them, always ensure that complete," +
-                Environment.NewLine +
-                "verified, and recoverable backups exist in a" +
-                Environment.NewLine +
-                "separate backup solution that EasyVersionBackup" +
-                Environment.NewLine +
-                "cannot modify or delete.");
+                "and maintain an independent backup of important files.");
 
             Controls.Add(buttonExit);
             Controls.Add(buttonAddConfiguredPath);
@@ -1027,6 +998,35 @@ namespace EasyVersionBackup
             Controls.Add(buttonModernSettings);
             Controls.Add(buttonAbout);
             Controls.Add(_activeDataLossWarningLabel);
+
+            _debugModeWarningLabel = new Label
+            {
+                Name = "labelDebugModeWarning",
+                Text = "Safety mode: Off",
+                AutoSize = true,
+                Location = new Point(
+                    _activeDataLossWarningLabel.Left,
+                    _activeDataLossWarningLabel.Top + 8),
+                BackColor = Color.Transparent,
+                ForeColor = ModernTheme.DisabledTextColor,
+                BorderStyle = BorderStyle.None,
+                Font = new Font(
+                    ModernTheme.FontFamilyName,
+                    ModernTheme.DefaultFontSize - 1,
+                    FontStyle.Regular),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Visible = false
+            };
+
+            _mainToolTip.SetToolTip(
+                _debugModeWarningLabel,
+                "Debug Mode is active." +
+                Environment.NewLine +
+                "One or more user-facing safety warnings or confirmations are disabled." +
+                Environment.NewLine +
+                "Technical deletion protections remain active.");
+
+            Controls.Add(_debugModeWarningLabel);
 
             buttonExit.BringToFront();
             buttonAddConfiguredPath.BringToFront();
@@ -1101,46 +1101,199 @@ namespace EasyVersionBackup
                 return;
             }
 
-            dataGridViewConfiguredPaths.DoDragDrop(dragInfo.Item1, DragDropEffects.Move);
+            try
+            {
+                ShowConfiguredPathDragPreview(dragInfo.Item1);
+                dataGridViewConfiguredPaths.DoDragDrop(dragInfo.Item1, DragDropEffects.Move);
+            }
+            finally
+            {
+                ClearConfiguredPathDragPreview();
+                dataGridViewConfiguredPaths.Tag = null;
+            }
         }
+        private void ShowConfiguredPathDragPreview(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= dataGridViewConfiguredPaths.Rows.Count)
+            {
+                return;
+            }
+
+            DataGridViewRow row = dataGridViewConfiguredPaths.Rows[rowIndex];
+            int width = dataGridViewConfiguredPaths.ClientSize.Width;
+            int height = row.Height;
+            if (width <= 0 || height <= 0)
+            {
+                return;
+            }
+
+            Bitmap image = new Bitmap(width, height);
+            using (Graphics graphics = Graphics.FromImage(image))
+            {
+                graphics.Clear(ModernTheme.ControlBackColor);
+                using SolidBrush textBrush = new SolidBrush(ModernTheme.TextColor);
+                foreach (DataGridViewCell cell in row.Cells)
+                {
+                    if (!cell.Visible || cell.OwningColumn == null)
+                    {
+                        continue;
+                    }
+
+                    Rectangle cellBounds = dataGridViewConfiguredPaths.GetCellDisplayRectangle(
+                        cell.ColumnIndex, rowIndex, true);
+                    if (cellBounds.Width <= 0)
+                    {
+                        continue;
+                    }
+
+                    graphics.DrawString(Convert.ToString(cell.FormattedValue) ?? string.Empty,
+                        dataGridViewConfiguredPaths.Font, textBrush,
+                        new RectangleF(cellBounds.Left, 0, cellBounds.Width, height));
+                }
+            }
+
+            _dragPreview = new DragRowPreviewForm
+            {
+                BackgroundImage = image,
+                BackgroundImageLayout = ImageLayout.None,
+                Size = image.Size,
+                Location = new Point(Cursor.Position.X, Cursor.Position.Y + SystemInformation.DragSize.Height),
+                Opacity = ModernTheme.DragRowPreviewOpacity
+            };
+            _dragPreview.Show();
+        }
+
+        private void ClearConfiguredPathDragPreview()
+        {
+            if (_dragGapPlaceholder != null)
+            {
+                if (_dragGapPlaceholder.DataGridView == dataGridViewConfiguredPaths)
+                {
+                    dataGridViewConfiguredPaths.Rows.Remove(_dragGapPlaceholder);
+                }
+                _dragGapPlaceholder.Dispose();
+                _dragGapPlaceholder = null;
+            }
+            _dragGapRow = -1;
+
+            if (_dragPreview != null)
+            {
+                Image? image = _dragPreview.BackgroundImage;
+                _dragPreview.BackgroundImage = null;
+                _dragPreview.Close();
+                _dragPreview.Dispose();
+                image?.Dispose();
+                _dragPreview = null;
+            }
+        }
+
+        private sealed class DragRowPreviewForm : Form
+        {
+            protected override bool ShowWithoutActivation => true;
+
+            protected override CreateParams CreateParams
+            {
+                get
+                {
+                    CreateParams parameters = base.CreateParams;
+                    parameters.ExStyle |= 0x00000020 | 0x00000080 | 0x08000000;
+                    return parameters;
+                }
+            }
+
+            public DragRowPreviewForm()
+            {
+                FormBorderStyle = FormBorderStyle.None;
+                ShowInTaskbar = false;
+                TopMost = true;
+            }
+        }
+
         private void dataGridViewConfiguredPaths_MouseUp(object? sender, MouseEventArgs e)
         {
             dataGridViewConfiguredPaths.Tag = null;
         }
         private void dataGridViewConfiguredPaths_DragOver(object? sender, DragEventArgs e)
         {
-            if (!e.Data.GetDataPresent(typeof(int)))
+            if (e.Data == null || !e.Data.GetDataPresent(typeof(int)))
             {
                 e.Effect = DragDropEffects.None;
                 return;
             }
 
-            Point clientPoint = dataGridViewConfiguredPaths.PointToClient(new Point(e.X, e.Y));
-            DataGridView.HitTestInfo hitTestInfo = dataGridViewConfiguredPaths.HitTest(clientPoint.X, clientPoint.Y);
+            if (_dragPreview != null)
+            {
+                _dragPreview.Location = new Point(e.X, e.Y + SystemInformation.DragSize.Height);
+            }
 
-            e.Effect = hitTestInfo.RowIndex >= 0 && hitTestInfo.RowIndex < _settings.BackupPathPairs.Count
-                ? DragDropEffects.Move
-                : DragDropEffects.None;
+            Point clientPoint = dataGridViewConfiguredPaths.PointToClient(new Point(e.X, e.Y));
+            DataGridView.HitTestInfo hit = dataGridViewConfiguredPaths.HitTest(clientPoint.X, clientPoint.Y);
+            int rowIndex = hit.RowIndex;
+            if (rowIndex < 0)
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
+            int insertionIndex;
+            if (_dragGapPlaceholder != null && rowIndex == _dragGapRow)
+            {
+                insertionIndex = _dragGapRow;
+            }
+            else
+            {
+                Rectangle bounds = dataGridViewConfiguredPaths.GetRowDisplayRectangle(rowIndex, false);
+                insertionIndex = rowIndex + (clientPoint.Y >= bounds.Top + bounds.Height / 2 ? 1 : 0);
+                if (_dragGapPlaceholder != null && rowIndex > _dragGapRow)
+                {
+                    insertionIndex--;
+                }
+            }
+
+            insertionIndex = Math.Clamp(insertionIndex, 0, _settings.BackupPathPairs.Count);
+            e.Effect = DragDropEffects.Move;
+            if (_dragGapPlaceholder != null && insertionIndex == _dragGapRow)
+            {
+                return;
+            }
+
+            if (_dragGapPlaceholder != null)
+            {
+                dataGridViewConfiguredPaths.Rows.Remove(_dragGapPlaceholder);
+                _dragGapPlaceholder.Dispose();
+            }
+
+            DataGridViewRow placeholder = (DataGridViewRow)dataGridViewConfiguredPaths.RowTemplate.Clone();
+            placeholder.CreateCells(dataGridViewConfiguredPaths);
+            placeholder.Height = dataGridViewConfiguredPaths.RowTemplate.Height;
+            placeholder.ReadOnly = true;
+            placeholder.DefaultCellStyle.BackColor = ModernTheme.WindowBackColor;
+            placeholder.DefaultCellStyle.SelectionBackColor = ModernTheme.WindowBackColor;
+            _dragGapPlaceholder = placeholder;
+            _dragGapRow = insertionIndex;
+            dataGridViewConfiguredPaths.Rows.Insert(insertionIndex, placeholder);
         }
+
         private void dataGridViewConfiguredPaths_DragDrop(object? sender, DragEventArgs e)
         {
-            if (!e.Data.GetDataPresent(typeof(int)))
+            if (e.Data == null || !e.Data.GetDataPresent(typeof(int)))
             {
                 return;
             }
 
             int sourceRowIndex = (int)e.Data.GetData(typeof(int))!;
-            Point clientPoint = dataGridViewConfiguredPaths.PointToClient(new Point(e.X, e.Y));
-            DataGridView.HitTestInfo hitTestInfo = dataGridViewConfiguredPaths.HitTest(clientPoint.X, clientPoint.Y);
-
-            if (hitTestInfo.RowIndex < 0 || hitTestInfo.RowIndex >= _settings.BackupPathPairs.Count)
+            int insertionIndex = _dragGapRow;
+            ClearConfiguredPathDragPreview();
+            dataGridViewConfiguredPaths.Tag = null;
+            if (insertionIndex < 0)
             {
                 return;
             }
 
-            MoveConfiguredPathRow(sourceRowIndex, hitTestInfo.RowIndex);
-            dataGridViewConfiguredPaths.Tag = null;
+            int targetRowIndex = insertionIndex > sourceRowIndex ? insertionIndex - 1 : insertionIndex;
+            MoveConfiguredPathRow(sourceRowIndex, targetRowIndex);
         }
+
         private void dataGridViewConfiguredPaths_MouseDown(object? sender, MouseEventArgs e)
         {
             if (e.Button != MouseButtons.Left)
@@ -1511,9 +1664,25 @@ namespace EasyVersionBackup
                 _settings.BackupPathPairs.Any(pair =>
                     pair.SourceCleanupEnabled);
 
+            bool debugModeActive =
+                DebugMode.Current.Enabled;
+
             _activeDataLossWarningLabel.Visible =
-                retentionActive ||
-                sourceCleanupActive;
+                !debugModeActive &&
+                !DebugMode.Current.HideActiveDataLossWarning &&
+                (retentionActive ||
+                 sourceCleanupActive);
+
+            if (_debugModeWarningLabel != null)
+            {
+                _debugModeWarningLabel.Visible =
+                    debugModeActive;
+
+                if (_debugModeWarningLabel.Visible)
+                {
+                    _debugModeWarningLabel.BringToFront();
+                }
+            }
 
             if (_activeDataLossWarningLabel.Visible)
             {
@@ -1796,6 +1965,8 @@ namespace EasyVersionBackup
                     return;
                 }
 
+                List<string> writtenFileNames = new List<string>();
+
                 List<BackupPathPair> runnablePairs =
                     new List<BackupPathPair>();
 
@@ -2043,6 +2214,12 @@ namespace EasyVersionBackup
                     if (runResult.Successful)
                     {
                         successfulBackups++;
+                        string pairKey = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+                        if (_settings.BackupStatusesByPair.TryGetValue(pairKey, out BackupPathStatus? completedStatus) &&
+                            !string.IsNullOrWhiteSpace(completedStatus.LastBackupFileName))
+                        {
+                            writtenFileNames.Add(completedStatus.LastBackupFileName);
+                        }
                         skippedPaths +=
                             runResult.SkippedPaths;
                         purgedBackups +=
@@ -2114,7 +2291,7 @@ namespace EasyVersionBackup
                 else
                 {
                     notifyIconMain.BalloonTipText =
-                        $"Backup finished. Successful: {successfulBackups}, failed: {failedBackups}, canceled: {canceledBackups}, skipped files: {skippedPaths}.{BackupHelper.FormatDestinationActionSummary(destinationActions)}{BackupHelper.FormatRetentionSummary(purgedBackups)}";
+                        $"{FormatWrittenFileNames(writtenFileNames)}Backup finished. Successful: {successfulBackups}, failed: {failedBackups}, canceled: {canceledBackups}, skipped files: {skippedPaths}.{BackupHelper.FormatDestinationActionSummary(destinationActions)}{BackupHelper.FormatRetentionSummary(purgedBackups)}";
 
                     notifyIconMain.BalloonTipIcon =
                         failedBackups > 0
@@ -2670,6 +2847,7 @@ namespace EasyVersionBackup
             int canceledBackups = 0;
             int skippedPaths = 0;
             int purgedBackups = 0;
+            List<string> writtenFileNames = new List<string>();
 
             List<string> destinationActions =
                 new List<string>();
@@ -2752,6 +2930,12 @@ namespace EasyVersionBackup
                     if (runResult.Successful)
                     {
                         successfulBackups++;
+                        string pairKey = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
+                        if (_settings.BackupStatusesByPair.TryGetValue(pairKey, out BackupPathStatus? completedStatus) &&
+                            !string.IsNullOrWhiteSpace(completedStatus.LastBackupFileName))
+                        {
+                            writtenFileNames.Add(completedStatus.LastBackupFileName);
+                        }
                         skippedPaths +=
                             runResult.SkippedPaths;
                         purgedBackups +=
@@ -2791,7 +2975,7 @@ namespace EasyVersionBackup
 
             notifyIconMain.BalloonTipText =
                 successfulBackups > 0
-                    ? $"Auto-Backup finished. Successful: {successfulBackups}, failed: {failedBackups}, canceled: {canceledBackups}, skipped files: {skippedPaths}.{BackupHelper.FormatDestinationActionSummary(destinationActions)}{BackupHelper.FormatRetentionSummary(purgedBackups)}"
+                    ? $"{FormatWrittenFileNames(writtenFileNames)}Auto-Backup finished. Successful: {successfulBackups}, failed: {failedBackups}, canceled: {canceledBackups}, skipped files: {skippedPaths}.{BackupHelper.FormatDestinationActionSummary(destinationActions)}{BackupHelper.FormatRetentionSummary(purgedBackups)}"
                     : $"Auto-Backup failed. Successful: 0, failed: {failedBackups}, canceled: {canceledBackups}.";
 
             notifyIconMain.BalloonTipIcon =
@@ -3201,6 +3385,18 @@ namespace EasyVersionBackup
 
             return bitmap;
         }
+        // Semantic Anchor: Format names written during the current backup run for tray notifications.
+        private static string FormatWrittenFileNames(List<string> writtenFileNames)
+        {
+            if (writtenFileNames.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            string fileList = string.Join(", ", writtenFileNames);
+            return $"File: {fileList}{Environment.NewLine}";
+        }
+
         private void SetBackupStatus(
             BackupPathPair pair,
             string status,
@@ -3453,6 +3649,133 @@ namespace EasyVersionBackup
 
 
 
+        // Semantic Anchor: Context actions affect the selected row's filter/options only.
+        private void ConfiguredPaths_CellMouseDown(object? sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right || e.RowIndex < 0 ||
+                e.RowIndex >= _settings.BackupPathPairs.Count || e.ColumnIndex < 0)
+                return;
+
+            string columnName = dataGridViewConfiguredPaths.Columns[e.ColumnIndex].Name;
+            bool isFilter = columnName == "ColumnConfiguredSourceExclusions";
+            if (!isFilter && columnName != "ColumnConfiguredSourceSettings")
+                return;
+
+            int row = e.RowIndex;
+            ContextMenuStrip menu = new ContextMenuStrip
+            {
+                Renderer = ModernTheme.CreateContextMenuRenderer(),
+                BackColor = ModernTheme.ControlBackColor,
+                ForeColor = ModernTheme.TextColor,
+                Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize)
+            };
+            menu.Items.Add("Copy Settings", null, (_, _) =>
+            {
+                if (isFilter)
+                    _copiedExclusions = GetRowExclusions(row);
+                else
+                    _copiedPairSettings = ClonePairOptions(_settings.BackupPathPairs[row]);
+            });
+            ToolStripItem paste = menu.Items.Add("Paste Settings", null, (_, _) =>
+            {
+                if (isFilter && _copiedExclusions != null)
+                    ApplyRowExclusions(row, _copiedExclusions);
+                else if (!isFilter && _copiedPairSettings != null)
+                    ApplyPairOptions(row, _copiedPairSettings);
+            });
+            paste.Enabled = isFilter ? _copiedExclusions != null : _copiedPairSettings != null;
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("Save as Template", null, (_, _) =>
+            {
+                string? name = TemplateDialogs.AskName(this, isFilter
+                    ? _settings.ExclusionTemplates.Keys.AsEnumerable() : _settings.PairSettingsTemplates.Keys.AsEnumerable());
+                if (string.IsNullOrWhiteSpace(name)) return;
+                string? existingName = (isFilter ? _settings.ExclusionTemplates.Keys.AsEnumerable() : _settings.PairSettingsTemplates.Keys.AsEnumerable())
+                    .FirstOrDefault(value => string.Equals(value, name, StringComparison.OrdinalIgnoreCase));
+                name = existingName ?? name;
+                if (isFilter)
+                    _settings.ExclusionTemplates[name] = GetRowExclusions(row);
+                else
+                    _settings.PairSettingsTemplates[name] = ClonePairOptions(_settings.BackupPathPairs[row]);
+                SaveSettings();
+            });
+            ToolStripMenuItem load = new ToolStripMenuItem("Load Template");
+            load.BackColor = ModernTheme.ControlBackColor;
+            load.ForeColor = ModernTheme.TextColor;
+            IEnumerable<string> names = isFilter
+                ? _settings.ExclusionTemplates.Keys
+                : _settings.PairSettingsTemplates.Keys;
+            foreach (string name in names.OrderBy(value => value, StringComparer.OrdinalIgnoreCase))
+            {
+                string selectedName = name;
+                ToolStripItem templateItem = load.DropDownItems.Add(selectedName, null, (_, _) =>
+                {
+                    if (isFilter && _settings.ExclusionTemplates.TryGetValue(selectedName, out List<string>? paths))
+                        ApplyRowExclusions(row, paths);
+                    else if (!isFilter && _settings.PairSettingsTemplates.TryGetValue(selectedName, out BackupPathPair? options))
+                        ApplyPairOptions(row, options);
+                });
+                templateItem.ForeColor = ModernTheme.TextColor;
+                templateItem.BackColor = ModernTheme.ControlBackColor;
+            }
+            load.Enabled = load.DropDownItems.Count > 0;
+            menu.Items.Add(load);
+            Rectangle bounds = dataGridViewConfiguredPaths.GetCellDisplayRectangle(e.ColumnIndex, row, false);
+            menu.Show(dataGridViewConfiguredPaths, new Point(bounds.Left + e.X, bounds.Top + e.Y));
+        }
+
+        private List<string> GetRowExclusions(int row)
+        {
+            return dataGridViewConfiguredPaths.Rows[row].Tag is List<string> paths
+                ? new List<string>(paths) : new List<string>();
+        }
+
+        private void ApplyRowExclusions(int row, List<string> paths)
+        {
+            dataGridViewConfiguredPaths.Rows[row].Tag = new List<string>(paths);
+            UpdateConfiguredExclusionButtonStyle(row);
+            SyncEnabledPairsFromGrid();
+            SaveSettings();
+        }
+
+        private static BackupPathPair ClonePairOptions(BackupPathPair pair)
+        {
+            BackupPathPair clone = JsonSerializer.Deserialize<BackupPathPair>(JsonSerializer.Serialize(pair))
+                ?? new BackupPathPair();
+            clone.SourceDirectory = string.Empty;
+            clone.TargetDirectory = string.Empty;
+            clone.ExcludedPaths = new List<string>();
+            return clone;
+        }
+
+        private void ApplyPairOptions(int row, BackupPathPair options)
+        {
+            SyncEnabledPairsFromGrid();
+            BackupPathPair pair = _settings.BackupPathPairs[row];
+            pair.Versioning = options.Versioning;
+            pair.IgnoreCopyErrors = options.IgnoreCopyErrors;
+            pair.SkipDialogs = options.SkipDialogs;
+            pair.AutoBackupIntervalSeconds = options.AutoBackupIntervalSeconds;
+            pair.RetentionKeepLastEnabled = options.RetentionKeepLastEnabled;
+            pair.RetentionKeepLastCount = options.RetentionKeepLastCount;
+            pair.RetentionKeepDaysEnabled = options.RetentionKeepDaysEnabled;
+            pair.RetentionKeepDaysCount = options.RetentionKeepDaysCount;
+            pair.RetentionMode = options.RetentionMode;
+            pair.RetentionExcludedTags = new List<string>(options.RetentionExcludedTags);
+            pair.SourceCleanupEnabled = options.SourceCleanupEnabled;
+            pair.SourceCleanupRelativeDirectory = options.SourceCleanupRelativeDirectory;
+            pair.SourceCleanupFileExtensions = new List<string>(options.SourceCleanupFileExtensions);
+            pair.SourceCleanupMode = options.SourceCleanupMode;
+            pair.SourceCleanupKeepLastCount = options.SourceCleanupKeepLastCount;
+            pair.SourceCleanupKeepAfterDate = options.SourceCleanupKeepAfterDate;
+            SaveSettings();
+            UpdateActiveDataLossWarning();
+            RestartAutoBackupCountdown();
+            DataGridViewCell cell = dataGridViewConfiguredPaths.Rows[row].Cells["ColumnConfiguredSourceSettings"];
+            cell.ToolTipText = GetConfiguredSettingsToolTipText(pair);
+            dataGridViewConfiguredPaths.InvalidateCell(cell);
+        }
+
         private void dataGridViewConfiguredPaths_CellContentClick(object? sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0 || e.ColumnIndex < 0)
@@ -3629,9 +3952,9 @@ namespace EasyVersionBackup
                     e.RowIndex,
                     out BackupProgressDisplayState? progressState) &&
                 ((columnName == "ColumnConfiguredSourceDirectory" &&
-                  progressState.Area == BackupFileProgressArea.Source) ||
+                  progressState?.Area == BackupFileProgressArea.Source) ||
                  (columnName == "ColumnConfiguredTargetDirectory" &&
-                  progressState.Area == BackupFileProgressArea.Target)))
+                  progressState?.Area == BackupFileProgressArea.Target)))
             {
                 PaintBackupProgressCell(
                     e,
@@ -3856,6 +4179,15 @@ namespace EasyVersionBackup
             BackupPathPair pair,
             List<string> sourceCleanupPreviewPaths)
         {
+            if (DebugMode.Current.Enabled &&
+                DebugMode.Current.SkipDeletionConfirmationDialogs)
+            {
+                BackupLogger.WriteLine(
+                    $"SOURCE CLEANUP CONFIRMATION BYPASSED BY DEBUG MODE | source=\"{pair.SourceDirectory}\" | files={sourceCleanupPreviewPaths.Count}");
+
+                return DialogResult.Yes;
+            }
+
             List<string> deletionPreviewLines =
                 new List<string>
                 {
@@ -3886,6 +4218,15 @@ namespace EasyVersionBackup
             BackupPathPair pair,
             List<string> retentionPreviewPaths)
         {
+            if (DebugMode.Current.Enabled &&
+                DebugMode.Current.SkipDeletionConfirmationDialogs)
+            {
+                BackupLogger.WriteLine(
+                    $"RETENTION CONFIRMATION BYPASSED BY DEBUG MODE | target=\"{pair.TargetDirectory}\" | files={retentionPreviewPaths.Count}");
+
+                return DialogResult.Yes;
+            }
+
             List<string> deletionPreviewLines =
                 new List<string>
                 {

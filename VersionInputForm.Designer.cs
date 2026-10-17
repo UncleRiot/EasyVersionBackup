@@ -1,9 +1,10 @@
-﻿namespace EasyVersionBackup
+﻿// Semantic Anchor: Designer wiring only; navigation is owned by TabNavigationDataGridView, appearance by ModernTheme.
+namespace EasyVersionBackup
 {
     partial class VersionInputForm
     {
         private System.ComponentModel.IContainer components = null;
-        private System.Windows.Forms.DataGridView dataGridViewVersions;
+        private TabNavigationDataGridView dataGridViewVersions;
         private System.Windows.Forms.Button buttonOk;
         private System.Windows.Forms.Button buttonCancel;
         private System.Windows.Forms.Label labelInfo;
@@ -24,7 +25,7 @@
 
         private void InitializeComponent()
         {
-            dataGridViewVersions = new System.Windows.Forms.DataGridView();
+            dataGridViewVersions = new TabNavigationDataGridView();
             ColumnSourceName = new System.Windows.Forms.DataGridViewTextBoxColumn();
             ColumnVersion = new System.Windows.Forms.DataGridViewTextBoxColumn();
             ColumnTag = new System.Windows.Forms.DataGridViewComboBoxColumn();

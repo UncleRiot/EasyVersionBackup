@@ -11,6 +11,30 @@ namespace EasyVersionBackup
 {
     public static class ModernTheme
     {
+        // Semantic Anchor: Shared drag row preview appearance; existing theme values remain authoritative.
+        public const double DragRowPreviewOpacity = 0.72;
+
+        // Semantic Anchor: All popup menus use the shared dark palette, including their image margin and selection.
+        public static System.Windows.Forms.ToolStripRenderer CreateContextMenuRenderer()
+        {
+            return new System.Windows.Forms.ToolStripProfessionalRenderer(new DarkContextMenuColorTable());
+        }
+
+        private sealed class DarkContextMenuColorTable : System.Windows.Forms.ProfessionalColorTable
+        {
+            public override Color ToolStripDropDownBackground => ControlBackColor;
+            public override Color ImageMarginGradientBegin => WindowBackColor;
+            public override Color ImageMarginGradientMiddle => WindowBackColor;
+            public override Color ImageMarginGradientEnd => WindowBackColor;
+            public override Color MenuItemSelected => ControlHoverBackColor;
+            public override Color MenuItemSelectedGradientBegin => ControlHoverBackColor;
+            public override Color MenuItemSelectedGradientEnd => ControlHoverBackColor;
+            public override Color MenuItemBorder => ControlHoverBackColor;
+            public override Color MenuBorder => WindowBorderColor;
+            public override Color SeparatorDark => WindowBackColor;
+            public override Color SeparatorLight => WindowBorderColor;
+        }
+
         // window color settings start
         public static readonly Color WindowBackColor = Color.FromArgb(27, 40, 56);
         public static readonly Color TitleBarBackColor = Color.FromArgb(23, 26, 33);

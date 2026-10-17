@@ -1,4 +1,5 @@
-﻿namespace EasyVersionBackup
+﻿// Semantic Anchor: Designer wiring only; navigation is owned by TabNavigationDataGridView, appearance by ModernTheme.
+namespace EasyVersionBackup
 {
     partial class Form1
     {
@@ -11,7 +12,7 @@
         private System.Windows.Forms.ToolStripMenuItem helpToolStripMenuItem;
         private System.Windows.Forms.Button buttonBackup;
         private System.Windows.Forms.Label labelConfiguredPaths;
-        private System.Windows.Forms.DataGridView dataGridViewConfiguredPaths;
+        private TabNavigationDataGridView dataGridViewConfiguredPaths;
         private System.Windows.Forms.DataGridViewCheckBoxColumn ColumnConfiguredIsEnabled;
         private System.Windows.Forms.DataGridViewTextBoxColumn ColumnConfiguredSourceDirectory;
         private System.Windows.Forms.DataGridViewTextBoxColumn ColumnConfiguredTargetDirectory;
@@ -42,7 +43,7 @@
             helpToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             buttonBackup = new System.Windows.Forms.Button();
             labelConfiguredPaths = new System.Windows.Forms.Label();
-            dataGridViewConfiguredPaths = new System.Windows.Forms.DataGridView();
+            dataGridViewConfiguredPaths = new TabNavigationDataGridView();
             ColumnConfiguredIsEnabled = new System.Windows.Forms.DataGridViewCheckBoxColumn();
             ColumnConfiguredSourceDirectory = new System.Windows.Forms.DataGridViewTextBoxColumn();
             ColumnConfiguredTargetDirectory = new System.Windows.Forms.DataGridViewTextBoxColumn();

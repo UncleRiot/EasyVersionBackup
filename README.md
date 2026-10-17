@@ -3,18 +3,6 @@
 > Read the [Data-Loss Warning and Disclaimer](DISCLAIMER.md) before use.
 
 
-## Important Safety Notice
-
-Retention and Source Cleanup are experimental features that can permanently delete source files or older backups.
-
-Both features are disabled by default and must be enabled explicitly. Always keep an independent, verified backup before using them.
-
-See the [Wiki](https://github.com/UncleRiot/EasyVersionBackup/wiki) for detailed configuration, restore instructions, limitations, and safety information.
-
-<br>
-<br>
-
-
 # EasyVersionBackup
 
 EasyVersionBackup is a lightweight Windows tool for creating versioned backups of folders. 
@@ -119,6 +107,15 @@ Source Cleanup
 - Confirmation prompt before removing existing exclusion entries
 - Supports source-relative paths and glob-style patterns
 
+Examples:
+
+    bin
+    bin\
+    .sav
+    *.sav
+    Saved\SaveGames\*.sav
+    **\SaveGames\*.sav
+    Saved\**\*.sav
 
 Pattern behavior:
 
@@ -145,19 +142,20 @@ Pattern behavior:
 
 ### Source Cleanup
 
-- Experimental feature for removing old source files after a successful backup
-- Must be enabled globally and per backup pair
-- Supports multiple rules, for example:
-  ```text
-  .sav
-  G1R*.sav
-  Saved\SaveGames\.sav
-  Saved\SaveGames\G1R*.sav
-  ```
-- Keep the newest files or delete files older than a selected date
-- Shows a deletion preview before cleanup
+- Remove old source files after a successful backup
+- Configure cleanup rules separately for every backup pair
+- Supports multiple file rules, for example:
+
+    .sav
+    Saved\SaveGames\.sav
+    Saved\SaveGames\*.sav
+
+- Keep only the newest configured number of files
+- Or delete files modified before a selected date
+- Cleanup is restricted to explicitly configured file types and source-relative folders
 - Directories are never deleted
-- Cleanup does not run if the backup fails or is canceled
+- Files outside the configured rules remain untouched
+- Cleanup does not run when the backup fails or is canceled
 
 ### Flexible Backup Timer
 
@@ -265,10 +263,8 @@ Pattern behavior:
    - Create a versioned directory or ZIP archive
    - Report progress directly in the backup-pair row
    - Skip problematic files if configured
-   - Preview Source Cleanup and Retention candidates before deletion
-   - Allow canceling the backup or continuing without deletion
-   - Apply confirmed Source Cleanup only after a successful backup
-   - Apply confirmed Retention after backup creation
+   - Apply source cleanup only after a successful backup
+   - Apply retention only after user confirmation
    - Store the final backup status per entry
    - Persist the selected version only after success
 

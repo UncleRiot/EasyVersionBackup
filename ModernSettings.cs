@@ -1,6 +1,7 @@
 ﻿// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
+// Semantic Anchor: Preserve themed settings UI and existing retention controls; template manager edits the cloned settings state.
 // 03.05.2026 /dc
 
 using System;
@@ -290,9 +291,13 @@ namespace EasyVersionBackup
 
             Button buttonExportSettings = CreateToolButton("buttonExportSettings", "Export Settings", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsRowTop(0)));
             Button buttonImportSettings = CreateToolButton("buttonImportSettings", "Import Settings", new Point(buttonExportSettings.Right + ModernTheme.ToolbarButtonSpacing, buttonExportSettings.Top));
+            Button buttonDebugMode = CreateToolButton("buttonDebugMode", "Debug Mode", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsRowTop(1)));
 
             buttonExportSettings.Click += buttonExportSettings_Click;
             buttonImportSettings.Click += buttonImportSettings_Click;
+            buttonDebugMode.Click += buttonDebugMode_Click;
+            Button buttonTemplateManager = CreateToolButton("buttonTemplateManager", "Template Manager", new Point(buttonDebugMode.Right + ModernTheme.ToolbarButtonSpacing, buttonDebugMode.Top));
+            buttonTemplateManager.Click += (_, _) => TemplateDialogs.Manage(this, ResultSettings);
 
             settingsToolTip.SetToolTip(comboBoxDefaultVersioning, "Default version or date pattern for new backups");
             settingsToolTip.SetToolTip(checkBoxAutoIncrementVersion, "Automatically increment the suggested version");
@@ -311,6 +316,7 @@ namespace EasyVersionBackup
             settingsToolTip.SetToolTip(checkBoxShowRetentionWarningDialogue, "Ask for confirmation before Retention deletes old ZIP backups.");
             settingsToolTip.SetToolTip(buttonExportSettings, "Export current settings to " + ToolsHelper.SettingsFileName);
             settingsToolTip.SetToolTip(buttonImportSettings, "Import settings from " + ToolsHelper.SettingsFileName);
+            settingsToolTip.SetToolTip(buttonDebugMode, "Password-protected access to persistent Debug Mode safety overrides.");
             settingsToolTip.SetToolTip(textBoxTag, "New backup tag");
             settingsToolTip.SetToolTip(buttonAddTag, "Add tag");
             settingsToolTip.SetToolTip(buttonRemoveTag, "Remove selected tag");
@@ -376,6 +382,8 @@ namespace EasyVersionBackup
             Panel tabPageTools = CreateTabPage("tabPageTools");
             tabPageTools.Controls.Add(buttonExportSettings);
             tabPageTools.Controls.Add(buttonImportSettings);
+            tabPageTools.Controls.Add(buttonDebugMode);
+            tabPageTools.Controls.Add(buttonTemplateManager);
 
             ApplyDynamicSettingsLayout(tabPageGeneral);
             ApplyDynamicSettingsLayout(tabPageBackup);
@@ -524,6 +532,14 @@ namespace EasyVersionBackup
             button.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
 
             return button;
+        }
+
+        private void buttonDebugMode_Click(
+            object? sender,
+            EventArgs e)
+        {
+            DebugMode.ShowAccessAndSettingsDialog(
+                this);
         }
 
         private void buttonExportSettings_Click(object? sender, EventArgs e)
@@ -887,7 +903,7 @@ namespace EasyVersionBackup
                 ModernConfirmationDialog.ShowExperimentalDataLossConfirmation(
                     this,
                     "Source Cleanup",
-                    "permanently deletes source files from the original source folder after a successful backup.");
+                    "removes files from the original source directory after a successful backup, according to your configuration.");
 
             if (confirmationResult != DialogResult.OK)
             {
@@ -898,6 +914,11 @@ namespace EasyVersionBackup
         private void UpdateRetentionWarningDialogueControls()
         {
             checkBoxShowRetentionWarningDialogue.Enabled = checkBoxAutoPurgeEnabled.Checked;
+
+            if (checkBoxShowRetentionWarningDialogue.Parent == null)
+            {
+                return;
+            }
 
             foreach (Control control in checkBoxShowRetentionWarningDialogue.Parent.Controls)
             {
@@ -915,7 +936,7 @@ namespace EasyVersionBackup
                 ModernConfirmationDialog.ShowExperimentalDataLossConfirmation(
                     this,
                     "Retention",
-                    "permanently deletes older backup files after a successful backup.");
+                    "automatically removes older backup versions according to your configured retention policy.");
 
             return confirmationResult == DialogResult.OK;
         }
@@ -1372,6 +1393,14 @@ namespace EasyVersionBackup
                 AutoBackupEnabled = settings.AutoBackupEnabled,
                 AutoBackupIntervalSeconds = settings.AutoBackupIntervalSeconds,
                 BackupPathPairs = new List<BackupPathPair>(),
+                ExclusionTemplates = settings.ExclusionTemplates != null
+                    ? settings.ExclusionTemplates.ToDictionary(entry => entry.Key, entry => new List<string>(entry.Value), StringComparer.OrdinalIgnoreCase)
+                    : new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase),
+                PairSettingsTemplates = settings.PairSettingsTemplates != null
+                    ? settings.PairSettingsTemplates.ToDictionary(entry => entry.Key,
+                        entry => System.Text.Json.JsonSerializer.Deserialize<BackupPathPair>(System.Text.Json.JsonSerializer.Serialize(entry.Value)) ?? new BackupPathPair(),
+                        StringComparer.OrdinalIgnoreCase)
+                    : new Dictionary<string, BackupPathPair>(StringComparer.OrdinalIgnoreCase),
                 LastUsedVersionsByPair = settings.LastUsedVersionsByPair != null
                     ? new Dictionary<string, string>(settings.LastUsedVersionsByPair)
                     : new Dictionary<string, string>(),

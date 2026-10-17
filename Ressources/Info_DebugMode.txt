@@ -1,0 +1,35 @@
+DebugMode.cs
+- The Password in cleartext is "Explosion!!" … see following code:
+
+
+================================================================
+using System;
+using System.Drawing;
+using System.IO;
+using System.Text.Json;
+using System.Windows.Forms;
+
+namespace EasyVersionBackup
+{
+    public sealed class DebugModeSettings
+    {
+        public bool Enabled { get; set; }
+        public bool HideActiveDataLossWarning { get; set; }
+        public bool SkipInitialDisclaimer { get; set; }
+        public bool SkipRecurringDataLossWarning { get; set; }
+        public bool SkipExperimentalActivationConfirmations { get; set; }
+        public bool SkipDeletionConfirmationDialogs { get; set; }
+    }
+
+    public static class DebugMode
+    {
+        // This password is intentionally stored as plain text.
+        // It is only a simple access barrier for accidental activation.
+        // It is NOT a security boundary and must not be treated as one.
+        private const string Password =
+            "Explosion!!";
+
+
+================================================================
+
+- DebugMode let's you enable/disable security warnings
