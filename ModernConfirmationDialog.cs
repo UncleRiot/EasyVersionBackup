@@ -170,67 +170,53 @@ namespace EasyVersionBackup
             Form owner)
         {
             const string requiredText =
-                "I accept the risk of data loss.";
+                "I ACCEPT";
 
             const string disclaimerText =
-                "IMPORTANT DATA-LOSS WARNING AND DISCLAIMER\r\n" +
-                "Experimental Software\r\n\r\n" +
-                "This software is an experimental hobby project and proof of concept.\r\n\r\n" +
-                "It is not a professional, certified, audited, supported, or production-ready backup solution. It has not been validated for business-critical, commercial, regulated, or other professional use.\r\n\r\n" +
-                "Use of this software for production systems, business purposes, or the protection of important, valuable, confidential, regulated, or irreplaceable data is strongly discouraged.\r\n\r\n" +
-                "Risk of Permanent Data Loss\r\n\r\n" +
-                "This software includes functions that may delete, purge, overwrite, move, replace, or otherwise modify files, directories, backups, snapshots, and other data at source and destination locations.\r\n\r\n" +
-                "Retention, cleanup, synchronization, and purging operations may result in partial or complete, permanent, and irreversible data loss.\r\n\r\n" +
-                "Data loss may occur due to, among other things:\r\n\r\n" +
-                "    software defects or programming errors;\r\n" +
-                "    design flaws or undocumented behavior;\r\n" +
-                "    incorrect configuration or operation;\r\n" +
-                "    incorrect source or destination paths;\r\n" +
-                "    retention, cleanup, filtering, or exclusion rules;\r\n" +
-                "    unexpected interactions with operating systems, storage devices, network services, filesystems, permissions, or third-party software;\r\n" +
-                "    hardware, storage, network, or service failures;\r\n" +
-                "    interrupted, incomplete, corrupted, or unverified backup operations.\r\n\r\n" +
-                "Warnings, previews, dry-run functions, confirmation dialogs, logs, and other protective measures may themselves contain defects or may fail to identify every destructive operation.\r\n\r\n" +
-                "DO NOT RELY ON THIS SOFTWARE AS YOUR ONLY BACKUP.\r\n\r\n" +
-                "Before using it, create independent and verified backups that are not accessible to this software. Test all functionality, including retention, purging, deletion, backup verification, and restoration, in an isolated non-production environment.\r\n\r\n" +
-                "The user is solely responsible for reviewing all settings, paths, rules, filters, exclusions, retention policies, deletion options, backup results, and restore procedures.\r\n\r\n" +
-                "No Warranty\r\n\r\n" +
-                "TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THIS SOFTWARE IS PROVIDED “AS IS” AND “AS AVAILABLE”, WITH ALL FAULTS AND WITHOUT WARRANTY OF ANY KIND, WHETHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE.\r\n\r\n" +
-                "ALL WARRANTIES ARE DISCLAIMED, INCLUDING, WITHOUT LIMITATION, WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, ACCURACY, RELIABILITY, AVAILABILITY, SECURITY, COMPATIBILITY, DATA INTEGRITY, ERROR-FREE OPERATION, AND FITNESS FOR BACKUP, RESTORATION, RETENTION, ARCHIVING, OR DISASTER-RECOVERY PURPOSES.\r\n\r\n" +
-                "NO REPRESENTATION OR WARRANTY IS MADE THAT:\r\n\r\n" +
-                "    backups will be complete, correct, recoverable, or available;\r\n" +
-                "    restoration will succeed;\r\n" +
-                "    retention or deletion rules will operate as expected;\r\n" +
-                "    data will not be deleted, overwritten, corrupted, lost, or disclosed;\r\n" +
-                "    defects will be identified, corrected, or supported;\r\n" +
-                "    the software is suitable for any particular environment or purpose.\r\n\r\n" +
-                "Limitation of Liability\r\n\r\n" +
-                "TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE AUTHOR, MAINTAINERS, CONTRIBUTORS, COPYRIGHT HOLDERS, AND DISTRIBUTORS SHALL NOT BE LIABLE FOR ANY CLAIM, LOSS, DAMAGE, COST, OR OTHER LIABILITY ARISING FROM OR RELATED TO THIS SOFTWARE OR ITS USE, MISUSE, CONFIGURATION, MODIFICATION, DISTRIBUTION, OR INABILITY TO USE.\r\n\r\n" +
-                "THIS EXCLUSION INCLUDES, WITHOUT LIMITATION:\r\n\r\n" +
-                "    deletion, loss, corruption, overwriting, alteration, disclosure, or unavailability of data;\r\n" +
-                "    failed, incomplete, unusable, or unrecoverable backups;\r\n" +
-                "    failed restoration or disaster recovery;\r\n" +
-                "    loss of revenue, profits, contracts, business, goodwill, or expected savings;\r\n" +
-                "    business interruption or system downtime;\r\n" +
-                "    costs of data recovery, restoration, replacement systems, services, or substitute software;\r\n" +
-                "    direct, indirect, incidental, special, exemplary, punitive, or consequential damages.\r\n\r\n" +
-                "THIS LIMITATION APPLIES REGARDLESS OF THE LEGAL THEORY OF LIABILITY, INCLUDING CONTRACT, TORT, NEGLIGENCE, STRICT LIABILITY, OR OTHERWISE, AND EVEN IF THE POSSIBILITY OF SUCH DAMAGE WAS KNOWN OR REASONABLY FORESEEABLE.\r\n\r\n" +
-                "Nothing in this disclaimer excludes or limits liability that cannot legally be excluded or limited under applicable law.\r\n\r\n" +
-                "Assumption of Risk\r\n\r\n" +
-                "USE OF THIS SOFTWARE IS ENTIRELY AT YOUR OWN RISK.\r\n\r\n" +
-                "By installing, starting, configuring, or using the software, you acknowledge that:\r\n\r\n" +
-                "    you have read and understood this warning;\r\n" +
-                "    the software can permanently delete or damage source and destination data;\r\n" +
-                "    no backup or restoration result is guaranteed;\r\n" +
-                "    you have created independent, verified, and recoverable backups;\r\n" +
-                "    you have tested the software in a safe, isolated environment;\r\n" +
-                "    you accept full responsibility for deciding whether and how to use it;\r\n" +
-                "    you assume all risks and consequences arising from its use.\r\n\r\n" +
-                "If you do not understand or accept these risks, do not install, start, configure, or use the software.";
+                "Important Information and Disclaimer\r\n" +
+                "\r\n" +
+                "Experimental Software – Please Read Before Use\r\n" +
+                "\r\n" +
+                "EasyVersionBackup is an independently developed, experimental software project intended for personal use, testing, and evaluation.\r\n" +
+                "\r\n" +
+                "The software is designed to create and manage file backups. However, like any backup solution, it may contain defects or behave unexpectedly under certain conditions.\r\n" +
+                "\r\n" +
+                "Important Considerations\r\n" +
+                "\r\n" +
+                "Although the software is developed with care, it has not undergone formal certification, independent security auditing, or comprehensive validation for business-critical or regulated environments.\r\n" +
+                "\r\n" +
+                "Certain functions, including backup synchronization, retention, cleanup, and file replacement, may modify or delete existing files as part of their intended operation.\r\n" +
+                "\r\n" +
+                "Incorrect settings, software defects, interrupted operations, or unexpected system conditions could potentially result in incomplete backups or unintended data loss.\r\n" +
+                "\r\n" +
+                "To minimize these risks, we recommend:\r\n" +
+                "\r\n" +
+                "    Verifying backup configurations before relying on them.\r\n" +
+                "    Testing backup and restore operations with non-critical data.\r\n" +
+                "    Maintaining an additional, independent backup of important files.\r\n" +
+                "    Reviewing retention and cleanup settings carefully.\r\n" +
+                "\r\n" +
+                "Warranty and Liability\r\n" +
+                "\r\n" +
+                "This software is provided \"AS IS\", without warranties of any kind, express or implied, to the extent permitted by applicable law.\r\n" +
+                "\r\n" +
+                "The author does not guarantee uninterrupted operation, error-free functionality, successful backups, or the recoverability of stored data.\r\n" +
+                "\r\n" +
+                "To the extent permitted by applicable law, the author shall not be liable for losses or damages resulting from the use or inability to use this software, including loss of data.\r\n" +
+                "\r\n" +
+                "Nothing in this disclaimer excludes or limits liability where such exclusion or limitation is prohibited by applicable law.\r\n" +
+                "\r\n" +
+                "Acknowledgment\r\n" +
+                "\r\n" +
+                "By continuing, you confirm that you understand the experimental nature of this software, the potential risks associated with backup and file-management operations, and the importance of maintaining independent backups of valuable data.\r\n" +
+                "\r\n" +
+                "Required confirmation:\r\n" +
+                "\r\n" +
+                "I ACCEPT";
 
             using Form form = new Form();
 
-            form.Text = "Important data-loss warning";
+            form.Text = "Important Information and Disclaimer";
             form.StartPosition = FormStartPosition.CenterParent;
             form.FormBorderStyle = FormBorderStyle.None;
             form.ClientSize = new Size(820, 700);
@@ -261,7 +247,7 @@ namespace EasyVersionBackup
             Label labelModernTitle = new Label
             {
                 Name = "labelModernTitle",
-                Text = "Important data-loss warning",
+                Text = "Important Information and Disclaimer",
                 AutoSize = false,
                 Location = new Point(ModernTheme.TitleBarTextLeft, 0),
                 Size = new Size(form.ClientSize.Width - 66, ModernTheme.TitleBarHeight),
@@ -312,7 +298,7 @@ namespace EasyVersionBackup
 
             Label labelRequiredPrompt = new Label
             {
-                Text = "Type the following text to accept:",
+                Text = "Type the following text in UPPERCASE to accept:",
                 AutoSize = false,
                 Location = new Point(18, 582),
                 Size = new Size(form.ClientSize.Width - 36, 22),
@@ -459,36 +445,109 @@ namespace EasyVersionBackup
             return result;
         }
 
+        // Semantic Anchor: Experimental feature activation is explicit, themed, and independent of Debug Mode.
         public static DialogResult ShowExperimentalDataLossConfirmation(
             Form owner,
             string featureName,
             string deletionDescription)
         {
-            const string requiredText =
-                "I understand the risk of data loss!";
+            string message = featureName == "Retention"
+                ? "Retention automatically removes older backup versions according to your configured retention policy. " +
+                  "Deleted versions may no longer be recoverable. Review your retention settings and keep an independent backup of important files."
+                : "Source Cleanup removes files from the original source directory after a successful backup, according to your configuration. " +
+                  "Deleted source files may no longer be recoverable from their original location. Check your source and destination paths and make sure the backup is accessible.";
 
-            DialogResult result =
-                ShowTextConfirmation(
-                    owner,
-                    "Enable experimental feature?",
-                    featureName + " is an experimental feature that " +
-                    deletionDescription +
-                    " By enabling this feature, you are explicitly warned that data can be deleted permanently, unintentionally, and irreversibly. " +
-                    "Deleted data cannot be restored by EasyVersionBackup. The use of this feature is expressly discouraged. " +
-                    "Before enabling it, verify that all settings and affected paths are correct and that an independent, complete, and readable backup exists. " +
-                    "You are solely responsible for reviewing the configuration and affected paths. " +
-                    "NO WARRANTY OR GUARANTEE OF ANY KIND IS PROVIDED. THE AUTHOR ASSUMES NO RESPONSIBILITY OR LIABILITY FOR DATA LOSS, " +
-                    "CORRUPTION, DELETION, LOSS OF BACKUPS, CONSEQUENTIAL DAMAGE, OR ANY OTHER DAMAGE RESULTING FROM ENABLING OR USING THIS FEATURE.",
-                    requiredText,
-                    new Size(620, 420));
+            message += "\n\nThis is an experimental feature. By enabling it, you acknowledge the possible consequences of deletion " +
+                       "and accept responsibility for your configuration. The software is provided AS IS, without warranties, " +
+                       "to the extent permitted by applicable law. Nothing excludes liability where exclusion is prohibited by law.";
 
+            using Form form = new Form
+            {
+                Text = "Enable " + featureName + "?",
+                StartPosition = FormStartPosition.CenterParent,
+                FormBorderStyle = FormBorderStyle.None,
+                ClientSize = new Size(620, 340),
+                BackColor = ModernTheme.WindowBackColor,
+                Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize),
+                ShowInTaskbar = false,
+                Icon = owner.Icon
+            };
+            ModernWindowFrame.Apply(form);
+
+            Panel titleBar = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = ModernTheme.TitleBarHeight,
+                BackColor = ModernTheme.TitleBarBackColor
+            };
+            Label title = new Label
+            {
+                Text = form.Text,
+                ForeColor = ModernTheme.TextColor,
+                BackColor = Color.Transparent,
+                Font = new Font(ModernTheme.FontFamilyName, ModernTheme.TitleFontSize),
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(ModernTheme.TitleBarTextLeft, 0, 0, 0)
+            };
+            titleBar.Controls.Add(title);
+            form.Controls.Add(titleBar);
+
+            Label description = new Label
+            {
+                Text = message,
+                ForeColor = ModernTheme.TextColor,
+                BackColor = Color.Transparent,
+                Location = new Point(18, ModernTheme.TitleBarHeight + 18),
+                Size = new Size(form.ClientSize.Width - 36, 168),
+                TextAlign = ContentAlignment.TopLeft
+            };
+            const string requiredText = "I ACCEPT";
+            Label acknowledgmentPrompt = new Label
+            {
+                Text = "Type I ACCEPT (UPPERCASE) to enable this feature:",
+                ForeColor = ModernTheme.TextColor,
+                BackColor = Color.Transparent,
+                AutoSize = true,
+                Location = new Point(18, form.ClientSize.Height - 119)
+            };
+            TextBox acknowledgment = new TextBox
+            {
+                BackColor = ModernTheme.ControlBackColor,
+                ForeColor = ModernTheme.TextColor,
+                BorderStyle = BorderStyle.FixedSingle,
+                Location = new Point(18, form.ClientSize.Height - 91),
+                Size = new Size(form.ClientSize.Width - 36, 27)
+            };
+            Button enable = ModernTheme.CreateDialogPrimaryButton("buttonEnable", "Enable");
+            Button cancel = ModernTheme.CreateDialogSecondaryButton("buttonCancel", "Cancel", DialogResult.Cancel);
+            enable.Enabled = false;
+            acknowledgment.TextChanged += (_, _) =>
+                enable.Enabled = string.Equals(acknowledgment.Text, requiredText, StringComparison.Ordinal);
+            enable.Click += (_, _) =>
+            {
+                if (string.Equals(acknowledgment.Text, requiredText, StringComparison.Ordinal))
+                {
+                    form.DialogResult = DialogResult.OK;
+                    form.Close();
+                }
+            };
+            cancel.Click += (_, _) =>
+            {
+                form.DialogResult = DialogResult.Cancel;
+                form.Close();
+            };
+            form.Controls.Add(description);
+            form.Controls.Add(acknowledgmentPrompt);
+            form.Controls.Add(acknowledgment);
+            form.Controls.Add(enable);
+            form.Controls.Add(cancel);
+            ModernTheme.PositionDialogButtons(form, enable, cancel);
+            DialogResult result = form.ShowDialog(owner);
             if (result == DialogResult.OK)
             {
-                SystemLogger.WriteExperimentalConfirmation(
-                    featureName,
-                    requiredText);
+                SystemLogger.WriteExperimentalConfirmation(featureName, requiredText);
             }
-
             return result;
         }
 

@@ -72,6 +72,46 @@ namespace EasyVersionBackup
                 $"RECURRING DATA-LOSS WARNING | retentionEnabled={retentionEnabled} | sourceCleanupEnabled={sourceCleanupEnabled} | accepted={accepted} | enteredText=\"{Escape(enteredText)}\"");
         }
 
+        public static void WriteDebugModeAccess(
+            bool accepted)
+        {
+            WriteLine(
+                $"DEBUG MODE ACCESS | accepted={accepted}");
+        }
+
+        public static void WriteDebugModeChanges(
+            DebugModeSettings previousSettings,
+            DebugModeSettings currentSettings)
+        {
+            WriteLine(
+                "DEBUG MODE SETTINGS SAVED");
+
+            WriteValueChange(
+                "DebugMode.Enabled",
+                previousSettings.Enabled,
+                currentSettings.Enabled);
+            WriteValueChange(
+                "DebugMode.HideActiveDataLossWarning",
+                previousSettings.HideActiveDataLossWarning,
+                currentSettings.HideActiveDataLossWarning);
+            WriteValueChange(
+                "DebugMode.SkipInitialDisclaimer",
+                previousSettings.SkipInitialDisclaimer,
+                currentSettings.SkipInitialDisclaimer);
+            WriteValueChange(
+                "DebugMode.SkipRecurringDataLossWarning",
+                previousSettings.SkipRecurringDataLossWarning,
+                currentSettings.SkipRecurringDataLossWarning);
+            WriteValueChange(
+                "DebugMode.SkipExperimentalActivationConfirmations",
+                previousSettings.SkipExperimentalActivationConfirmations,
+                currentSettings.SkipExperimentalActivationConfirmations);
+            WriteValueChange(
+                "DebugMode.SkipDeletionConfirmationDialogs",
+                previousSettings.SkipDeletionConfirmationDialogs,
+                currentSettings.SkipDeletionConfirmationDialogs);
+        }
+
         private static void WriteBackupPairChanges(
             IReadOnlyList<BackupPathPair> previousPairs,
             IReadOnlyList<BackupPathPair> currentPairs)
