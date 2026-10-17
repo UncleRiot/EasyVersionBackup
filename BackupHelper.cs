@@ -1,6 +1,7 @@
 ﻿// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
+// Semantic Anchor: Preserve existing backup/UI behavior; only requested exclusion corrections.
 // 03.05.2026 /dc
 
 
@@ -135,19 +136,20 @@ namespace EasyVersionBackup
                     continue;
                 }
 
-                bool extensionShorthand =
-                    normalizedExclusion.StartsWith(".", StringComparison.Ordinal) &&
-                    !normalizedExclusion.Contains('\\') &&
-                    normalizedExclusion.IndexOf('*') < 0;
-
-                if (extensionShorthand)
+                // Match both files and directories. Excluding a matching directory
+                // also excludes its complete subtree during source enumeration.
+                // Literal folder names exclude the folder and all descendants.
+                // Wildcard patterns keep their existing file/folder semantics.
+                if (!normalizedExclusion.Contains('*') &&
+                    !normalizedExclusion.Contains('\\'))
                 {
-                    if (isDirectory)
+                    string[] components = relativePath.Split('\\');
+                    if (components.Any(component => string.Equals(
+                            component, normalizedExclusion,
+                            StringComparison.OrdinalIgnoreCase)))
                     {
-                        continue;
+                        return true;
                     }
-
-                    normalizedExclusion = "*" + normalizedExclusion;
                 }
 
                 bool containsDirectorySeparator =

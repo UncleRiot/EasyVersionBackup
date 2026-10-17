@@ -1,6 +1,7 @@
 ﻿// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
+// Semantic Anchor: Preserve themed settings UI and existing retention controls; template manager edits the cloned settings state.
 // 03.05.2026 /dc
 
 using System;
@@ -295,6 +296,8 @@ namespace EasyVersionBackup
             buttonExportSettings.Click += buttonExportSettings_Click;
             buttonImportSettings.Click += buttonImportSettings_Click;
             buttonDebugMode.Click += buttonDebugMode_Click;
+            Button buttonTemplateManager = CreateToolButton("buttonTemplateManager", "Template Manager", new Point(buttonDebugMode.Right + ModernTheme.ToolbarButtonSpacing, buttonDebugMode.Top));
+            buttonTemplateManager.Click += (_, _) => TemplateDialogs.Manage(this, ResultSettings);
 
             settingsToolTip.SetToolTip(comboBoxDefaultVersioning, "Default version or date pattern for new backups");
             settingsToolTip.SetToolTip(checkBoxAutoIncrementVersion, "Automatically increment the suggested version");
@@ -380,6 +383,7 @@ namespace EasyVersionBackup
             tabPageTools.Controls.Add(buttonExportSettings);
             tabPageTools.Controls.Add(buttonImportSettings);
             tabPageTools.Controls.Add(buttonDebugMode);
+            tabPageTools.Controls.Add(buttonTemplateManager);
 
             ApplyDynamicSettingsLayout(tabPageGeneral);
             ApplyDynamicSettingsLayout(tabPageBackup);
@@ -879,13 +883,9 @@ namespace EasyVersionBackup
                 return;
             }
 
-            if (!DebugMode.Current.Enabled ||
-                !DebugMode.Current.SkipExperimentalActivationConfirmations)
+            if (!ShowAutoPurgeSafetyConfirmation())
             {
-                if (!ShowAutoPurgeSafetyConfirmation())
-                {
-                    checkBoxAutoPurgeEnabled.Checked = false;
-                }
+                checkBoxAutoPurgeEnabled.Checked = false;
             }
         }
 
@@ -899,25 +899,26 @@ namespace EasyVersionBackup
                 return;
             }
 
-            if (!DebugMode.Current.Enabled ||
-                !DebugMode.Current.SkipExperimentalActivationConfirmations)
-            {
-                DialogResult confirmationResult =
-                    ModernConfirmationDialog.ShowExperimentalDataLossConfirmation(
-                        this,
-                        "Source Cleanup",
-                        "permanently deletes source files from the original source folder after a successful backup.");
+            DialogResult confirmationResult =
+                ModernConfirmationDialog.ShowExperimentalDataLossConfirmation(
+                    this,
+                    "Source Cleanup",
+                    "removes files from the original source directory after a successful backup, according to your configuration.");
 
-                if (confirmationResult != DialogResult.OK)
-                {
-                    checkBoxSourceCleanupEnabled.Checked = false;
-                }
+            if (confirmationResult != DialogResult.OK)
+            {
+                checkBoxSourceCleanupEnabled.Checked = false;
             }
         }
 
         private void UpdateRetentionWarningDialogueControls()
         {
             checkBoxShowRetentionWarningDialogue.Enabled = checkBoxAutoPurgeEnabled.Checked;
+
+            if (checkBoxShowRetentionWarningDialogue.Parent == null)
+            {
+                return;
+            }
 
             foreach (Control control in checkBoxShowRetentionWarningDialogue.Parent.Controls)
             {
@@ -935,7 +936,7 @@ namespace EasyVersionBackup
                 ModernConfirmationDialog.ShowExperimentalDataLossConfirmation(
                     this,
                     "Retention",
-                    "permanently deletes older backup files after a successful backup.");
+                    "automatically removes older backup versions according to your configured retention policy.");
 
             return confirmationResult == DialogResult.OK;
         }
@@ -1392,6 +1393,14 @@ namespace EasyVersionBackup
                 AutoBackupEnabled = settings.AutoBackupEnabled,
                 AutoBackupIntervalSeconds = settings.AutoBackupIntervalSeconds,
                 BackupPathPairs = new List<BackupPathPair>(),
+                ExclusionTemplates = settings.ExclusionTemplates != null
+                    ? settings.ExclusionTemplates.ToDictionary(entry => entry.Key, entry => new List<string>(entry.Value), StringComparer.OrdinalIgnoreCase)
+                    : new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase),
+                PairSettingsTemplates = settings.PairSettingsTemplates != null
+                    ? settings.PairSettingsTemplates.ToDictionary(entry => entry.Key,
+                        entry => System.Text.Json.JsonSerializer.Deserialize<BackupPathPair>(System.Text.Json.JsonSerializer.Serialize(entry.Value)) ?? new BackupPathPair(),
+                        StringComparer.OrdinalIgnoreCase)
+                    : new Dictionary<string, BackupPathPair>(StringComparer.OrdinalIgnoreCase),
                 LastUsedVersionsByPair = settings.LastUsedVersionsByPair != null
                     ? new Dictionary<string, string>(settings.LastUsedVersionsByPair)
                     : new Dictionary<string, string>(),
