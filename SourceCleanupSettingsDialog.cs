@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
+// Semantic Anchor [SourceCleanupSettingsDialog.cs]: Source-cleanup dialog collects settings without deleting files; validation and deletion semantics belong to SourceCleanupService.
 namespace EasyVersionBackup
 {
     public sealed class SourceCleanupSettingsDialog : Form

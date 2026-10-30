@@ -9,6 +9,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 
+// Semantic Anchor [ExclusionsDialog.cs]: Exclusion editing must preserve input patterns and pair/template identity; central path exclusion interpretation belongs to BackupHelper.
 namespace EasyVersionBackup
 {
     public class ExclusionsDialog : Form

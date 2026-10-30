@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
+// Semantic Anchor [BackupPairSettingsDialog.cs]: This dialog edits a BackupPathPair, not a second settings model; preserve existing values, apply changes only through accepted dialog results, and use ModernTheme for common UI tokens.
 namespace EasyVersionBackup
 {
     public sealed class BackupPairSettingsDialog : Form
@@ -282,13 +283,8 @@ namespace EasyVersionBackup
                 ForeColor = ModernTheme.TextColor
             };
 
-            comboBoxDefaultVersioning.Items.Add("none");
-            comboBoxDefaultVersioning.Items.Add("v1.0");
-            comboBoxDefaultVersioning.Items.Add("1.0");
-            comboBoxDefaultVersioning.Items.Add("yyyy-MM-dd");
-            comboBoxDefaultVersioning.Items.Add("yyyyMMdd");
-            comboBoxDefaultVersioning.Items.Add("yyyy-MM-dd-HH-mm");
-            comboBoxDefaultVersioning.Items.Add("yyyyMMddHHmm");
+            // SSOT: VersionPatternHelper owns the suggested patterns and their order.
+            comboBoxDefaultVersioning.Items.AddRange(VersionPatternHelper.GetSuggestedVersionPatterns());
             comboBoxDefaultVersioning.Text = string.IsNullOrWhiteSpace(ResultVersioning) ? "v1.0" : ResultVersioning;
 
             checkBoxKeepLast = CreateCheckBox("checkBoxKeepLast", 5);

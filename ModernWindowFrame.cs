@@ -6,6 +6,7 @@
 using System.Drawing;
 using System.Windows.Forms;
 
+// Semantic Anchor [ModernWindowFrame.cs]: Custom border/resize hit-testing must respect form client coordinates and preserve caption drag, control hit targets and existing window sizing.
 namespace EasyVersionBackup
 {
     public static class ModernWindowFrame

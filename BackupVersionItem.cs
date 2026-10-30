@@ -1,4 +1,5 @@
-﻿namespace EasyVersionBackup
+﻿// Semantic Anchor [BackupVersionItem.cs]: Version selection data contract: preserve property names and semantics consumed by VersionInputForm and backup execution.
+namespace EasyVersionBackup
 {
     public class BackupVersionItem
     {

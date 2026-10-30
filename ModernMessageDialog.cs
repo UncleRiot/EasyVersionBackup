@@ -8,6 +8,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
+// Semantic Anchor [ModernMessageDialog.cs]: Message dialog is presentation-only and uses ModernTheme for shared appearance; do not introduce alternate settings or action state.
 namespace EasyVersionBackup
 {
     public sealed class ModernMessageDialog : Form

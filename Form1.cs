@@ -14,6 +14,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
+// Semantic Anchor [Form1.cs]: Main-form UI rows mirror AppSettings.BackupPathPairs; SettingsStorage owns persistence, BackupHelper/BackupFileService own execution rules, and ModernTheme owns common visual values. Drag placeholders are not persisted backup pairs.
 namespace EasyVersionBackup
 {
     public partial class Form1 : Form
@@ -29,6 +30,9 @@ namespace EasyVersionBackup
         private readonly System.Windows.Forms.Timer _autoBackupCountdownTimer = new System.Windows.Forms.Timer();
         private readonly Dictionary<string, DateTime> _nextAutoBackupRunsByPair = new Dictionary<string, DateTime>();
         private bool _isRefreshingConfiguredPaths;
+        private Panel? _configuredPathsLoadingPanel;
+        // Semantic Anchor: Track only targets created by autofill; never overwrite manual destinations.
+        private readonly Dictionary<DataGridViewRow, string> _autoSuggestedTargets = new Dictionary<DataGridViewRow, string>();
         private readonly ToolTip _mainToolTip = new ToolTip();
         private readonly bool _startMinimizedToSystray;
         private readonly ModernTheme.ModernScrollBar _configuredPathsVerticalScrollBar = new ModernTheme.ModernScrollBar
@@ -161,6 +165,7 @@ namespace EasyVersionBackup
             dataGridViewConfiguredPaths.DragDrop += dataGridViewConfiguredPaths_DragDrop;
             dataGridViewConfiguredPaths.DragLeave += (_, _) => ClearConfiguredPathDragPreview();
             InitializeConfiguredPathsScrollBar();
+            InitializeConfiguredPathsLoadingPanel();
 
             _autoBackupCountdownTimer.Interval = TitleRefreshIntervalMilliseconds;
             _autoBackupCountdownTimer.Tick += autoBackupCountdownTimer_Tick;
@@ -206,7 +211,6 @@ namespace EasyVersionBackup
                 _isApplyingWindowSettings = false;
             }
 
-            RefreshConfiguredPaths();
             RestartAutoBackupCountdown();
         }
         private void BeginBackupProgress(
@@ -602,7 +606,7 @@ namespace EasyVersionBackup
         }
 
 
-        protected override void OnShown(EventArgs e)
+        protected override async void OnShown(EventArgs e)
         {
             base.OnShown(e);
 
@@ -611,7 +615,33 @@ namespace EasyVersionBackup
                 StartMinimizedToSystray();
             }
 
-            if (_settings.AutoUpdateCheck)
+            // Semantic Anchor: Paint Loading before the initial synchronous grid rebuild.
+            // Never defer backup settings or alter backup-pair persistence.
+            if (Visible)
+            {
+                await Task.Delay(75);
+            }
+
+            try
+            {
+                if (!IsDisposed)
+                {
+                    RefreshConfiguredPaths();
+                }
+            }
+            finally
+            {
+                if (!IsDisposed)
+                {
+                    dataGridViewConfiguredPaths.Visible = true;
+                    if (_configuredPathsLoadingPanel != null)
+                    {
+                        _configuredPathsLoadingPanel.Visible = false;
+                    }
+                }
+            }
+
+            if (_settings.AutoUpdateCheck && !IsDisposed)
             {
                 _ = CheckForUpdatesOnStartupAsync();
             }
@@ -729,6 +759,14 @@ namespace EasyVersionBackup
             _modernTitleBarPanel.MouseDown += ModernTitleBar_MouseDown;
             pictureBoxModernTitleIcon.MouseDown += ModernTitleBar_MouseDown;
             _modernTitleLabel.MouseDown += ModernTitleBar_MouseDown;
+
+            // The title-bar child controls cover the top resize border.
+            _modernTitleBarPanel.MouseMove += ModernTitleBar_MouseMove;
+            pictureBoxModernTitleIcon.MouseMove += ModernTitleBar_MouseMove;
+            _modernTitleLabel.MouseMove += ModernTitleBar_MouseMove;
+            _modernTitleBarPanel.MouseDoubleClick += ModernTitleBar_MouseDoubleClick;
+            pictureBoxModernTitleIcon.MouseDoubleClick += ModernTitleBar_MouseDoubleClick;
+            _modernTitleLabel.MouseDoubleClick += ModernTitleBar_MouseDoubleClick;
 
             _modernTitleBarPanel.Controls.Add(pictureBoxModernTitleIcon);
             _modernTitleBarPanel.Controls.Add(_modernTitleLabel);
@@ -896,11 +934,44 @@ namespace EasyVersionBackup
                 return;
             }
 
-            const int wmNclbuttondown = 0xA1;
-            const int htCaption = 0x2;
+            // Keep resizing available even where the title panel and its children cover the window edge.
+            Point cursorPosition = PointToClient(Cursor.Position);
+            if (WindowState == FormWindowState.Normal &&
+                cursorPosition.Y <= 8 &&
+                ModernWindowFrame.TryGetResizeHitTestResult(ClientSize, cursorPosition, out int resizeHitTestResult))
+            {
+                ReleaseCapture();
+                SendMessage(Handle, ModernWindowFrame.WmNclButtonDown, resizeHitTestResult, 0);
+                return;
+            }
 
             ReleaseCapture();
-            SendMessage(Handle, wmNclbuttondown, htCaption, 0);
+            SendMessage(Handle, ModernWindowFrame.WmNclButtonDown, ModernWindowFrame.HtCaption, 0);
+        }
+
+        private void ModernTitleBar_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if (sender is not Control control)
+            {
+                return;
+            }
+
+            Point cursorPosition = PointToClient(Cursor.Position);
+            control.Cursor = WindowState == FormWindowState.Normal &&
+                cursorPosition.Y <= 8 &&
+                ModernWindowFrame.TryGetResizeHitTestResult(ClientSize, cursorPosition, out int resizeHitTestResult)
+                    ? ModernWindowFrame.GetResizeCursor(resizeHitTestResult)
+                    : Cursors.Default;
+        }
+
+        private void ModernTitleBar_MouseDoubleClick(object? sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left && PointToClient(Cursor.Position).Y > 8)
+            {
+                WindowState = WindowState == FormWindowState.Maximized
+                    ? FormWindowState.Normal
+                    : FormWindowState.Maximized;
+            }
         }
         private void InitializeMainToolbar()
         {
@@ -1167,9 +1238,11 @@ namespace EasyVersionBackup
         {
             if (_dragGapPlaceholder != null)
             {
-                if (_dragGapPlaceholder.DataGridView == dataGridViewConfiguredPaths)
+                if (_dragGapRow >= 0 &&
+                    _dragGapRow < dataGridViewConfiguredPaths.Rows.Count &&
+                    ReferenceEquals(dataGridViewConfiguredPaths.Rows.SharedRow(_dragGapRow), _dragGapPlaceholder))
                 {
-                    dataGridViewConfiguredPaths.Rows.Remove(_dragGapPlaceholder);
+                    dataGridViewConfiguredPaths.Rows.RemoveAt(_dragGapRow);
                 }
                 _dragGapPlaceholder.Dispose();
                 _dragGapPlaceholder = null;
@@ -1259,8 +1332,14 @@ namespace EasyVersionBackup
 
             if (_dragGapPlaceholder != null)
             {
-                dataGridViewConfiguredPaths.Rows.Remove(_dragGapPlaceholder);
+                if (_dragGapRow >= 0 &&
+                    _dragGapRow < dataGridViewConfiguredPaths.Rows.Count &&
+                    ReferenceEquals(dataGridViewConfiguredPaths.Rows.SharedRow(_dragGapRow), _dragGapPlaceholder))
+                {
+                    dataGridViewConfiguredPaths.Rows.RemoveAt(_dragGapRow);
+                }
                 _dragGapPlaceholder.Dispose();
+                _dragGapPlaceholder = null;
             }
 
             DataGridViewRow placeholder = (DataGridViewRow)dataGridViewConfiguredPaths.RowTemplate.Clone();
@@ -1441,6 +1520,7 @@ namespace EasyVersionBackup
                 ExcludedPaths = new List<string>()
             };
 
+            // A new pair receives a target only after its source has been entered.
             _settings.BackupPathPairs.Add(pair);
 
             SaveSettings();
@@ -1459,18 +1539,21 @@ namespace EasyVersionBackup
 
         private void buttonRemoveConfiguredPath_Click(object? sender, EventArgs e)
         {
-            if (dataGridViewConfiguredPaths.CurrentRow == null)
+            if (dataGridViewConfiguredPaths.CurrentRow != null)
             {
-                return;
+                RemoveConfiguredPathAt(dataGridViewConfiguredPaths.CurrentRow.Index);
             }
+        }
 
-            int rowIndex = dataGridViewConfiguredPaths.CurrentRow.Index;
-
+        private void RemoveConfiguredPathAt(int rowIndex)
+        {
             if (rowIndex < 0 || rowIndex >= _settings.BackupPathPairs.Count)
             {
                 return;
             }
 
+            dataGridViewConfiguredPaths.EndEdit();
+            SyncEnabledPairsFromGrid();
             BackupPathPair pair = _settings.BackupPathPairs[rowIndex];
 
             if (ConfiguredPathContainsData(pair))
@@ -1478,7 +1561,9 @@ namespace EasyVersionBackup
                 DialogResult result = ModernConfirmationDialog.Show(
                     this,
                     "Remove path",
-                    "The selected path contains configured data. Do you really want to remove it?");
+                    "The selected path contains configured data:" + Environment.NewLine +
+                    pair.SourceDirectory + Environment.NewLine + Environment.NewLine +
+                    "Do you really want to remove it?");
 
                 if (result != DialogResult.Yes)
                 {
@@ -1489,9 +1574,14 @@ namespace EasyVersionBackup
             string pairKey = SettingsStorage.CreatePairKey(pair.SourceDirectory, pair.TargetDirectory);
 
             _settings.BackupPathPairs.RemoveAt(rowIndex);
-            _settings.LastUsedVersionsByPair.Remove(pairKey);
-            _settings.BackupStatusesByPair.Remove(pairKey);
-            _nextAutoBackupRunsByPair.Remove(pairKey);
+            if (!_settings.BackupPathPairs.Any(other =>
+                string.Equals(SettingsStorage.CreatePairKey(other.SourceDirectory, other.TargetDirectory),
+                    pairKey, StringComparison.OrdinalIgnoreCase)))
+            {
+                _settings.LastUsedVersionsByPair.Remove(pairKey);
+                _settings.BackupStatusesByPair.Remove(pairKey);
+                _nextAutoBackupRunsByPair.Remove(pairKey);
+            }
 
             SaveSettings();
             RefreshConfiguredPaths();
@@ -1731,7 +1821,17 @@ namespace EasyVersionBackup
             UpdateActiveDataLossWarning();
 
             _isRefreshingConfiguredPaths = true;
+            _autoSuggestedTargets.Clear();
 
+            // Semantic Anchor: Rebuild rows without intermediate repainting; show the completed grid at once.
+            const int wmSetRedraw = 0x000B;
+            bool redrawSuspended = dataGridViewConfiguredPaths.IsHandleCreated;
+            if (redrawSuspended)
+            {
+                SendMessage(dataGridViewConfiguredPaths.Handle, wmSetRedraw, 0, 0);
+            }
+
+            dataGridViewConfiguredPaths.SuspendLayout();
             try
             {
                 foreach (DataGridViewRow existingRow in dataGridViewConfiguredPaths.Rows)
@@ -1776,9 +1876,43 @@ namespace EasyVersionBackup
             }
             finally
             {
+                dataGridViewConfiguredPaths.ResumeLayout(false);
+                if (redrawSuspended && dataGridViewConfiguredPaths.IsHandleCreated)
+                {
+                    SendMessage(dataGridViewConfiguredPaths.Handle, wmSetRedraw, 1, 0);
+                    dataGridViewConfiguredPaths.Invalidate(true);
+                }
+
                 _isRefreshingConfiguredPaths = false;
                 UpdateConfiguredPathsScrollBar();
             }
+        }
+
+        private void InitializeConfiguredPathsLoadingPanel()
+        {
+            // Semantic Anchor: Startup overlay only; the completed grid replaces it atomically.
+            dataGridViewConfiguredPaths.Visible = false;
+
+            Panel overlay = new Panel
+            {
+                Name = "panelConfiguredPathsLoading",
+                Location = dataGridViewConfiguredPaths.Location,
+                Size = dataGridViewConfiguredPaths.Size,
+                Anchor = dataGridViewConfiguredPaths.Anchor,
+                BackColor = ModernTheme.WindowBackColor
+            };
+            Label label = new Label
+            {
+                Text = "Loading…",
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                ForeColor = ModernTheme.TextColor,
+                BackColor = ModernTheme.WindowBackColor
+            };
+            overlay.Controls.Add(label);
+            Controls.Add(overlay);
+            overlay.BringToFront();
+            _configuredPathsLoadingPanel = overlay;
         }
 
         private void InitializeConfiguredPathsScrollBar()
@@ -1895,7 +2029,10 @@ namespace EasyVersionBackup
 
         private void dataGridViewConfiguredPaths_ContentChanged(object? sender, EventArgs e)
         {
-            UpdateConfiguredPathsScrollBar();
+            if (!_isRefreshingConfiguredPaths)
+            {
+                UpdateConfiguredPathsScrollBar();
+            }
         }
 
         private void dataGridViewConfiguredPaths_MouseWheel(object? sender, MouseEventArgs e)
@@ -3649,7 +3786,7 @@ namespace EasyVersionBackup
 
 
 
-        // Semantic Anchor: Context actions affect the selected row's filter/options only.
+        // Semantic Anchor: Context actions use the right-clicked row; row duplication copies all pair options.
         private void ConfiguredPaths_CellMouseDown(object? sender, DataGridViewCellMouseEventArgs e)
         {
             if (e.Button != MouseButtons.Right || e.RowIndex < 0 ||
@@ -3658,8 +3795,7 @@ namespace EasyVersionBackup
 
             string columnName = dataGridViewConfiguredPaths.Columns[e.ColumnIndex].Name;
             bool isFilter = columnName == "ColumnConfiguredSourceExclusions";
-            if (!isFilter && columnName != "ColumnConfiguredSourceSettings")
-                return;
+            bool hasSettingsMenu = isFilter || columnName == "ColumnConfiguredSourceSettings";
 
             int row = e.RowIndex;
             ContextMenuStrip menu = new ContextMenuStrip
@@ -3669,6 +3805,13 @@ namespace EasyVersionBackup
                 ForeColor = ModernTheme.TextColor,
                 Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize)
             };
+            if (!hasSettingsMenu)
+            {
+                menu.Items.Add("Duplicate Row", null, (_, _) => DuplicateConfiguredPath(row));
+                menu.Items.Add("Remove Row", null, (_, _) => RemoveConfiguredPathAt(row));
+                menu.Show(dataGridViewConfiguredPaths, dataGridViewConfiguredPaths.PointToClient(Cursor.Position));
+                return;
+            }
             menu.Items.Add("Copy Settings", null, (_, _) =>
             {
                 if (isFilter)
@@ -3720,8 +3863,75 @@ namespace EasyVersionBackup
             }
             load.Enabled = load.DropDownItems.Count > 0;
             menu.Items.Add(load);
-            Rectangle bounds = dataGridViewConfiguredPaths.GetCellDisplayRectangle(e.ColumnIndex, row, false);
-            menu.Show(dataGridViewConfiguredPaths, new Point(bounds.Left + e.X, bounds.Top + e.Y));
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("Duplicate Row", null, (_, _) => DuplicateConfiguredPath(row));
+            menu.Items.Add("Remove Row", null, (_, _) => RemoveConfiguredPathAt(row));
+            menu.Show(dataGridViewConfiguredPaths, dataGridViewConfiguredPaths.PointToClient(Cursor.Position));
+        }
+
+        // Semantic Anchor: Duplicated pairs are independent and retain their full configuration.
+        private void DuplicateConfiguredPath(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= _settings.BackupPathPairs.Count)
+                return;
+
+            dataGridViewConfiguredPaths.EndEdit();
+            SyncEnabledPairsFromGrid();
+            BackupPathPair original = _settings.BackupPathPairs[rowIndex];
+            BackupPathPair copy = JsonSerializer.Deserialize<BackupPathPair>(JsonSerializer.Serialize(original))
+                ?? new BackupPathPair();
+            // Avoid creating two active jobs with identical source and destination.
+            copy.IsEnabled = false;
+            _settings.BackupPathPairs.Insert(rowIndex + 1, copy);
+            SaveSettings();
+            RefreshConfiguredPaths();
+            RestartAutoBackupCountdown();
+            dataGridViewConfiguredPaths.CurrentCell =
+                dataGridViewConfiguredPaths.Rows[rowIndex + 1].Cells["ColumnConfiguredSourceDirectory"];
+        }
+
+        // Semantic Anchor: Suggest targets only for empty cells and unambiguous existing target parents.
+        private string GetSuggestedTargetDirectory(string sourceDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(sourceDirectory))
+                return string.Empty;
+
+            // A drive letter or partial root is not a source folder name.
+            string normalizedSource = sourceDirectory.TrimEnd('\\', '/');
+            if (!Path.IsPathFullyQualified(sourceDirectory) ||
+                string.Equals(normalizedSource + "\\", Path.GetPathRoot(sourceDirectory), StringComparison.OrdinalIgnoreCase))
+                return string.Empty;
+
+            string sourceName = Path.GetFileName(normalizedSource);
+            if (string.IsNullOrWhiteSpace(sourceName))
+                return string.Empty;
+
+            List<string> parents = new List<string>();
+            foreach (BackupPathPair existing in _settings.BackupPathPairs)
+            {
+                if (string.IsNullOrWhiteSpace(existing.SourceDirectory) ||
+                    string.IsNullOrWhiteSpace(existing.TargetDirectory))
+                    continue;
+
+                string existingSourceName = Path.GetFileName(existing.SourceDirectory.TrimEnd('\\', '/'));
+                string existingTarget = existing.TargetDirectory.TrimEnd('\\', '/');
+                if (!string.Equals(existingSourceName, Path.GetFileName(existingTarget), StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string? parent = Path.GetDirectoryName(existingTarget);
+                if (!string.IsNullOrWhiteSpace(parent))
+                    parents.Add(parent);
+            }
+
+            if (parents.Count < 2)
+                return string.Empty;
+
+            var grouped = parents.GroupBy(parent => parent, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(group => group.Count()).ToList();
+            if (grouped[0].Count() < 2 || grouped[0].Count() <= parents.Count / 2)
+                return string.Empty;
+
+            return Path.Combine(grouped[0].Key, sourceName);
         }
 
         private List<string> GetRowExclusions(int row)
@@ -4138,6 +4348,39 @@ namespace EasyVersionBackup
             }
 
             string columnName = dataGridViewConfiguredPaths.Columns[e.ColumnIndex].Name;
+
+            if (columnName == "ColumnConfiguredSourceDirectory")
+            {
+                DataGridViewRow row = dataGridViewConfiguredPaths.Rows[e.RowIndex];
+                DataGridViewCell targetCell = row.Cells["ColumnConfiguredTargetDirectory"];
+                string currentTarget = targetCell.Value?.ToString() ?? string.Empty;
+                bool isAutoTarget = _autoSuggestedTargets.TryGetValue(row, out string? previousSuggestion) &&
+                    string.Equals(currentTarget, previousSuggestion, StringComparison.OrdinalIgnoreCase);
+
+                if (string.IsNullOrWhiteSpace(currentTarget) || isAutoTarget)
+                {
+                    string suggested = GetSuggestedTargetDirectory(
+                        row.Cells["ColumnConfiguredSourceDirectory"].Value?.ToString() ?? string.Empty);
+                    if (!string.IsNullOrWhiteSpace(suggested))
+                    {
+                        _autoSuggestedTargets[row] = suggested;
+                        targetCell.Value = suggested;
+                    }
+                    else if (isAutoTarget)
+                    {
+                        _autoSuggestedTargets.Remove(row);
+                        targetCell.Value = string.Empty;
+                    }
+                }
+            }
+            else if (columnName == "ColumnConfiguredTargetDirectory")
+            {
+                DataGridViewRow row = dataGridViewConfiguredPaths.Rows[e.RowIndex];
+                if (_autoSuggestedTargets.TryGetValue(row, out string? suggestion) &&
+                    !string.Equals(row.Cells["ColumnConfiguredTargetDirectory"].Value?.ToString(),
+                        suggestion, StringComparison.OrdinalIgnoreCase))
+                    _autoSuggestedTargets.Remove(row);
+            }
 
             if (columnName == "ColumnConfiguredIsEnabled" ||
                 columnName == "ColumnConfiguredSourceDirectory" ||

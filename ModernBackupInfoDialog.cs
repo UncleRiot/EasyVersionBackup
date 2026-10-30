@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 
+// Semantic Anchor [ModernBackupInfoDialog.cs]: Backup-information views display existing backup metadata and log content without mutating backup files; shared UI values belong to ModernTheme.
 namespace EasyVersionBackup
 {
     public sealed class ModernBackupInfoDialog : Form

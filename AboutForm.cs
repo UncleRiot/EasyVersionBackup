@@ -4,6 +4,7 @@ using System.Windows.Forms;
 using System.Threading;
 using System.Threading.Tasks;
 
+// Semantic Anchor [AboutForm.cs]: About and update display are presentation-only; application version text comes from ApplicationVersionHelper and shared visual styling from ModernTheme.
 namespace EasyVersionBackup
 {
     public class AboutForm : Form

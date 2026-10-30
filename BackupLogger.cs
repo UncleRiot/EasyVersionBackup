@@ -9,6 +9,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 
+// Semantic Anchor [BackupLogger.cs]: BackupLogger owns backup-log formatting and level gating; callers must not bypass its selected log-level behavior.
 namespace EasyVersionBackup
 {
     public sealed class BackupLogEntry

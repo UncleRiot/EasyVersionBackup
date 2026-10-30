@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 
+// Semantic Anchor [SystemLogger.cs]: SystemLogger owns audit/event record formatting; retain sensitive-data handling and existing log destinations.
 namespace EasyVersionBackup
 {
     public static class SystemLogger

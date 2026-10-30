@@ -3,6 +3,7 @@
 // Home/End remain available to an active text editing control.
 using System.Windows.Forms;
 
+// Semantic Anchor [TabNavigationDataGridView.cs]: Keyboard navigation overrides only intended grid navigation keys; preserve standard DataGridView editing and selection behavior.
 namespace EasyVersionBackup
 {
     internal sealed class TabNavigationDataGridView : DataGridView

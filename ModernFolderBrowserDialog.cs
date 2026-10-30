@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 
+// Semantic Anchor [ModernFolderBrowserDialog.cs]: Folder/file browsing reports user selection only; path validation and backup execution remain with their existing consumers.
 namespace EasyVersionBackup
 {
     public sealed class ModernFolderBrowserDialog : Form

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
+// Semantic Anchor [AppSettings.cs]: Serialized settings contract: property names, defaults, schema version and BackupPathPair identity must stay compatible with SettingsStorage and existing JSON files.
 namespace EasyVersionBackup
 {
     public class AppSettings

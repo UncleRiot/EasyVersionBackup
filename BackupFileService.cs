@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 
+// Semantic Anchor [BackupFileService.cs]: Filesystem copy/ZIP execution owns file operations; preserve cancellation/error actions, progress reporting, source exclusions and destination cleanup on failures.
 namespace EasyVersionBackup
 {
     public enum BackupFileErrorAction

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 
+// Semantic Anchor [VersionHelper.cs]: Version calculation and comparison must preserve persisted version syntax and naming conventions; callers should use existing helpers.
 namespace EasyVersionBackup
 {
     public static class VersionHelper

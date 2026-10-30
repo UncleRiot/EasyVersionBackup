@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 
+// Semantic Anchor [ApplicationVersionHelper.cs]: Application version display uses the assembly/project version as its source of truth; do not introduce independent version literals.
 namespace EasyVersionBackup
 {
     public static class ApplicationVersionHelper

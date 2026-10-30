@@ -7,6 +7,7 @@
 using System;
 using System.Drawing;
 
+// Semantic Anchor [ModernTheme.cs]: Single source of truth for shared colors, spacing, sizing and reusable UI rendering; keep deliberate local exceptions unchanged unless explicitly requested.
 namespace EasyVersionBackup
 {
     public static class ModernTheme

@@ -13,6 +13,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 
+// Semantic Anchor [BackupHelper.cs]: Backup path validation and conflict/retention constants are shared contracts; consumers must use this normalization rather than duplicate rules.
 namespace EasyVersionBackup
 {
     public static class BackupHelper

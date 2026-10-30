@@ -1,5 +1,6 @@
 using System;
 
+// Semantic Anchor [AutoBackupIntervalHelper.cs]: Interval formatting and parsing are shared by scheduler and settings UI; persisted values remain seconds and invalid input keeps established fallback behavior.
 namespace EasyVersionBackup
 {
     public static class AutoBackupIntervalHelper

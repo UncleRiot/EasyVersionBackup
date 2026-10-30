@@ -7,6 +7,7 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
+// Semantic Anchor [BackupDialogHelper.cs]: Destination-conflict responses must reflect BackupHelper conflict actions; dialogs must not perform filesystem operations.
 namespace EasyVersionBackup
 {
     public static class BackupDialogHelper

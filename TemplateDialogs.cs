@@ -6,6 +6,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 
+// Semantic Anchor [TemplateDialogs.cs]: Template dialogs return names/selections; named templates remain in AppSettings and are persisted via SettingsStorage.
 namespace EasyVersionBackup
 {
     internal static class TemplateDialogs

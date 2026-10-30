@@ -9,6 +9,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 
+// Semantic Anchor [VersionInputForm.cs]: Version/tag UI consumes BackupVersionItem and AppSettings tags; preserve selection/result semantics and use ModernTheme for shared presentation.
 namespace EasyVersionBackup
 {
     public partial class VersionInputForm : Form
@@ -163,6 +164,21 @@ namespace EasyVersionBackup
 
             _verticalScrollBar.ScrollValueChanged += verticalScrollBarVersions_ScrollValueChanged;
             _horizontalScrollBar.ScrollValueChanged += horizontalScrollBarVersions_ScrollValueChanged;
+            // Open the Tag combo on its first click, including when invoked from the tray.
+            dataGridViewVersions.CellMouseDown += (sender, e) =>
+            {
+                if (e.Button != MouseButtons.Left || e.RowIndex < 0 ||
+                    e.ColumnIndex != ColumnTag.Index)
+                    return;
+
+                dataGridViewVersions.CurrentCell = dataGridViewVersions.Rows[e.RowIndex].Cells[e.ColumnIndex];
+                dataGridViewVersions.BeginEdit(true);
+                BeginInvoke(new Action(() =>
+                {
+                    if (dataGridViewVersions.EditingControl is ComboBox combo && !combo.DroppedDown)
+                        combo.DroppedDown = true;
+                }));
+            };
             dataGridViewVersions.Scroll += dataGridViewVersions_Scroll;
             dataGridViewVersions.RowsAdded += dataGridViewVersions_ContentChanged;
             dataGridViewVersions.RowsRemoved += dataGridViewVersions_ContentChanged;

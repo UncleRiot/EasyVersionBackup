@@ -4,10 +4,28 @@ using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 
+// Semantic Anchor [VersionPatternHelper.cs]: Pattern tokens, validation and increment semantics are authoritative here; consumers must not independently reinterpret version patterns.
 namespace EasyVersionBackup
 {
     public static class VersionPatternHelper
     {
+        // Semantic Anchor: This ordered list is the single source for versioning suggestions
+        // in both settings dialogs. Return a fresh array so callers cannot mutate shared state.
+        // This is only a UI suggestion list; validation continues to accept custom patterns.
+        public static string[] GetSuggestedVersionPatterns()
+        {
+            return new[]
+            {
+                "none",
+                "v1.0",
+                "1.0",
+                "yyyy-MM-dd",
+                "yyyyMMdd",
+                "yyyy-MM-dd-HH-mm",
+                "yyyyMMddHHmm"
+            };
+        }
+
         public static bool IsDatePattern(string value)
         {
             if (string.IsNullOrWhiteSpace(value))

@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
+// Semantic Anchor [VersionHelperGit.cs]: GitHub version checks must not change current backup state; use application version helpers and retain network failure handling.
 namespace EasyVersionBackup
 {
     public static class VersionHelperGit

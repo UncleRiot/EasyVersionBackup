@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows.Forms;
 
+// Semantic Anchor [DebugMode.cs]: Debug settings and access controls must remain explicit; do not change protection or persistence behavior while editing visual dialogs.
 namespace EasyVersionBackup
 {
     public sealed class DebugModeSettings

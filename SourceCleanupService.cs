@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 
+// Semantic Anchor [SourceCleanupService.cs]: Source cleanup is destructive: validate affected paths, keep configured mode/pattern semantics, and report failures; do not change deletion scope incidentally.
 namespace EasyVersionBackup
 {
     public sealed class SourceCleanupResult

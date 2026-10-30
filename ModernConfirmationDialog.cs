@@ -8,6 +8,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
+// Semantic Anchor [ModernConfirmationDialog.cs]: Destructive-action confirmations must preserve explicit user choice; the dialog must not perform the underlying destructive operation.
 namespace EasyVersionBackup
 {
     public static class ModernConfirmationDialog

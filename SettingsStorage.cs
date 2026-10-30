@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 
+// Semantic Anchor [SettingsStorage.cs]: Single source of truth for settings JSON location, schema migration, defaults and save/load normalization; maintain backward compatibility with existing settings.
 namespace EasyVersionBackup
 {
     public static class SettingsStorage
@@ -457,7 +458,7 @@ namespace EasyVersionBackup
             {
                 SettingsSchemaVersion = CurrentSettingsSchemaVersion,
                 ZipDestinationFiles = true,
-                DefaultVersioning = "0.0.1",
+                // SSOT: AppSettings defines DefaultVersioning; preserve its initializer.
                 AutoIncrementVersion = true,
                 MinimizeToSystray = false,
                 CloseToSystray = false,

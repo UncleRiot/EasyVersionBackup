@@ -12,6 +12,7 @@ using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.IO;
 
+// Semantic Anchor [ModernSettings.cs]: Settings UI edits AppSettings through SettingsStorage; do not create separate persisted defaults or duplicate scheduling and cleanup normalization.
 namespace EasyVersionBackup
 {
     public class ModernSettings : Form
@@ -772,13 +773,8 @@ namespace EasyVersionBackup
             _isApplyingSettingsToUi = true;
 
             comboBoxDefaultVersioning.Items.Clear();
-            comboBoxDefaultVersioning.Items.Add("none");
-            comboBoxDefaultVersioning.Items.Add("v1.0");
-            comboBoxDefaultVersioning.Items.Add("1.0");
-            comboBoxDefaultVersioning.Items.Add("yyyy-MM-dd");
-            comboBoxDefaultVersioning.Items.Add("yyyyMMdd");
-            comboBoxDefaultVersioning.Items.Add("yyyy-MM-dd-HH-mm");
-            comboBoxDefaultVersioning.Items.Add("yyyyMMddHHmm");
+            // SSOT: VersionPatternHelper owns the suggested patterns and their order.
+            comboBoxDefaultVersioning.Items.AddRange(VersionPatternHelper.GetSuggestedVersionPatterns());
 
             comboBoxDefaultVersioning.Text = string.IsNullOrWhiteSpace(settings.DefaultVersioning)
                 ? "v1.0"

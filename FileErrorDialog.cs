@@ -7,6 +7,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
+// Semantic Anchor [FileErrorDialog.cs]: File-error UI only returns a supported BackupFileErrorAction; backup I/O and retry behavior remain owned by BackupFileService.
 namespace EasyVersionBackup
 {
     public class FileErrorDialog : Form

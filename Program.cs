@@ -1,6 +1,7 @@
 using System;
 using System.Windows.Forms;
 
+// Semantic Anchor [Program.cs]: Application startup creates one main form and delegates application state and persistence to its existing owners; preserve startup argument handling.
 namespace EasyVersionBackup
 {
     internal static class Program
