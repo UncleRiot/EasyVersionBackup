@@ -1,4 +1,5 @@
-﻿// Semantic Anchor: Designer wiring only; navigation is owned by TabNavigationDataGridView, appearance by ModernTheme.
+﻿// Semantic Anchor: Designer owns the version-grid columns (including the read-only preview action);
+// navigation is owned by TabNavigationDataGridView and appearance by ModernTheme.
 namespace EasyVersionBackup
 {
     partial class VersionInputForm
@@ -11,6 +12,7 @@ namespace EasyVersionBackup
         private System.Windows.Forms.DataGridViewTextBoxColumn ColumnSourceName;
         private System.Windows.Forms.DataGridViewTextBoxColumn ColumnVersion;
         private System.Windows.Forms.DataGridViewComboBoxColumn ColumnTag;
+        private System.Windows.Forms.DataGridViewButtonColumn ColumnPreview;
         private System.Windows.Forms.CheckBox checkBoxIgnoreCopyErrors;
 
         protected override void Dispose(bool disposing)
@@ -29,6 +31,7 @@ namespace EasyVersionBackup
             ColumnSourceName = new System.Windows.Forms.DataGridViewTextBoxColumn();
             ColumnVersion = new System.Windows.Forms.DataGridViewTextBoxColumn();
             ColumnTag = new System.Windows.Forms.DataGridViewComboBoxColumn();
+            ColumnPreview = new System.Windows.Forms.DataGridViewButtonColumn();
             buttonOk = new System.Windows.Forms.Button();
             buttonCancel = new System.Windows.Forms.Button();
             labelInfo = new System.Windows.Forms.Label();
@@ -40,7 +43,7 @@ namespace EasyVersionBackup
             dataGridViewVersions.AllowUserToAddRows = false;
             dataGridViewVersions.AllowUserToDeleteRows = false;
             dataGridViewVersions.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dataGridViewVersions.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] { ColumnSourceName, ColumnVersion, ColumnTag });
+            dataGridViewVersions.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] { ColumnSourceName, ColumnVersion, ColumnTag, ColumnPreview });
             dataGridViewVersions.Location = new System.Drawing.Point(12, 34);
             dataGridViewVersions.Name = "dataGridViewVersions";
             dataGridViewVersions.RowHeadersVisible = false;
@@ -58,6 +61,20 @@ namespace EasyVersionBackup
             ColumnTag.HeaderText = "Tag";
             ColumnTag.Width = 120;
             ColumnTag.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+
+            ColumnPreview.HeaderText = string.Empty;
+            ColumnPreview.Name = "ColumnPreview";
+            ColumnPreview.Width = 30;
+            ColumnPreview.MinimumWidth = 30;
+            ColumnPreview.ReadOnly = true;
+            ColumnPreview.Resizable = System.Windows.Forms.DataGridViewTriState.False;
+            ColumnPreview.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            ColumnPreview.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            ColumnPreview.Text = "?";
+            ColumnPreview.UseColumnTextForButtonValue = true;
+            ColumnPreview.ToolTipText = "Show recent backup version";
+            ColumnPreview.DefaultCellStyle.Alignment = System.Windows.Forms.DataGridViewContentAlignment.MiddleCenter;
+            ColumnPreview.DefaultCellStyle.Padding = System.Windows.Forms.Padding.Empty;
 
             checkBoxIgnoreCopyErrors.Location = new System.Drawing.Point(12, 198);
             checkBoxIgnoreCopyErrors.Text = "Ignore copy errors";

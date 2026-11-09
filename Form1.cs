@@ -1,4 +1,4 @@
-﻿// Design-Rule / UI consistency:
+// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // Semantic Anchor: Preserve backup/UI behavior; drag/drop insertion uses a temporary row; template context actions retain existing settings behavior.
@@ -58,6 +58,14 @@ namespace EasyVersionBackup
         private Label? _modernTitleLabel;
         private Label? _activeDataLossWarningLabel;
         private Label? _debugModeWarningLabel;
+        private readonly Panel _configuredPathsFilterPanel = new Panel();
+        private readonly TextBox _configuredPathsFilterTextBox = new TextBox();
+        private readonly Label _configuredPathsFilterCountLabel = new Label();
+        private readonly Button _configuredPathsFilterClearButton = new Button();
+        private Panel? _configuredPathsFilterIcon;
+        private Button? _addConfiguredPathButton;
+        private Button? _moveConfiguredPathUpButton;
+        private Button? _moveConfiguredPathDownButton;
         
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern bool ReleaseCapture();
@@ -145,8 +153,12 @@ namespace EasyVersionBackup
             dataGridViewConfiguredPaths.AlternatingRowsDefaultCellStyle.ForeColor = ModernTheme.TextColor;
             dataGridViewConfiguredPaths.EditMode = DataGridViewEditMode.EditOnKeystrokeOrF2;
 
-            dataGridViewConfiguredPaths.Columns["ColumnConfiguredSourceDirectory"].ReadOnly = false;
-            dataGridViewConfiguredPaths.Columns["ColumnConfiguredTargetDirectory"].ReadOnly = false;
+            // Semantic Anchor [Configured paths column schema]: Designer-owned base columns
+            // and dynamically inserted action columns are mandatory and keep their exact
+            // names/order. Fail explicitly if a required column is missing; do not skip an
+            // operation or change the row-to-backup-pair mapping.
+            (dataGridViewConfiguredPaths.Columns["ColumnConfiguredSourceDirectory"] ?? throw new InvalidOperationException("Required source directory column is missing.")).ReadOnly = false;
+            (dataGridViewConfiguredPaths.Columns["ColumnConfiguredTargetDirectory"] ?? throw new InvalidOperationException("Required target directory column is missing.")).ReadOnly = false;
 
             InitializeAutoBackupTimerColumn();
             InitializeBackupInfoColumn();
@@ -174,6 +186,12 @@ namespace EasyVersionBackup
                 backupProgressAnimationTimer_Tick;
 
             LoadSettings();
+            // Semantic Anchor [Startup theme]: Load saved theme after settings, recolor only
+            // existing UI, and keep all backup state and the display filter untouched.
+            VisualThemeRuntime.Apply(_settings.VisualThemeId, this);
+            _configuredPathsFilterTextBox.Text = _settings.ConfiguredPathsFilter;
+            _configuredPathsFilterTextBox.TextChanged += configuredPathsFilterTextBox_TextChanged;
+            UpdateConfiguredPathsFilterControlLayout();
 
             if ((!DebugMode.Current.Enabled ||
                  !DebugMode.Current.SkipInitialDisclaimer) &&
@@ -715,7 +733,7 @@ namespace EasyVersionBackup
         }
         private void InitializeModernTitleBar()
         {
-            _modernTitleBarPanel = new Panel
+            _modernTitleBarPanel = new ThemeTitleBarPanel
             {
                 Name = "panelModernTitleBar",
                 Dock = DockStyle.Top,
@@ -881,7 +899,7 @@ namespace EasyVersionBackup
         }
         private Button CreateModernTitleBarButton(string name, string text, Point location)
         {
-            Button button = new Button
+            Button button = new ThemeTitleBarButton
             {
                 Name = name,
                 Text = string.Empty,
@@ -996,6 +1014,7 @@ namespace EasyVersionBackup
             left += buttonSize + buttonSpacing;
 
             Button buttonAddConfiguredPath = CreateToolbarButton("buttonAddConfiguredPath", "+", string.Empty, "Add backup path", new Point(left, toolbarTop));
+            _addConfiguredPathButton = buttonAddConfiguredPath;
             buttonAddConfiguredPath.Click += buttonAddConfiguredPath_Click;
             left += buttonSize + buttonSpacing;
 
@@ -1004,10 +1023,12 @@ namespace EasyVersionBackup
             left += buttonSize + buttonSpacing;
 
             Button buttonMoveConfiguredPathUp = CreateToolbarButton("buttonMoveConfiguredPathUp", "↑", string.Empty, "Move selected backup path up", new Point(left, toolbarTop));
+            _moveConfiguredPathUpButton = buttonMoveConfiguredPathUp;
             buttonMoveConfiguredPathUp.Click += buttonMoveConfiguredPathUp_Click;
             left += buttonSize + buttonSpacing;
 
             Button buttonMoveConfiguredPathDown = CreateToolbarButton("buttonMoveConfiguredPathDown", "↓", string.Empty, "Move selected backup path down", new Point(left, toolbarTop));
+            _moveConfiguredPathDownButton = buttonMoveConfiguredPathDown;
             buttonMoveConfiguredPathDown.Click += buttonMoveConfiguredPathDown_Click;
             left += buttonSize + buttonSpacing;
 
@@ -1022,6 +1043,7 @@ namespace EasyVersionBackup
                 if (settingsResult == DialogResult.OK)
                 {
                     _settings = form.ResultSettings;
+                    _configuredPathsFilterTextBox.Text = _settings.ConfiguredPathsFilter;
                     SaveSettings();
                     RestartAutoBackupCountdown();
                 }
@@ -1034,7 +1056,9 @@ namespace EasyVersionBackup
             buttonAbout.Click += helpToolStripMenuItem_Click;
             left += buttonSize + buttonSpacing;
 
-            _activeDataLossWarningLabel = new Label
+            // Semantic Anchor [Retention warning backdrop]: Keep the warning a normal
+            // interactive label; only its background is a themed window-surface sample.
+            _activeDataLossWarningLabel = new ThemeBackdropLabel
             {
                 Name = "labelActiveDataLossWarning",
                 Text = "⚠  Retention / Source Cleanup active",
@@ -1070,7 +1094,7 @@ namespace EasyVersionBackup
             Controls.Add(buttonAbout);
             Controls.Add(_activeDataLossWarningLabel);
 
-            _debugModeWarningLabel = new Label
+            _debugModeWarningLabel = new ThemeBackdropLabel
             {
                 Name = "labelDebugModeWarning",
                 Text = "Safety mode: Off",
@@ -1098,6 +1122,7 @@ namespace EasyVersionBackup
                 "Technical deletion protections remain active.");
 
             Controls.Add(_debugModeWarningLabel);
+            InitializeConfiguredPathsFilter();
 
             buttonExit.BringToFront();
             buttonAddConfiguredPath.BringToFront();
@@ -1107,6 +1132,7 @@ namespace EasyVersionBackup
             buttonModernSettings.BringToFront();
             buttonAbout.BringToFront();
             _activeDataLossWarningLabel.BringToFront();
+            _configuredPathsFilterPanel.BringToFront();
             buttonBackup.BringToFront();
 
             if (_modernTitleBarPanel != null)
@@ -1114,9 +1140,299 @@ namespace EasyVersionBackup
                 _modernTitleBarPanel.BringToFront();
             }
         }
+        // Semantic Anchor [Configured paths display filter]: AppSettings.ConfiguredPathsFilter is the sole persisted filter.
+        // Keep every row at its BackupPathPairs index; hiding affects execution eligibility, never IsEnabled or saved pair order.
+        private bool IsConfiguredPathsFilterActive =>
+            !string.IsNullOrWhiteSpace(_settings.ConfiguredPathsFilter);
+
+        private bool MatchesConfiguredPathsFilter(BackupPathPair pair)
+        {
+            if (!IsConfiguredPathsFilterActive)
+            {
+                return true;
+            }
+
+            string sourceDirectory = pair.SourceDirectory ?? string.Empty;
+            string targetDirectory = pair.TargetDirectory ?? string.Empty;
+
+            return _settings.ConfiguredPathsFilter
+                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                .All(fragment =>
+                    sourceDirectory.Contains(fragment, StringComparison.OrdinalIgnoreCase) ||
+                    targetDirectory.Contains(fragment, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private void InitializeConfiguredPathsFilter()
+        {
+            _configuredPathsFilterPanel.Name = "panelConfiguredPathsFilter";
+            _configuredPathsFilterPanel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            _configuredPathsFilterPanel.BackColor = ModernTheme.TitleBarBackColor;
+            _configuredPathsFilterPanel.Paint += (_, e) =>
+            {
+                using Pen borderPen = new Pen(
+                    _configuredPathsFilterTextBox.Focused
+                        ? ModernTheme.AccentColor
+                        : ModernTheme.WindowBorderColor);
+                e.Graphics.DrawRectangle(
+                    borderPen,
+                    0,
+                    0,
+                    _configuredPathsFilterPanel.Width - 1,
+                    _configuredPathsFilterPanel.Height - 1);
+            };
+            _configuredPathsFilterPanel.Click += (_, _) => _configuredPathsFilterTextBox.Focus();
+
+            _configuredPathsFilterIcon = new Panel
+            {
+                Name = "panelConfiguredPathsFilterIcon",
+                BackColor = ModernTheme.TitleBarBackColor,
+                Size = new Size(17, 18),
+                Location = new Point(5, 7)
+            };
+            _configuredPathsFilterIcon.Paint += (_, e) =>
+            {
+                using Pen pen = new Pen(ModernTheme.TextColor, 1.4F);
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                e.Graphics.DrawEllipse(pen, 2, 2, 9, 9);
+                e.Graphics.DrawLine(pen, 10, 11, 15, 16);
+            };
+            _configuredPathsFilterIcon.Click += (_, _) => _configuredPathsFilterTextBox.Focus();
+
+            _configuredPathsFilterTextBox.Name = "textBoxConfiguredPathsFilter";
+            _configuredPathsFilterTextBox.BorderStyle = BorderStyle.None;
+            _configuredPathsFilterTextBox.PlaceholderText = "Search paths...";
+            _configuredPathsFilterTextBox.BackColor = ModernTheme.TitleBarBackColor;
+            _configuredPathsFilterTextBox.ForeColor = ModernTheme.TextColor;
+            _configuredPathsFilterTextBox.Font = new Font(
+                ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
+            _configuredPathsFilterTextBox.GotFocus += (_, _) => _configuredPathsFilterPanel.Invalidate();
+            _configuredPathsFilterTextBox.LostFocus += (_, _) => _configuredPathsFilterPanel.Invalidate();
+
+            _configuredPathsFilterCountLabel.Name = "labelConfiguredPathsFilterCount";
+            _configuredPathsFilterCountLabel.BackColor = ModernTheme.TitleBarBackColor;
+            _configuredPathsFilterCountLabel.ForeColor = ModernTheme.TextColor;
+            _configuredPathsFilterCountLabel.TextAlign = ContentAlignment.MiddleRight;
+            _configuredPathsFilterCountLabel.Font = new Font(
+                ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize - 1);
+            _configuredPathsFilterCountLabel.Click += (_, _) => _configuredPathsFilterTextBox.Focus();
+
+            _configuredPathsFilterClearButton.Name = "buttonClearConfiguredPathsFilter";
+            // Semantic Anchor [Filter clear affordance]: Paint the cross centered in the button;
+            // WinForms font glyph baselines can clip at small toolbar heights and DPI scales.
+            _configuredPathsFilterClearButton.Text = string.Empty;
+            _configuredPathsFilterClearButton.Paint += (_, e) =>
+            {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using Pen pen = new Pen(ModernTheme.TextColor, 1.5F);
+                float centerX = _configuredPathsFilterClearButton.ClientSize.Width / 2F;
+                float centerY = _configuredPathsFilterClearButton.ClientSize.Height / 2F;
+                const float radius = 3.5F;
+                e.Graphics.DrawLine(pen, centerX - radius, centerY - radius,
+                    centerX + radius, centerY + radius);
+                e.Graphics.DrawLine(pen, centerX - radius, centerY + radius,
+                    centerX + radius, centerY - radius);
+            };
+            _configuredPathsFilterClearButton.FlatStyle = FlatStyle.Flat;
+            _configuredPathsFilterClearButton.FlatAppearance.BorderSize = 0;
+            _configuredPathsFilterClearButton.FlatAppearance.MouseOverBackColor = ModernTheme.ControlHoverBackColor;
+            _configuredPathsFilterClearButton.BackColor = ModernTheme.TitleBarBackColor;
+            _configuredPathsFilterClearButton.ForeColor = ModernTheme.TextColor;
+            _configuredPathsFilterClearButton.Cursor = Cursors.Hand;
+            _configuredPathsFilterClearButton.Click += (_, _) =>
+            {
+                _configuredPathsFilterTextBox.Clear();
+                _configuredPathsFilterTextBox.Focus();
+            };
+
+            _configuredPathsFilterPanel.Controls.Add(_configuredPathsFilterIcon);
+            _configuredPathsFilterPanel.Controls.Add(_configuredPathsFilterTextBox);
+            _configuredPathsFilterPanel.Controls.Add(_configuredPathsFilterCountLabel);
+            _configuredPathsFilterPanel.Controls.Add(_configuredPathsFilterClearButton);
+            Controls.Add(_configuredPathsFilterPanel);
+
+            _mainToolTip.SetToolTip(_configuredPathsFilterTextBox,
+                "Filter source and target paths by fragments (all words must match). Only visible active pairs are backed up.");
+            _mainToolTip.SetToolTip(_configuredPathsFilterClearButton, "Clear filter");
+            UpdateConfiguredPathsFilterBounds();
+        }
+
+        private void UpdateConfiguredPathsFilterBounds()
+        {
+            if (_activeDataLossWarningLabel == null || _debugModeWarningLabel == null)
+            {
+                return;
+            }
+
+            const int spacing = 6;
+            int filterRight = buttonBackup.Left - spacing;
+            int warningLeft = _activeDataLossWarningLabel.Left;
+            int reservedWarningWidth = _activeDataLossWarningLabel.Visible
+                ? 286
+                : _debugModeWarningLabel.Visible ? 140 : 0;
+            int availableWidth = Math.Max(72, filterRight - warningLeft - spacing);
+            int filterWidth = Math.Min(220,
+                Math.Max(72, availableWidth - reservedWarningWidth - spacing));
+
+            _configuredPathsFilterPanel.SetBounds(
+                filterRight - filterWidth,
+                buttonBackup.Top,
+                filterWidth,
+                buttonBackup.Height);
+
+            int warningWidth = Math.Max(0,
+                _configuredPathsFilterPanel.Left - warningLeft - spacing);
+            _activeDataLossWarningLabel.Width = warningWidth;
+            _activeDataLossWarningLabel.AutoEllipsis = true;
+            _activeDataLossWarningLabel.Text = warningWidth < 40
+                ? "⚠"
+                : "⚠  Retention / Source Cleanup active";
+
+            _debugModeWarningLabel.AutoSize = false;
+            _debugModeWarningLabel.Size = new Size(warningWidth, buttonBackup.Height);
+            _debugModeWarningLabel.Text = warningWidth < 60
+                ? "!"
+                : "Safety mode: Off";
+            _debugModeWarningLabel.TextAlign = ContentAlignment.MiddleLeft;
+
+            UpdateConfiguredPathsFilterControlLayout();
+        }
+
+        private void UpdateConfiguredPathsFilterControlLayout()
+        {
+            int panelWidth = _configuredPathsFilterPanel.Width;
+            int panelHeight = _configuredPathsFilterPanel.Height;
+            if (panelWidth <= 0 || panelHeight <= 0)
+            {
+                return;
+            }
+
+            bool hasInput = _configuredPathsFilterTextBox.TextLength > 0;
+            bool showIcon = panelWidth >= 115;
+
+            if (_configuredPathsFilterIcon != null)
+            {
+                _configuredPathsFilterIcon.Visible = showIcon;
+            }
+
+            // Semantic Anchor [Filter toolbar layout]: Reserve only the clear-button width;
+            // match counts are available through the input tooltip, never in the text area.
+            _configuredPathsFilterCountLabel.Visible = false;
+            _configuredPathsFilterClearButton.Visible = hasInput;
+            _configuredPathsFilterClearButton.SetBounds(panelWidth - 25, 4, 21, panelHeight - 8);
+
+            int textLeft = showIcon ? 26 : 7;
+            int textRight = hasInput
+                ? _configuredPathsFilterClearButton.Left - 4
+                : panelWidth - 7;
+            _configuredPathsFilterTextBox.SetBounds(
+                textLeft,
+                (panelHeight - _configuredPathsFilterTextBox.PreferredHeight) / 2,
+                Math.Max(18, textRight - textLeft),
+                _configuredPathsFilterTextBox.PreferredHeight);
+        }
+
+        private void configuredPathsFilterTextBox_TextChanged(object? sender, EventArgs e)
+        {
+            if (string.Equals(_settings.ConfiguredPathsFilter,
+                    _configuredPathsFilterTextBox.Text, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _settings.ConfiguredPathsFilter = _configuredPathsFilterTextBox.Text;
+            SaveSettings();
+            ApplyConfiguredPathsFilter();
+        }
+
+        private void ApplyConfiguredPathsFilter()
+        {
+            // Semantic Anchor: Row visibility is presentation state only. Never clear hidden checkboxes or alter BackupPathPairs.
+            if (_dragGapPlaceholder != null)
+            {
+                ClearConfiguredPathDragPreview();
+            }
+
+            int currentRowIndex = dataGridViewConfiguredPaths.CurrentCell?.RowIndex ?? -1;
+            if (currentRowIndex >= 0 &&
+                currentRowIndex < _settings.BackupPathPairs.Count &&
+                !MatchesConfiguredPathsFilter(_settings.BackupPathPairs[currentRowIndex]))
+            {
+                dataGridViewConfiguredPaths.CurrentCell = null;
+                dataGridViewConfiguredPaths.ClearSelection();
+            }
+
+            bool wasRefreshing = _isRefreshingConfiguredPaths;
+            _isRefreshingConfiguredPaths = true;
+            int matchingCount = 0;
+            try
+            {
+                for (int i = 0;
+                     i < _settings.BackupPathPairs.Count &&
+                     i < dataGridViewConfiguredPaths.Rows.Count;
+                     i++)
+                {
+                    bool matches = MatchesConfiguredPathsFilter(_settings.BackupPathPairs[i]);
+                    if (dataGridViewConfiguredPaths.Rows[i].Visible != matches)
+                    {
+                        dataGridViewConfiguredPaths.Rows[i].Visible = matches;
+                    }
+
+                    if (matches)
+                    {
+                        matchingCount++;
+                    }
+                }
+            }
+            finally
+            {
+                _isRefreshingConfiguredPaths = wasRefreshing;
+            }
+
+            _configuredPathsFilterCountLabel.Text =
+                $"{matchingCount} / {_settings.BackupPathPairs.Count}";
+            string matchInformation =
+                $"Matching backup pairs: {matchingCount} of {_settings.BackupPathPairs.Count}";
+            _mainToolTip.SetToolTip(_configuredPathsFilterCountLabel, matchInformation);
+            _mainToolTip.SetToolTip(_configuredPathsFilterTextBox,
+                matchInformation + Environment.NewLine +
+                "Filter source and target paths by fragments (all words must match). Only visible active pairs are backed up.");
+
+            dataGridViewConfiguredPaths.AllowDrop = !IsConfiguredPathsFilterActive;
+            dataGridViewConfiguredPaths.Tag = null;
+            if (_addConfiguredPathButton != null)
+            {
+                _addConfiguredPathButton.Enabled = !IsConfiguredPathsFilterActive;
+                _mainToolTip.SetToolTip(_addConfiguredPathButton,
+                    IsConfiguredPathsFilterActive
+                        ? "Clear the filter to add a backup path"
+                        : "Add backup path");
+            }
+            if (_moveConfiguredPathUpButton != null)
+            {
+                _moveConfiguredPathUpButton.Enabled = !IsConfiguredPathsFilterActive;
+            }
+            if (_moveConfiguredPathDownButton != null)
+            {
+                _moveConfiguredPathDownButton.Enabled = !IsConfiguredPathsFilterActive;
+            }
+
+            UpdateConfiguredPathsFilterControlLayout();
+            UpdateBackupButtonAvailability();
+            UpdateConfiguredPathsScrollBarBounds();
+            RefreshWindowTitleCountdown();
+            RefreshNotifyIconText();
+        }
+
+        private void UpdateBackupButtonAvailability()
+        {
+            buttonBackup.Enabled = !_isBackupRunning &&
+                _settings.BackupPathPairs.Any(pair =>
+                    pair.IsEnabled && MatchesConfiguredPathsFilter(pair));
+        }
+
         private void MoveConfiguredPathRow(int sourceRowIndex, int targetRowIndex)
         {
-            if (sourceRowIndex == targetRowIndex)
+            if (IsConfiguredPathsFilterActive || sourceRowIndex == targetRowIndex)
             {
                 return;
             }
@@ -1151,6 +1467,12 @@ namespace EasyVersionBackup
         }
         private void dataGridViewConfiguredPaths_MouseMove(object? sender, MouseEventArgs e)
         {
+            if (IsConfiguredPathsFilterActive)
+            {
+                dataGridViewConfiguredPaths.Tag = null;
+                return;
+            }
+
             if (e.Button != MouseButtons.Left)
             {
                 return;
@@ -1288,6 +1610,12 @@ namespace EasyVersionBackup
         }
         private void dataGridViewConfiguredPaths_DragOver(object? sender, DragEventArgs e)
         {
+            if (IsConfiguredPathsFilterActive)
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
             if (e.Data == null || !e.Data.GetDataPresent(typeof(int)))
             {
                 e.Effect = DragDropEffects.None;
@@ -1375,6 +1703,12 @@ namespace EasyVersionBackup
 
         private void dataGridViewConfiguredPaths_MouseDown(object? sender, MouseEventArgs e)
         {
+            if (IsConfiguredPathsFilterActive)
+            {
+                dataGridViewConfiguredPaths.Tag = null;
+                return;
+            }
+
             if (e.Button != MouseButtons.Left)
             {
                 dataGridViewConfiguredPaths.Tag = null;
@@ -1430,6 +1764,32 @@ namespace EasyVersionBackup
             button.FlatAppearance.BorderSize = 1;
             button.FlatAppearance.MouseOverBackColor = ModernTheme.ControlHoverBackColor;
             button.FlatAppearance.MouseDownBackColor = ModernTheme.AccentColor;
+
+            // Semantic Anchor [Filtered toolbar buttons]: A disabled action keeps its existing
+            // Enabled/click contract, but must use the ModernTheme palette instead of the OS's
+            // near-black disabled-text rendering. The controls' state is not changed here.
+            if (!string.IsNullOrEmpty(text))
+            {
+                button.Paint += (sender, e) =>
+                {
+                    if (button.Enabled)
+                    {
+                        return;
+                    }
+
+                    using SolidBrush background = new SolidBrush(ModernTheme.ControlBackColor);
+                    using Pen border = new Pen(ModernTheme.AccentColor);
+                    e.Graphics.FillRectangle(background, button.ClientRectangle);
+                    Rectangle frame = button.ClientRectangle;
+                    frame.Width -= 1;
+                    frame.Height -= 1;
+                    e.Graphics.DrawRectangle(border, frame);
+                    TextRenderer.DrawText(e.Graphics, button.Text, button.Font,
+                        new Rectangle(0, -1, button.Width, button.Height), ModernTheme.TextColor,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+                        TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+                };
+            }
 
             if (!string.IsNullOrWhiteSpace(toolTipText))
             {
@@ -1501,6 +1861,12 @@ namespace EasyVersionBackup
         }
         private void buttonAddConfiguredPath_Click(object? sender, EventArgs e)
         {
+            // A newly added empty pair would be invisible with a search active.
+            if (IsConfiguredPathsFilterActive)
+            {
+                return;
+            }
+
             SyncEnabledPairsFromGrid();
 
             BackupPathPair pair = new BackupPathPair
@@ -1778,6 +2144,8 @@ namespace EasyVersionBackup
             {
                 _activeDataLossWarningLabel.BringToFront();
             }
+
+            UpdateConfiguredPathsFilterBounds();
         }
 
         private bool IsRecurringDataLossWarningDue()
@@ -1846,7 +2214,7 @@ namespace EasyVersionBackup
 
                 if (_settings.BackupPathPairs.Count == 0)
                 {
-                    buttonBackup.Enabled = false;
+                    ApplyConfiguredPathsFilter();
                     return;
                 }
 
@@ -1871,8 +2239,8 @@ namespace EasyVersionBackup
                     UpdateConfiguredExclusionButtonStyle(rowIndex);
                 }
 
-                buttonBackup.Enabled = _settings.BackupPathPairs.Any(p => p.IsEnabled);
                 RefreshAutoBackupTimerColumn();
+                ApplyConfiguredPathsFilter();
             }
             finally
             {
@@ -1973,10 +2341,12 @@ namespace EasyVersionBackup
 
             try
             {
-                int rowCount = dataGridViewConfiguredPaths.Rows.Count;
+                // Semantic Anchor: Scrollbar coordinates are visible-row ordinals; grid coordinates remain original pair indexes.
+                List<int> visibleRowIndices = GetVisibleConfiguredPathRowIndices();
                 int visibleRowCount = Math.Max(1, dataGridViewConfiguredPaths.DisplayedRowCount(false));
-                int maximumFirstDisplayedRowIndex = Math.Max(0, rowCount - visibleRowCount);
-                int firstDisplayedRowIndex = GetConfiguredPathsFirstDisplayedScrollingRowIndex();
+                int maximumFirstDisplayedRowIndex = Math.Max(0, visibleRowIndices.Count - visibleRowCount);
+                int firstDisplayedRowIndex = visibleRowIndices.IndexOf(
+                    GetConfiguredPathsFirstDisplayedScrollingRowIndex());
 
                 _configuredPathsVerticalScrollBar.Minimum = 0;
                 _configuredPathsVerticalScrollBar.Maximum = maximumFirstDisplayedRowIndex;
@@ -1989,6 +2359,19 @@ namespace EasyVersionBackup
             {
                 _isUpdatingConfiguredPathsScrollBar = false;
             }
+        }
+
+        private List<int> GetVisibleConfiguredPathRowIndices()
+        {
+            List<int> visibleRowIndices = new List<int>();
+            for (int i = 0; i < dataGridViewConfiguredPaths.Rows.Count; i++)
+            {
+                if (dataGridViewConfiguredPaths.Rows[i].Visible)
+                {
+                    visibleRowIndices.Add(i);
+                }
+            }
+            return visibleRowIndices;
         }
 
         private int GetConfiguredPathsFirstDisplayedScrollingRowIndex()
@@ -2005,14 +2388,21 @@ namespace EasyVersionBackup
 
         private void configuredPathsVerticalScrollBar_ScrollValueChanged(object? sender, EventArgs e)
         {
-            if (_isUpdatingConfiguredPathsScrollBar || dataGridViewConfiguredPaths.Rows.Count == 0)
+            if (_isUpdatingConfiguredPathsScrollBar)
+            {
+                return;
+            }
+
+            List<int> visibleRowIndices = GetVisibleConfiguredPathRowIndices();
+            if (visibleRowIndices.Count == 0)
             {
                 return;
             }
 
             try
             {
-                dataGridViewConfiguredPaths.FirstDisplayedScrollingRowIndex = Math.Min(_configuredPathsVerticalScrollBar.Value, dataGridViewConfiguredPaths.Rows.Count - 1);
+                int position = Math.Min(_configuredPathsVerticalScrollBar.Value, visibleRowIndices.Count - 1);
+                dataGridViewConfiguredPaths.FirstDisplayedScrollingRowIndex = visibleRowIndices[position];
             }
             catch (InvalidOperationException exception)
             {
@@ -2061,6 +2451,7 @@ namespace EasyVersionBackup
             if (form.ShowDialog(this) == DialogResult.OK)
             {
                 _settings = form.ResultSettings;
+                _configuredPathsFilterTextBox.Text = _settings.ConfiguredPathsFilter;
                 SaveSettings();
                 RefreshConfiguredPaths();
                 RestartAutoBackupCountdown();
@@ -2078,6 +2469,7 @@ namespace EasyVersionBackup
 
             _isBackupRunning = true;
             buttonBackup.Enabled = false;
+            _configuredPathsFilterPanel.Enabled = false;
 
             try
             {
@@ -2087,6 +2479,7 @@ namespace EasyVersionBackup
                     _settings.BackupPathPairs
                         .Where(pair =>
                             pair.IsEnabled &&
+                            MatchesConfiguredPathsFilter(pair) &&
                             !string.IsNullOrWhiteSpace(
                                 pair.SourceDirectory) &&
                             !string.IsNullOrWhiteSpace(
@@ -2443,9 +2836,8 @@ namespace EasyVersionBackup
             finally
             {
                 _isBackupRunning = false;
-                buttonBackup.Enabled =
-                    _settings.BackupPathPairs.Any(
-                        pair => pair.IsEnabled);
+                _configuredPathsFilterPanel.Enabled = true;
+                UpdateBackupButtonAvailability();
 
                 RefreshAutoBackupTimerColumn();
             }
@@ -2968,6 +3360,7 @@ namespace EasyVersionBackup
                 automaticBackupPairs
                     .Where(pair =>
                         pair.IsEnabled &&
+                        MatchesConfiguredPathsFilter(pair) &&
                         !string.IsNullOrWhiteSpace(
                             pair.SourceDirectory) &&
                         !string.IsNullOrWhiteSpace(
@@ -3143,6 +3536,7 @@ namespace EasyVersionBackup
                 _settings.BackupPathPairs
                     .Where(pair =>
                         pair.IsEnabled &&
+                        MatchesConfiguredPathsFilter(pair) &&
                         !string.IsNullOrWhiteSpace(
                             pair.SourceDirectory) &&
                         !string.IsNullOrWhiteSpace(
@@ -3177,6 +3571,7 @@ namespace EasyVersionBackup
 
             _isBackupRunning = true;
             buttonBackup.Enabled = false;
+            _configuredPathsFilterPanel.Enabled = false;
 
             try
             {
@@ -3201,9 +3596,8 @@ namespace EasyVersionBackup
                 }
 
                 _isBackupRunning = false;
-                buttonBackup.Enabled =
-                    _settings.BackupPathPairs.Any(
-                        pair => pair.IsEnabled);
+                _configuredPathsFilterPanel.Enabled = true;
+                UpdateBackupButtonAvailability();
 
                 RefreshAutoBackupTimerColumn();
                 RefreshWindowTitleCountdown();
@@ -3351,6 +3745,7 @@ namespace EasyVersionBackup
             foreach (BackupPathPair pair in _settings.BackupPathPairs)
             {
                 if (!pair.IsEnabled ||
+                    !MatchesConfiguredPathsFilter(pair) ||
                     string.IsNullOrWhiteSpace(pair.SourceDirectory) ||
                     string.IsNullOrWhiteSpace(pair.TargetDirectory))
                 {
@@ -3580,7 +3975,7 @@ namespace EasyVersionBackup
                 ImageLayout = DataGridViewImageCellLayout.Normal
             };
 
-            int targetColumnIndex = dataGridViewConfiguredPaths.Columns["ColumnConfiguredTargetDirectory"].Index;
+            int targetColumnIndex = (dataGridViewConfiguredPaths.Columns["ColumnConfiguredTargetDirectory"] ?? throw new InvalidOperationException("Required target directory column is missing.")).Index;
             dataGridViewConfiguredPaths.Columns.Insert(targetColumnIndex + 1, columnConfiguredBackupInfo);
         }
         private void InitializeAutoBackupTimerColumn()
@@ -3662,10 +4057,7 @@ namespace EasyVersionBackup
                 }
             }
 
-            buttonBackup.Enabled =
-                !_isBackupRunning &&
-                _settings.BackupPathPairs.Any(
-                    pair => pair.IsEnabled);
+            UpdateBackupButtonAvailability();
 
             RefreshAutoBackupTimerColumn();
             SaveSettings();
@@ -3728,7 +4120,7 @@ namespace EasyVersionBackup
                     ToolTipText = "Browse source directory"
                 };
 
-                int sourceDirectoryColumnIndex = dataGridViewConfiguredPaths.Columns["ColumnConfiguredSourceDirectory"].Index;
+                int sourceDirectoryColumnIndex = (dataGridViewConfiguredPaths.Columns["ColumnConfiguredSourceDirectory"] ?? throw new InvalidOperationException("Required source directory column is missing.")).Index;
                 dataGridViewConfiguredPaths.Columns.Insert(sourceDirectoryColumnIndex + 1, columnConfiguredSourceBrowse);
             }
 
@@ -3745,7 +4137,7 @@ namespace EasyVersionBackup
                     ToolTipText = "Backup pair settings"
                 };
 
-                int sourceBrowseColumnIndex = dataGridViewConfiguredPaths.Columns["ColumnConfiguredSourceBrowse"].Index;
+                int sourceBrowseColumnIndex = (dataGridViewConfiguredPaths.Columns["ColumnConfiguredSourceBrowse"] ?? throw new InvalidOperationException("Required source browse column is missing.")).Index;
                 dataGridViewConfiguredPaths.Columns.Insert(sourceBrowseColumnIndex + 1, columnConfiguredSourceSettings);
             }
 
@@ -3762,7 +4154,7 @@ namespace EasyVersionBackup
                     ToolTipText = "Edit excluded source paths"
                 };
 
-                int sourceSettingsColumnIndex = dataGridViewConfiguredPaths.Columns["ColumnConfiguredSourceSettings"].Index;
+                int sourceSettingsColumnIndex = (dataGridViewConfiguredPaths.Columns["ColumnConfiguredSourceSettings"] ?? throw new InvalidOperationException("Required source settings column is missing.")).Index;
                 dataGridViewConfiguredPaths.Columns.Insert(sourceSettingsColumnIndex + 1, columnConfiguredSourceExclusions);
             }
 
@@ -3779,7 +4171,7 @@ namespace EasyVersionBackup
                     ToolTipText = "Browse target directory"
                 };
 
-                int targetDirectoryColumnIndex = dataGridViewConfiguredPaths.Columns["ColumnConfiguredTargetDirectory"].Index;
+                int targetDirectoryColumnIndex = (dataGridViewConfiguredPaths.Columns["ColumnConfiguredTargetDirectory"] ?? throw new InvalidOperationException("Required target directory column is missing.")).Index;
                 dataGridViewConfiguredPaths.Columns.Insert(targetDirectoryColumnIndex + 1, columnConfiguredTargetBrowse);
             }
         }
@@ -4135,9 +4527,27 @@ namespace EasyVersionBackup
 
             string columnName = dataGridViewConfiguredPaths.Columns[e.ColumnIndex].Name;
 
+            // Semantic Anchor [Backup-grid theme composition]: Render every cell from the
+            // same form-coordinate effect texture, while preserving standard DataGridView
+            // foreground/border/checkbox drawing, progress indicators and row identity.
+            // No changes to bound values, selection state, backup flags or filtering.
+            bool themedBackdrop = ModernWindowFrame.PaintThemeSurface(
+                dataGridViewConfiguredPaths, e.Graphics, e.CellBounds,
+                e.RowIndex < 0 ? ModernTheme.ControlBackColor :
+                    (e.State & DataGridViewElementStates.Selected) != 0
+                        ? ModernTheme.AccentColor : ModernTheme.TitleBarBackColor,
+                e.RowIndex < 0 ? ModernTheme.ThemeGridHeaderBackdropOpacity :
+                    (e.State & DataGridViewElementStates.Selected) != 0
+                        ? ModernTheme.ThemeGridSelectionBackdropOpacity
+                        : ModernTheme.ThemeGridCellBackdropOpacity);
+            DataGridViewPaintParts parts = themedBackdrop
+                ? DataGridViewPaintParts.All &
+                    ~(DataGridViewPaintParts.Background | DataGridViewPaintParts.SelectionBackground)
+                : DataGridViewPaintParts.All;
+
             if (e.RowIndex == -1 && columnName == "ColumnConfiguredSourceSettings")
             {
-                e.Paint(e.CellBounds, DataGridViewPaintParts.All & ~DataGridViewPaintParts.ContentForeground);
+                e.Paint(e.CellBounds, parts & ~DataGridViewPaintParts.ContentForeground);
                 DrawConfiguredSettingsIcon(e.Graphics, e.CellBounds, ModernTheme.TextColor, 1.8F);
                 e.Handled = true;
                 return;
@@ -4145,7 +4555,7 @@ namespace EasyVersionBackup
 
             if (e.RowIndex == -1 && columnName == "ColumnConfiguredSourceExclusions")
             {
-                e.Paint(e.CellBounds, DataGridViewPaintParts.All & ~DataGridViewPaintParts.ContentForeground);
+                e.Paint(e.CellBounds, parts & ~DataGridViewPaintParts.ContentForeground);
                 DrawConfiguredFilterIcon(e.Graphics, e.CellBounds, false, ModernTheme.TextColor);
                 e.Handled = true;
                 return;
@@ -4153,6 +4563,11 @@ namespace EasyVersionBackup
 
             if (e.RowIndex < 0)
             {
+                if (themedBackdrop)
+                {
+                    e.Paint(e.CellBounds, parts);
+                    e.Handled = true;
+                }
                 return;
             }
 
@@ -4177,10 +4592,15 @@ namespace EasyVersionBackup
                 columnName != "ColumnConfiguredSourceExclusions" &&
                 columnName != "ColumnConfiguredTargetBrowse")
             {
+                if (themedBackdrop)
+                {
+                    e.Paint(e.CellBounds, parts);
+                    e.Handled = true;
+                }
                 return;
             }
 
-            e.Paint(e.CellBounds, DataGridViewPaintParts.All & ~DataGridViewPaintParts.ContentForeground);
+            e.Paint(e.CellBounds, parts & ~DataGridViewPaintParts.ContentForeground);
 
             bool isSelected = (e.State & DataGridViewElementStates.Selected) == DataGridViewElementStates.Selected;
             Color outlineColor = isSelected ? ModernTheme.DarkTextColor : ModernTheme.TextColor;
@@ -4387,6 +4807,20 @@ namespace EasyVersionBackup
                 columnName == "ColumnConfiguredTargetDirectory")
             {
                 SyncEnabledPairsFromGrid();
+                if (IsConfiguredPathsFilterActive &&
+                    (columnName == "ColumnConfiguredSourceDirectory" ||
+                     columnName == "ColumnConfiguredTargetDirectory") &&
+                    IsHandleCreated)
+                {
+                    // Defer hiding the edited row until the grid has completed its CellValueChanged notification.
+                    BeginInvoke(new Action(() =>
+                    {
+                        if (!IsDisposed && !Disposing)
+                        {
+                            ApplyConfiguredPathsFilter();
+                        }
+                    }));
+                }
             }
         }
 
@@ -4515,7 +4949,7 @@ namespace EasyVersionBackup
             form.Icon = Icon;
             ModernWindowFrame.Apply(form);
 
-            Panel panelModernTitleBar = new Panel
+            Panel panelModernTitleBar = new ThemeTitleBarPanel
             {
                 Name = "panelModernTitleBar",
                 Dock = DockStyle.Top,
@@ -4547,7 +4981,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Button buttonModernClose = new Button
+            Button buttonModernClose = new ThemeTitleBarButton
             {
                 Name = "buttonModernClose",
                 Text = string.Empty,
@@ -5022,6 +5456,7 @@ namespace EasyVersionBackup
             if (WindowState == FormWindowState.Normal)
             {
                 UpdateConfiguredPathsScrollBarBounds();
+                UpdateConfiguredPathsFilterBounds();
             }
 
             if (!_settings.MinimizeToSystray)
@@ -5131,6 +5566,7 @@ namespace EasyVersionBackup
             }
 
             WindowState = FormWindowState.Normal;
+            UpdateConfiguredPathsFilterBounds();
             Activate();
         }
 

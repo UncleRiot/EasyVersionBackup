@@ -1,0 +1,17 @@
+{
+  "Name": "Acrylic light",
+  "DockBackgroundColor": "#A7C7D1",
+  "ItemBackgroundColor": "#1AFFFFFF",
+  "ItemBorderColor": "#20FFFFFF",
+  "TextColor": "#FFFFFFFF",
+  "SubmenuIndicatorColor": "#FFFFFFFF",
+  "DragGhostBackgroundColor": "#42DDEEF3",
+  "DragGhostBorderColor": "#90FFFFFF",
+  "GlassSurfaceEnabled": true,
+  "GlassTopColor": "#78E9ECEB",
+  "GlassBottomColor": "#52B9C1BF",
+  "GlassHighlightColor": "#40FFFFFF",
+  "GlassShadowColor": "#7A0B1720",
+  "GlassCornerRadius": 18,
+  "GlassExtraThickness": 14
+}

@@ -122,6 +122,8 @@ namespace EasyVersionBackup
         {
             settings.SettingsSchemaVersion = CurrentSettingsSchemaVersion;
 
+            // Semantic Anchor: Missing or null filters in older settings mean "show all"; pair enabled states are never migrated by filtering.
+            settings.ConfiguredPathsFilter ??= string.Empty;
             settings.BackupPathPairs ??= new List<BackupPathPair>();
             settings.BackupPathPairs = settings.BackupPathPairs
                 .Where(pair => pair != null)

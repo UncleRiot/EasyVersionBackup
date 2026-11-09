@@ -1,0 +1,17 @@
+{
+  "Name": "Acrylic dark",
+  "DockBackgroundColor": "#101820",
+  "ItemBackgroundColor": "#2FFFFFFF",
+  "ItemBorderColor": "#38FFFFFF",
+  "TextColor": "#FFFFFF",
+  "SubmenuIndicatorColor": "#FFFFFF",
+  "DragGhostBackgroundColor": "#3AFFFFFF",
+  "DragGhostBorderColor": "#70FFFFFF",
+  "GlassSurfaceEnabled": true,
+  "GlassTopColor": "#E0101820",
+  "GlassBottomColor": "#E8080C10",
+  "GlassHighlightColor": "#40FFFFFF",
+  "GlassShadowColor": "#7A0B1720",
+  "GlassCornerRadius": 18,
+  "GlassExtraThickness": 14
+}

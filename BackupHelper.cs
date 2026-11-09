@@ -651,7 +651,9 @@ namespace EasyVersionBackup
 
 
 
-        private static bool IsRetentionBackupName(
+        // Semantic Anchor [Backup Name Identity / SSOT]: This existing retention predicate also identifies
+        // entries in the read-only version preview. Do not broaden matching to unrelated target contents.
+        internal static bool IsRetentionBackupName(
             string sourceName,
             string backupNameWithoutExtension)
         {

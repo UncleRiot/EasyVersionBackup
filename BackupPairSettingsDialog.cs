@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -118,7 +118,7 @@ namespace EasyVersionBackup
 
             ModernWindowFrame.Apply(this);
 
-            panelTitleBar = new Panel
+            panelTitleBar = new ThemeTitleBarPanel
             {
                 Name = "panelTitleBar",
                 Height = ModernTheme.TitleBarHeight,

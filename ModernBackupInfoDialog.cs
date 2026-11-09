@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -142,7 +142,7 @@ namespace EasyVersionBackup
 
         private void InitializeModernTitleBar()
         {
-            Panel panelModernTitleBar = new Panel
+            Panel panelModernTitleBar = new ThemeTitleBarPanel
             {
                 Name = "panelModernTitleBar",
                 Dock = DockStyle.Top,
@@ -205,7 +205,7 @@ namespace EasyVersionBackup
 
         private Button CreateModernTitleBarButton(string name, Point location)
         {
-            Button button = new Button
+            Button button = new ThemeTitleBarButton
             {
                 Name = name,
                 Text = string.Empty,

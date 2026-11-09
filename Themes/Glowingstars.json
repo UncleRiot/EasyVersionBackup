@@ -1,0 +1,85 @@
+{
+  "Name": "Glowingstars (animated)",
+  "DockBackgroundColor": "#030611",
+  "ItemBackgroundColor": "#18263E6A",
+  "ItemBorderColor": "#4CB8D8FF",
+  "TextColor": "#FFF6FBFF",
+  "SubmenuIndicatorColor": "#FFF6FBFF",
+  "DragGhostBackgroundColor": "#223C5F98",
+  "DragGhostBorderColor": "#80CFE4FF",
+  "GlassSurfaceEnabled": true,
+  "GlassTopColor": "#542A4F9E",
+  "GlassBottomColor": "#B0050A1A",
+  "GlassHighlightColor": "#86D9F4FF",
+  "GlassShadowColor": "#A0000208",
+  "GlassGradientStartX": 0.18,
+  "GlassGradientStartY": 0.1,
+  "GlassGradientEndX": 0.82,
+  "GlassGradientEndY": 0.9,
+  "GlassGradientAnimationEnabled": true,
+  "GlassGradientAnimationDurationSeconds": 32.0,
+  "GlassGradientAnimationAutoReverse": false,
+  "GlassGradientAnimationEasing": "Linear",
+  "GlassGradientAnimationEasingMode": "EaseInOut",
+  "GlassGradientAnimationToStartX": -0.079228,
+  "GlassGradientAnimationToStartY": 0.09442,
+  "GlassGradientAnimationToEndX": 1.079228,
+  "GlassGradientAnimationToEndY": 0.90558,
+  "GlassCornerRadius": 18,
+  "GlassExtraThickness": 14,
+  "GlassGradientAnimationKeyFrames": [],
+  "GlassGradientAnimationAspectCorrect": true,
+  "GlassGradientAnimationMode": "RotateTransform",
+  "GlassGradientAnimationRotationDegrees": 360.0,
+  "GlassFlameEffectEnabled": false,
+  "GlassFlameBaseGlowEnabled": false,
+  "GlassStarEffectEnabled": true,
+  "GlassStarLayers": [],
+  "GlassGradientStartColor": "#1A4B72C8",
+  "GlassGradientEndColor": "#0A0A1432",
+  "GlassEffectSchemaVersion": 1,
+  "GlassEffects": [
+    {
+      "Type": "Particles",
+      "Renderer": "GlowDot",
+      "Enabled": true,
+      "Count": 60,
+      "Seed": 341,
+      "Parameters": {
+        "PaddingXRatio": 0.035,
+        "TopPaddingRatio": 0.08,
+        "BottomPaddingRatio": 0.12,
+        "Size": {
+          "Min": 1.5,
+          "Max": 6.0
+        },
+        "Opacity": {
+          "Min": 0.22,
+          "Max": 1.0
+        },
+        "DurationSeconds": {
+          "Min": 2.8,
+          "Max": 7.2
+        },
+        "MaximumDelaySeconds": 2.8,
+        "GlowRadius": {
+          "Min": 1.5,
+          "Max": 5.0
+        },
+        "Scale": {
+          "Min": 0.74,
+          "Max": 1.32
+        },
+        "MaximumDriftXRatio": 0.0032,
+        "MaximumDriftYRatio": 0.0022,
+        "Palette": [
+          "#FFFDFEFF",
+          "#FFE9F4FF",
+          "#FFCBE0FF",
+          "#FFB5D2FF",
+          "#FFF7F2D9"
+        ]
+      }
+    }
+  ]
+}

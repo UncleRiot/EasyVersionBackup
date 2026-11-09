@@ -1,0 +1,10 @@
+{
+  "Name": "Acrylic",
+  "DockBackgroundColor": "#101820",
+  "ItemBackgroundColor": "#2FFFFFFF",
+  "ItemBorderColor": "#38FFFFFF",
+  "TextColor": "#FFFFFF",
+  "SubmenuIndicatorColor": "#FFFFFF",
+  "DragGhostBackgroundColor": "#3AFFFFFF",
+  "DragGhostBorderColor": "#70FFFFFF"
+}

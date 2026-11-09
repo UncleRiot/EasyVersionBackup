@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 // Semantic Anchor [AppSettings.cs]: Serialized settings contract: property names, defaults, schema version and BackupPathPair identity must stay compatible with SettingsStorage and existing JSON files.
@@ -24,6 +24,8 @@ namespace EasyVersionBackup
         public string BackupDestinationConflictHandling { get; set; } = "Ask";
         public bool AutoBackupEnabled { get; set; } = false;
         public int AutoBackupIntervalSeconds { get; set; } = 900;
+        // Semantic Anchor: Persist only the display filter; never serialize filtered pair subsets or temporary checkbox overrides.
+        public string ConfiguredPathsFilter { get; set; } = string.Empty;
         public List<BackupPathPair> BackupPathPairs { get; set; } = new List<BackupPathPair>();
         public Dictionary<string, List<string>> ExclusionTemplates { get; set; } = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, BackupPathPair> PairSettingsTemplates { get; set; } = new Dictionary<string, BackupPathPair>(StringComparer.OrdinalIgnoreCase);
@@ -38,6 +40,9 @@ namespace EasyVersionBackup
         public int BackupVersionDialogHeight { get; set; } = 330;
         public int BackupInfoDialogWidth { get; set; } = 760;
         public int BackupInfoDialogHeight { get; set; } = 430;
+        // Semantic Anchor [Theme selection]: Only the stable theme ID is persisted;
+        // visual previews, generated effect layers and runtime colors are never serialized.
+        public string VisualThemeId { get; set; } = "Default";
         public string LogLevel { get; set; } = "Normal";
     }
 

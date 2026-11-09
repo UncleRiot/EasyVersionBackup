@@ -1,8 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
-		<TargetFramework>net8.0-windows</TargetFramework>
+		<!-- SEMANTIC ANCHOR: FRAMEWORK_TARGET (SSOT). The project owns the Windows Forms target framework; publish profiles inherit it. -->
+		<TargetFramework>net10.0-windows</TargetFramework>
 		<UseWindowsForms>true</UseWindowsForms>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
@@ -18,10 +19,10 @@
 		<Product>EasyVersionBackup</Product>
 		<Copyright>Copyright © Daniel Capilla</Copyright>
 
-		<Version>1.3.1</Version>
-		<AssemblyVersion>1.3.1.20</AssemblyVersion>
-		<FileVersion>1.3.1.20</FileVersion>
-		<InformationalVersion>1.3.1</InformationalVersion>
+		<Version>1.4.2</Version>
+		<AssemblyVersion>1.4.2.4</AssemblyVersion>
+		<FileVersion>1.4.2.4</FileVersion>
+		<InformationalVersion>1.4.2</InformationalVersion>
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 	</PropertyGroup>
 
@@ -33,6 +34,9 @@
 		<EmbeddedResource Include="Ressources\molotov.jpg" />
 		<EmbeddedResource Include="Ressources\favicon2.ico" />
 		<EmbeddedResource Include="Ressources\ko-fi.png" />
+        <!-- Semantic Anchor [Theme preset SSOT]: Embed the original JSON presets in the assembly;
+             the selected ID is persisted in AppSettings, never in this project file. -->
+        <EmbeddedResource Include="Themes\*.json" LogicalName="EasyVersionBackup.Themes.%(Filename)%(Extension)" />
 	</ItemGroup>
 
-</Project>
+</Project>	

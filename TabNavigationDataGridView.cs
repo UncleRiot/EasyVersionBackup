@@ -8,6 +8,39 @@ namespace EasyVersionBackup
 {
     internal sealed class TabNavigationDataGridView : DataGridView
     {
+        // Semantic Anchor [Atomic grid repaint]: The animated form backdrop and all
+        // DataGridView cells (including text, headers and vacant area) must be drawn
+        // into the same WinForms back buffer before the frame reaches the screen.
+        // This does not change cell selection, editing, events or default-theme colors.
+        public TabNavigationDataGridView()
+        {
+            DoubleBuffered = true;
+        }
+
+        // Semantic Anchor [Grid vacant backdrop]: The area below existing rows is not a
+        // data cell; paint only that vacant region to avoid covering editors or selection.
+        // Cell backgrounds are composited by Form1's existing CellPainting handler.
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            if (VisualThemeRuntime.ActiveId == "Default") return;
+
+            int bottom = ColumnHeadersHeight;
+            foreach (DataGridViewRow row in Rows)
+            {
+                if (!row.Visible) continue;
+                var bounds = GetRowDisplayRectangle(row.Index, false);
+                if (bounds.Height > 0) bottom = System.Math.Max(bottom, bounds.Bottom);
+                if (bottom >= ClientSize.Height) return;
+            }
+
+            if (bottom >= ClientSize.Height) return;
+            var vacant = new System.Drawing.Rectangle(0, bottom,
+                ClientSize.Width, ClientSize.Height - bottom);
+            ModernWindowFrame.PaintThemeSurface(this, e.Graphics, vacant,
+                ModernTheme.WindowBackColor, ModernTheme.ThemeGridEmptyBackdropOpacity);
+        }
+
         private static bool IsNavigationArrow(Keys keyData)
         {
             Keys key = keyData & Keys.KeyCode;

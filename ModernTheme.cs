@@ -1,4 +1,4 @@
-﻿// Design-Rule / UI standards:
+// Design-Rule / UI standards:
 // This file defines the shared visual values for the application.
 // Forms should reuse these values to keep layout, spacing, colors, sizes, and fonts consistent.
 // 03.05.2026 /dc
@@ -37,19 +37,46 @@ namespace EasyVersionBackup
         }
 
         // window color settings start
-        public static readonly Color WindowBackColor = Color.FromArgb(27, 40, 56);
-        public static readonly Color TitleBarBackColor = Color.FromArgb(23, 26, 33);
-        public static readonly Color ControlBackColor = Color.FromArgb(42, 71, 94);
-        public static readonly Color ControlHoverBackColor = Color.FromArgb(55, 90, 120);
-        public static readonly Color AccentColor = Color.FromArgb(102, 192, 244);
-        public static readonly Color AccentHoverColor = Color.FromArgb(143, 212, 255);
-        public static readonly Color TextColor = Color.FromArgb(199, 213, 224);
-        public static readonly Color DarkTextColor = Color.FromArgb(23, 26, 33);
+        public static Color WindowBackColor { get; private set; } = Color.FromArgb(27, 40, 56);
+        public static Color TitleBarBackColor { get; private set; } = Color.FromArgb(23, 26, 33);
+        public static Color ControlBackColor { get; private set; } = Color.FromArgb(42, 71, 94);
+        public static Color ControlHoverBackColor { get; private set; } = Color.FromArgb(55, 90, 120);
+        public static Color AccentColor { get; private set; } = Color.FromArgb(102, 192, 244);
+        public static Color AccentHoverColor { get; private set; } = Color.FromArgb(143, 212, 255);
+        public static Color TextColor { get; private set; } = Color.FromArgb(199, 213, 224);
+        public static Color DarkTextColor { get; private set; } = Color.FromArgb(23, 26, 33);
         public static readonly Color CloseButtonHoverColor = Color.FromArgb(196, 43, 28);
         public static readonly Color DestructiveActionColor = Color.FromArgb(196, 43, 28);
         public static readonly Color DestructiveActionHoverColor = Color.FromArgb(220, 58, 42);
         public static readonly Color DestructiveActionPressedColor = Color.FromArgb(154, 32, 22);
         // window color settings end
+
+        // Semantic Anchor [Theme backdrop opacity]: Central style values for compositing
+        // the animated window effect behind existing WinForms surfaces. The Default theme
+        // does not use these values; keep text/selection contrast and hit targets unchanged.
+        public const int ThemeTitleBackdropOpacity = 75;
+        public const int ThemeWarningBackdropOpacity = 95;
+        public const int ThemeGridHeaderBackdropOpacity = 155;
+        public const int ThemeGridCellBackdropOpacity = 110;
+        public const int ThemeGridSelectionBackdropOpacity = 220;
+        public const int ThemeGridEmptyBackdropOpacity = 75;
+
+        // Semantic Anchor [Runtime palette]: ModernTheme is the only WinForms color SSOT;
+        // the original values above remain the Default baseline, and VisualThemeRuntime
+        // alone changes these nine theme-dependent properties on the UI thread.
+        internal static void SetVisualThemeColors(Color[] colors)
+        {
+            if (colors.Length != 9) throw new ArgumentException("Invalid theme palette length.", nameof(colors));
+            WindowBackColor = colors[0];
+            TitleBarBackColor = colors[1];
+            ControlBackColor = colors[2];
+            ControlHoverBackColor = colors[3];
+            AccentColor = colors[4];
+            AccentHoverColor = colors[5];
+            TextColor = colors[6];
+            DarkTextColor = colors[7];
+            WindowBorderColor = colors[8];
+        }
 
         // status color settings start
         public static readonly Color BackupInfoDefaultColor = Color.FromArgb(0, 120, 215);
@@ -69,7 +96,7 @@ namespace EasyVersionBackup
         // status color settings end
 
         // window border settings start
-        public static readonly Color WindowBorderColor = Color.FromArgb(92, 104, 112);
+        public static Color WindowBorderColor { get; private set; } = Color.FromArgb(92, 104, 112);
         public const float WindowBorderWidth = 1F;
         // window border settings end
 
@@ -245,14 +272,22 @@ namespace EasyVersionBackup
 
             public event EventHandler? ScrollValueChanged;
 
+            // Semantic Anchor [ModernScrollBar runtime state]: These values are set by the
+            // hosting view at runtime; the WinForms Designer must never persist them.
+            // The control's existing painting, scrolling and event contracts remain unchanged.
+            [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
             public System.Windows.Forms.Orientation Orientation { get; set; }
 
+            [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
             public int Minimum { get; set; }
 
+            [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
             public int Maximum { get; set; }
 
+            [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
             public int LargeChange { get; set; } = 1;
 
+            [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
             public int Value
             {
                 get => _value;
@@ -859,12 +894,28 @@ namespace EasyVersionBackup
 
             string text = button.Tag as string ?? string.Empty;
 
+            // Semantic Anchor [Dialog primary contrast]: The accent button must remain an
+            // opaque, legible control over animated backgrounds; Default remains unchanged.
+            Color textColor = button.ForeColor;
+            if (VisualThemeRuntime.ActiveId != "Default" && button.FlatAppearance.BorderSize == 0)
+            {
+                bool hovering = button.Enabled && button.ClientRectangle.Contains(
+                    button.PointToClient(System.Windows.Forms.Cursor.Position));
+                Color surface = !button.Enabled ? ControlBackColor :
+                    hovering ? AccentHoverColor : AccentColor;
+                using (SolidBrush background = new(surface))
+                    e.Graphics.FillRectangle(background, button.ClientRectangle);
+                double brightness = surface.R * .2126 + surface.G * .7152 + surface.B * .0722;
+                textColor = !button.Enabled ? Color.Gray :
+                    brightness >= 145 ? Color.FromArgb(15, 27, 36) : Color.White;
+            }
+
             System.Windows.Forms.TextRenderer.DrawText(
                 e.Graphics,
                 text,
                 button.Font,
                 button.ClientRectangle,
-                button.ForeColor,
+                textColor,
                 System.Windows.Forms.TextFormatFlags.HorizontalCenter |
                 System.Windows.Forms.TextFormatFlags.VerticalCenter |
                 System.Windows.Forms.TextFormatFlags.NoPadding |

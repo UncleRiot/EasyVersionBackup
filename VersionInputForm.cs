@@ -1,4 +1,4 @@
-﻿// Design-Rule / UI consistency:
+// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // 03.05.2026 /dc
@@ -6,10 +6,14 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
-// Semantic Anchor [VersionInputForm.cs]: Version/tag UI consumes BackupVersionItem and AppSettings tags; preserve selection/result semantics and use ModernTheme for shared presentation.
+// Semantic Anchor [VersionInputForm.cs]: Version/tag UI consumes BackupVersionItem and AppSettings tags;
+// preserve selection/result semantics. The preview reads BackupVersionItem target paths without altering
+// version inputs, configuration, or backups; name recognition is owned by BackupHelper, UI colors by ModernTheme.
 namespace EasyVersionBackup
 {
     public partial class VersionInputForm : Form
@@ -24,6 +28,8 @@ namespace EasyVersionBackup
         private readonly ModernTheme.ModernScrollBar _verticalScrollBar;
         private readonly ModernTheme.ModernScrollBar _horizontalScrollBar;
         private bool _isUpdatingScrollBars;
+        private ContextMenuStrip? _versionPreviewMenu;
+        private int _hoveredVersionPreviewRow = -1;
 
         public List<BackupVersionItem> ResultItems { get; private set; }
         public bool IgnoreCopyErrors { get; private set; }
@@ -107,9 +113,15 @@ namespace EasyVersionBackup
                 dataGridViewVersions.Columns[2].ToolTipText = "Optional backup tag";
             }
 
-            ColumnSourceName.Width = 260;
+            // Layout invariant: the preview column replaces 30px of Source width; the total grid width remains unchanged.
+            ColumnSourceName.Width = 230;
             ColumnVersion.Width = 125;
             ColumnTag.Width = 95;
+            ColumnPreview.Width = 30;
+            ColumnPreview.DefaultCellStyle.BackColor = ModernTheme.ControlBackColor;
+            ColumnPreview.DefaultCellStyle.ForeColor = ModernTheme.TextColor;
+            ColumnPreview.DefaultCellStyle.SelectionBackColor = ModernTheme.ControlHoverBackColor;
+            ColumnPreview.DefaultCellStyle.SelectionForeColor = ModernTheme.TextColor;
 
             checkBoxIgnoreCopyErrors.BackColor = ModernTheme.WindowBackColor;
             checkBoxIgnoreCopyErrors.ForeColor = ModernTheme.TextColor;
@@ -131,6 +143,7 @@ namespace EasyVersionBackup
             dataGridViewVersions.AlternatingRowsDefaultCellStyle.BackColor = ModernTheme.WindowBackColor;
             dataGridViewVersions.AlternatingRowsDefaultCellStyle.ForeColor = ModernTheme.TextColor;
             dataGridViewVersions.ScrollBars = ScrollBars.None;
+            dataGridViewVersions.ShowCellToolTips = true;
 
             if (ColumnTag.Items.Count == 0)
             {
@@ -159,7 +172,11 @@ namespace EasyVersionBackup
                     tag = "None";
                 }
 
-                dataGridViewVersions.Rows.Add(item.SourceName, item.Version, tag);
+                int rowIndex = dataGridViewVersions.Rows.Add(item.SourceName, item.Version, tag);
+                // SSOT: the original row item owns the source/target association; no parallel index map.
+                dataGridViewVersions.Rows[rowIndex].Tag = item;
+                // Native tooltip belongs to the actual button cell; ColumnPreview keeps the text as SSOT.
+                dataGridViewVersions.Rows[rowIndex].Cells[ColumnPreview.Index].ToolTipText = ColumnPreview.ToolTipText;
             }
 
             _verticalScrollBar.ScrollValueChanged += verticalScrollBarVersions_ScrollValueChanged;
@@ -179,6 +196,10 @@ namespace EasyVersionBackup
                         combo.DroppedDown = true;
                 }));
             };
+            dataGridViewVersions.CellContentClick += dataGridViewVersions_CellContentClick;
+            dataGridViewVersions.CellPainting += dataGridViewVersions_CellPainting;
+            dataGridViewVersions.CellMouseEnter += dataGridViewVersions_CellMouseEnter;
+            dataGridViewVersions.CellMouseLeave += dataGridViewVersions_CellMouseLeave;
             dataGridViewVersions.Scroll += dataGridViewVersions_Scroll;
             dataGridViewVersions.RowsAdded += dataGridViewVersions_ContentChanged;
             dataGridViewVersions.RowsRemoved += dataGridViewVersions_ContentChanged;
@@ -218,7 +239,7 @@ namespace EasyVersionBackup
 
         private void InitializeModernTitleBar()
         {
-            Panel panelModernTitleBar = new Panel
+            Panel panelModernTitleBar = new ThemeTitleBarPanel
             {
                 Name = "panelModernTitleBar",
                 Dock = DockStyle.Top,
@@ -273,7 +294,7 @@ namespace EasyVersionBackup
 
         private Button CreateModernTitleBarButton(string name, Point location)
         {
-            Button button = new Button
+            Button button = new ThemeTitleBarButton
             {
                 Name = name,
                 Text = string.Empty,
@@ -356,7 +377,7 @@ namespace EasyVersionBackup
             int gridBottom = checkBoxIgnoreCopyErrors.Top - 12;
             int gridHeight = Math.Max(105, gridBottom - gridTop - scrollBarSize);
             int availableGridWidth = Math.Max(220, ClientSize.Width - (margin * 2) - scrollBarSize);
-            int preferredGridWidth = ColumnSourceName.Width + ColumnVersion.Width + ColumnTag.Width;
+            int preferredGridWidth = ColumnSourceName.Width + ColumnVersion.Width + ColumnTag.Width + ColumnPreview.Width;
             int gridWidth = Math.Max(220, Math.Min(availableGridWidth, preferredGridWidth));
 
             dataGridViewVersions.Location = new Point(margin, gridTop);
@@ -461,6 +482,192 @@ namespace EasyVersionBackup
             dataGridViewVersions.HorizontalScrollingOffset = Math.Max(0, _horizontalScrollBar.Value);
         }
 
+        // Semantic Anchor [Version Preview UI]: Only the preview action is owner-painted;
+        // both its normal and hovered surfaces use the shared ModernTheme palette. The
+        // ColumnPreview.ToolTipText (Designer SSOT) is applied to each preview cell;
+        // DataGridView owns tooltip display. Do not add a competing manual ToolTip.Show/Hide.
+        // Header-edge invariant: the final column's right border must be visible even when
+        // the columns exactly fill the grid; draw inside the header cell, not outside the
+        // client rectangle. Keep existing column widths and horizontal scrolling unchanged.
+        // Never dereference optional paint resources; without Graphics, preserve default painting.
+        private void dataGridViewVersions_CellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
+        {
+            if (e.RowIndex == -1 && e.ColumnIndex == ColumnPreview.Index)
+            {
+                Graphics? headerGraphics = e.Graphics;
+                if (headerGraphics is null)
+                {
+                    return;
+                }
+
+                e.Paint(e.CellBounds, DataGridViewPaintParts.All);
+                int borderX = e.CellBounds.Right - 1;
+                if (borderX >= e.CellBounds.Left && borderX < dataGridViewVersions.ClientSize.Width)
+                {
+                    // Use the same native header-border palette as the neighboring columns.
+                    using Pen border = new Pen(SystemColors.ControlDarkDark);
+                    headerGraphics.DrawLine(border, borderX, e.CellBounds.Top + 1,
+                        borderX, e.CellBounds.Bottom - 1);
+                }
+
+                e.Handled = true;
+                return;
+            }
+
+            if (e.RowIndex < 0 || e.ColumnIndex != ColumnPreview.Index)
+            {
+                return;
+            }
+
+            Graphics? graphics = e.Graphics;
+            if (graphics is null)
+            {
+                return;
+            }
+
+            Color backgroundColor = e.RowIndex == _hoveredVersionPreviewRow
+                ? ModernTheme.ControlHoverBackColor
+                : ModernTheme.ControlBackColor;
+            using SolidBrush background = new SolidBrush(backgroundColor);
+            graphics.FillRectangle(background, e.CellBounds);
+            e.Paint(e.CellBounds, DataGridViewPaintParts.Border);
+            TextRenderer.DrawText(graphics, "?", e.CellStyle?.Font ?? Font,
+                e.CellBounds, ModernTheme.TextColor,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+                TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+            e.Handled = true;
+        }
+
+        private void dataGridViewVersions_CellMouseEnter(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex != ColumnPreview.Index)
+            {
+                return;
+            }
+
+            _hoveredVersionPreviewRow = e.RowIndex;
+            dataGridViewVersions.InvalidateCell(e.ColumnIndex, e.RowIndex);
+
+        }
+
+        private void dataGridViewVersions_CellMouseLeave(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex != ColumnPreview.Index)
+            {
+                return;
+            }
+
+            _hoveredVersionPreviewRow = -1;
+            dataGridViewVersions.InvalidateCell(e.ColumnIndex, e.RowIndex);
+        }
+
+        // Semantic Anchor [Version Preview]: Read-only, on-demand and scoped to the clicked row.
+        // SSOT: BackupVersionItem holds the target/source; BackupHelper identifies names created by this app.
+        // Never mutate a version cell, ResultItems, filesystem contents, or backup configuration here.
+        private async void dataGridViewVersions_CellContentClick(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex != ColumnPreview.Index ||
+                dataGridViewVersions.Rows[e.RowIndex].Tag is not BackupVersionItem item)
+            {
+                return;
+            }
+
+            string targetDirectory = item.TargetDirectory;
+            string sourceName = item.SourceName;
+
+            _versionPreviewMenu?.Close();
+            _versionPreviewMenu?.Dispose();
+
+            ContextMenuStrip menu = new ContextMenuStrip
+            {
+                BackColor = ModernTheme.ControlBackColor,
+                ForeColor = ModernTheme.TextColor,
+                Font = Font,
+                ShowImageMargin = false,
+                ShowItemToolTips = true,
+                Renderer = ModernTheme.CreateContextMenuRenderer()
+            };
+
+            _versionPreviewMenu = menu;
+            AddVersionPreviewLabel(menu, "Loading existing backups...");
+
+            Rectangle cellBounds = dataGridViewVersions.GetCellDisplayRectangle(
+                e.ColumnIndex, e.RowIndex, false);
+            menu.Show(dataGridViewVersions, new Point(cellBounds.Right, cellBounds.Bottom));
+
+            try
+            {
+                List<string> names = await Task.Run(() => GetRecentBackupNames(targetDirectory, sourceName));
+
+                if (IsDisposed || menu.IsDisposed || !ReferenceEquals(_versionPreviewMenu, menu))
+                {
+                    return;
+                }
+
+                menu.Items.Clear();
+                if (names.Count == 0)
+                {
+                    AddVersionPreviewLabel(menu, "No existing backups found");
+                }
+                else
+                {
+                    foreach (string name in names)
+                    {
+                        AddVersionPreviewLabel(menu, name);
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                if (IsDisposed || menu.IsDisposed || !ReferenceEquals(_versionPreviewMenu, menu))
+                {
+                    return;
+                }
+
+                menu.Items.Clear();
+                AddVersionPreviewLabel(menu, "Target directory cannot be read");
+                AddVersionPreviewLabel(menu, exception.Message);
+            }
+        }
+
+        private static void AddVersionPreviewLabel(ContextMenuStrip menu, string text)
+        {
+            menu.Items.Add(new ToolStripLabel(text)
+            {
+                ForeColor = ModernTheme.TextColor,
+                BackColor = ModernTheme.ControlBackColor,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ToolTipText = text
+            });
+        }
+
+        private static List<string> GetRecentBackupNames(string targetDirectory, string sourceName)
+        {
+            if (string.IsNullOrWhiteSpace(targetDirectory) || !Directory.Exists(targetDirectory))
+            {
+                throw new DirectoryNotFoundException("Target directory is missing or unavailable: " + targetDirectory);
+            }
+
+            // Only top-level ZIP backups and backup directories belonging to this source are eligible.
+            // Sorting by filesystem write time is intentionally independent of semantic version numbers.
+            var zipFiles = Directory.EnumerateFiles(targetDirectory, "*.zip", SearchOption.TopDirectoryOnly)
+                .Where(path => BackupHelper.IsRetentionBackupName(sourceName, Path.GetFileNameWithoutExtension(path)))
+                .Select(path => new { Name = Path.GetFileName(path), LastWriteTime = File.GetLastWriteTimeUtc(path) });
+
+            var backupDirectories = Directory.EnumerateDirectories(targetDirectory, "*", SearchOption.TopDirectoryOnly)
+                // BackupFileService.BuildTemporaryPath marks unpublished work as .evbtmp-; never preview it.
+                .Where(path => !Path.GetFileName(path).Contains(".evbtmp-", StringComparison.OrdinalIgnoreCase))
+                .Where(path => BackupHelper.IsRetentionBackupName(sourceName, Path.GetFileName(path)))
+                .Select(path => new { Name = Path.GetFileName(path), LastWriteTime = Directory.GetLastWriteTimeUtc(path) });
+
+            return zipFiles.Concat(backupDirectories)
+                .OrderByDescending(entry => entry.LastWriteTime)
+                .ThenBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+                .Take(5)
+                .Select(entry => entry.Name)
+                .ToList();
+        }
+
         private void dataGridViewVersions_Scroll(object? sender, ScrollEventArgs e)
         {
             UpdateVersionScrollBars();
@@ -491,6 +698,8 @@ namespace EasyVersionBackup
 
         private void VersionInputForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
+            _versionPreviewMenu?.Dispose();
+            _versionPreviewMenu = null;
             DialogSize = WindowState == FormWindowState.Normal
                 ? Size
                 : RestoreBounds.Size;

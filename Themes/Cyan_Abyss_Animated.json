@@ -1,0 +1,34 @@
+{
+  "Name": "Cyan Abyss (animated)",
+  "DockBackgroundColor": "#FF010813",
+  "ItemBackgroundColor": "#AF0A2333",
+  "ItemBorderColor": "#AA2A7190",
+  "TextColor": "#FFF0FBFF",
+  "SubmenuIndicatorColor": "#FF92E8FF",
+  "DragGhostBackgroundColor": "#CB125675",
+  "DragGhostBorderColor": "#FF1BBDEB",
+  "GlassSurfaceEnabled": true,
+  "GlassTopColor": "#09030E1A",
+  "GlassBottomColor": "#14030F19",
+  "GlassHighlightColor": "#FF22D8FF",
+  "GlassShadowColor": "#FF01060D",
+  "GlassGradientAnimationEnabled": false,
+  "GlassFlameEffectEnabled": false,
+  "GlassFlameBaseGlowEnabled": false,
+  "GlassStarEffectEnabled": false,
+  "GlassEffectSchemaVersion": 1,
+  "GlassEffects": [
+    {
+      "Type": "Background",
+      "Renderer": "Smoke",
+      "Enabled": true,
+      "Seed": 27181,
+      "Parameters": {
+        "Opacity": 0.88,
+        "Speed": 0.24,
+        "Scale": 5.2,
+        "EdgeStrength": 1.42
+      }
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Windows.Forms;
 using System.Threading;
@@ -70,7 +70,7 @@ namespace EasyVersionBackup
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             ModernWindowFrame.Apply(this);
 
-            Panel panelModernTitleBar = new Panel
+            Panel panelModernTitleBar = new ThemeTitleBarPanel
             {
                 Name = "panelModernTitleBar",
                 Dock = DockStyle.Top,
@@ -321,7 +321,7 @@ namespace EasyVersionBackup
 
         private Button CreateModernTitleBarButton(string name, string text, Point location)
         {
-            Button button = new Button
+            Button button = new ThemeTitleBarButton
             {
                 Name = name,
                 Text = string.Empty,

@@ -1,4 +1,4 @@
-﻿// Design-Rule / UI consistency:
+// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // 03.05.2026 /dc
@@ -104,7 +104,7 @@ namespace EasyVersionBackup
 
         private void InitializeModernTitleBar()
         {
-            Panel panelModernTitleBar = new Panel
+            Panel panelModernTitleBar = new ThemeTitleBarPanel
             {
                 Name = "panelModernTitleBar",
                 Dock = DockStyle.Top,
@@ -163,7 +163,7 @@ namespace EasyVersionBackup
 
         private Button CreateModernTitleBarButton(string name, Point location)
         {
-            Button button = new Button
+            Button button = new ThemeTitleBarButton
             {
                 Name = name,
                 Text = string.Empty,

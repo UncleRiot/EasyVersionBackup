@@ -1,4 +1,4 @@
-﻿// Design-Rule / UI consistency:
+// Design-Rule / UI consistency:
 // Keep layout, spacing, colors, sizes, and fonts aligned with ModernTheme.
 // Add new shared visual values to ModernTheme instead of hardcoding local exceptions here.
 // Semantic Anchor: Preserve themed settings UI and existing retention controls; template manager edits the cloned settings state.
@@ -11,6 +11,7 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.IO;
+using EasyVersionBackup.VisualThemes;
 
 // Semantic Anchor [ModernSettings.cs]: Settings UI edits AppSettings through SettingsStorage; do not create separate persisted defaults or duplicate scheduling and cleanup normalization.
 namespace EasyVersionBackup
@@ -56,6 +57,15 @@ namespace EasyVersionBackup
         private int tagListFirstVisibleIndex;
         private bool _isApplyingSettingsToUi;
 
+        // Semantic Anchor [Theme Settings transaction]: A preview changes only runtime colors/effects.
+        // The chosen stable ID is persisted exclusively through ResultSettings on OK;
+        // Cancel restores the theme active before opening this dialog.
+        private readonly string initialVisualThemeId;
+        private readonly ComboBox comboBoxVisualTheme;
+        private readonly VisualThemePreviewPanel themePreview;
+        private readonly Button buttonImportVisualTheme;
+        private bool isPopulatingVisualThemes;
+
         private readonly List<Button> tabButtons = new List<Button>();
         private readonly List<Panel> tabPages = new List<Panel>();
 
@@ -64,6 +74,7 @@ namespace EasyVersionBackup
         public ModernSettings(AppSettings settings)
         {
             ResultSettings = CloneSettings(settings);
+            initialVisualThemeId = VisualThemeRuntime.ActiveId;
 
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             Text = "Settings";
@@ -77,7 +88,7 @@ namespace EasyVersionBackup
 
             ModernWindowFrame.Apply(this);
 
-            panelTitleBar = new Panel
+            panelTitleBar = new ThemeTitleBarPanel
             {
                 Name = "panelTitleBar",
                 Height = ModernTheme.TitleBarHeight,
@@ -334,6 +345,32 @@ namespace EasyVersionBackup
             checkBoxAutoPurgeEnabled.CheckedChanged += checkBoxAutoPurgeEnabled_CheckedChanged;
             checkBoxSourceCleanupEnabled.CheckedChanged += checkBoxSourceCleanupEnabled_CheckedChanged;
 
+            // Semantic Anchor [Theme preview UI]: Use the imported GlueDock JSON and generated
+            // effect model as the source of preview pixels, not duplicated form-specific settings.
+            comboBoxVisualTheme = new ComboBox
+            {
+                Name = "comboBoxVisualTheme",
+                Location = new Point(ModernTheme.SettingsControlLeft, ModernTheme.SettingsRowTop(0)),
+                Size = new Size(250, ModernTheme.SettingsControlHeight),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = ModernTheme.TitleBarBackColor,
+                ForeColor = ModernTheme.TextColor
+            };
+            buttonImportVisualTheme = CreateToolButton("buttonImportVisualTheme", "Import JSON",
+                new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsRowTop(1)));
+            buttonImportVisualTheme.Size = new Size(135, ModernTheme.DialogButtonSize.Height);
+            themePreview = new VisualThemePreviewPanel
+            {
+                Name = "themePreview",
+                Location = new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsRowTop(3)),
+                Size = new Size(590, 160),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+            };
+            comboBoxVisualTheme.SelectedIndexChanged += (_, _) => PreviewSelectedVisualTheme();
+            buttonImportVisualTheme.Click += buttonImportVisualTheme_Click;
+            settingsToolTip.SetToolTip(buttonImportVisualTheme, "Import a GlueDock theme JSON file");
+
             Panel tabPageGeneral = CreateTabPage("tabPageGeneral");
             tabPageGeneral.Controls.Add(labelDefaultVersioning);
             tabPageGeneral.Controls.Add(comboBoxDefaultVersioning);
@@ -380,6 +417,14 @@ namespace EasyVersionBackup
             tabPageLog.Controls.Add(labelLogLevel);
             tabPageLog.Controls.Add(comboBoxLogLevel);
 
+            Panel tabPageThemes = CreateTabPage("tabPageThemes");
+            tabPageThemes.Controls.Add(CreateLabel("labelVisualTheme", "Theme",
+                new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(0)),
+                new Size(ModernTheme.SettingsLabelWidth, 20)));
+            tabPageThemes.Controls.Add(comboBoxVisualTheme);
+            tabPageThemes.Controls.Add(buttonImportVisualTheme);
+            tabPageThemes.Controls.Add(themePreview);
+
             Panel tabPageTools = CreateTabPage("tabPageTools");
             tabPageTools.Controls.Add(buttonExportSettings);
             tabPageTools.Controls.Add(buttonImportSettings);
@@ -395,12 +440,18 @@ namespace EasyVersionBackup
             AddSettingsTab("Tags", tabPageTags);
             AddSettingsTab("Log", tabPageLog);
             AddSettingsTab("Tools", tabPageTools);
+            AddSettingsTab("Themes", tabPageThemes);
 
             buttonOk = ModernTheme.CreateDialogPrimaryButton("buttonOk", "OK");
             buttonCancel = ModernTheme.CreateDialogSecondaryButton("buttonCancel", "Cancel", DialogResult.Cancel);
             ModernTheme.PositionDialogButtons(this, buttonOk, buttonCancel);
 
             buttonOk.Click += buttonOk_Click;
+            FormClosed += (_, _) =>
+            {
+                if (DialogResult != DialogResult.OK)
+                    VisualThemeRuntime.Apply(initialVisualThemeId);
+            };
 
             panelTitleBar.MouseDown += titleBar_MouseDown;
             labelTitle.MouseDown += titleBar_MouseDown;
@@ -421,6 +472,57 @@ namespace EasyVersionBackup
 
             AcceptButton = buttonOk;
             CancelButton = buttonCancel;
+        }
+
+        private void PopulateVisualThemes(string? preferredId)
+        {
+            isPopulatingVisualThemes = true;
+            try
+            {
+                comboBoxVisualTheme.Items.Clear();
+                foreach (DockThemeOption theme in DockThemeService.GetAvailableThemes())
+                    comboBoxVisualTheme.Items.Add(theme);
+                var selected = comboBoxVisualTheme.Items.Cast<DockThemeOption>()
+                    .FirstOrDefault(item => string.Equals(item.Id, preferredId, StringComparison.OrdinalIgnoreCase))
+                    ?? comboBoxVisualTheme.Items.Cast<DockThemeOption>()
+                        .FirstOrDefault(item => item.Id.Equals("Default", StringComparison.OrdinalIgnoreCase));
+                if (selected != null) comboBoxVisualTheme.SelectedItem = selected;
+            }
+            finally { isPopulatingVisualThemes = false; }
+            PreviewSelectedVisualTheme();
+        }
+
+        private void PreviewSelectedVisualTheme()
+        {
+            if (isPopulatingVisualThemes || comboBoxVisualTheme.SelectedItem is not DockThemeOption selected)
+                return;
+            // Runtime visuals only; saved settings remain unchanged until OK.
+            VisualThemeRuntime.Apply(selected.Id, this);
+            themePreview.ShowTheme(selected.Id, selected.DisplayName);
+        }
+
+        private void buttonImportVisualTheme_Click(object? sender, EventArgs e)
+        {
+            using OpenFileDialog dialog = new()
+            {
+                Title = "Import Theme",
+                Filter = "Theme JSON (*.json)|*.json",
+                CheckFileExists = true,
+                Multiselect = false
+            };
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+            try
+            {
+                DockThemeOption imported = DockThemeService.ImportTheme(dialog.FileName);
+                PopulateVisualThemes(imported.Id);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
+                                       ArgumentException or System.Text.Json.JsonException or
+                                       InvalidDataException or NotSupportedException)
+            {
+                ModernMessageDialog.Show(this, "Import Theme", "Theme import failed:" +
+                    Environment.NewLine + Environment.NewLine + ex.Message);
+            }
         }
 
         private void ApplyDynamicSettingsLayout(Panel tabPage)
@@ -824,6 +926,7 @@ namespace EasyVersionBackup
 
             UpdateAutoBackupControls();
             UpdateRetentionWarningDialogueControls();
+            PopulateVisualThemes(settings.VisualThemeId);
         }
 
         private AppSettings ReadSettingsFromUi()
@@ -855,6 +958,7 @@ namespace EasyVersionBackup
             settings.LogLevel = BackupLogger.NormalizeLogLevel(comboBoxLogLevel.Text);
             settings.AutoBackupEnabled = checkBoxAutoBackupEnabled.Checked;
             settings.AutoBackupIntervalSeconds = autoBackupIntervalSeconds;
+            settings.VisualThemeId = (comboBoxVisualTheme.SelectedItem as DockThemeOption)?.Id ?? "Default";
                         settings.Tags = tags
                 .Where(tag => !string.IsNullOrWhiteSpace(tag))
                 .Select(tag => tag.Trim())
@@ -965,7 +1069,7 @@ namespace EasyVersionBackup
 
                 ModernWindowFrame.Apply(this);
 
-                panelTitleBar = new Panel
+                panelTitleBar = new ThemeTitleBarPanel
                 {
                     Name = "panelTitleBar",
                     Height = ModernTheme.TitleBarHeight,
@@ -1386,6 +1490,7 @@ namespace EasyVersionBackup
                 ShowRetentionWarningDialogue = settings.ShowRetentionWarningDialogue,
                 BackupDestinationConflictHandling = settings.BackupDestinationConflictHandling,
                 LogLevel = BackupLogger.NormalizeLogLevel(settings.LogLevel),
+                VisualThemeId = settings.VisualThemeId,
                 AutoBackupEnabled = settings.AutoBackupEnabled,
                 AutoBackupIntervalSeconds = settings.AutoBackupIntervalSeconds,
                 BackupPathPairs = new List<BackupPathPair>(),
