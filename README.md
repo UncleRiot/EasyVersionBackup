@@ -46,7 +46,8 @@ If this tool saves you time, you can support development here:
 Main-Window
 
 <br>
-<img width="956" height="326" alt="grafik" src="https://github.com/user-attachments/assets/fa575d05-ad64-47d0-b571-23e36ca8c9a0" />
+<img width="927" height="391" alt="grafik" src="https://github.com/user-attachments/assets/764297e6-79f5-4a0f-95c9-3a46ee3f6596" />
+
 <br>
 
 
