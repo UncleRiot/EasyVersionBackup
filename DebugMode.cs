@@ -5,6 +5,8 @@ using System.Text.Json;
 using System.Windows.Forms;
 
 // Semantic Anchor [DebugMode.cs]: Debug settings and access controls must remain explicit; do not change protection or persistence behavior while editing visual dialogs.
+// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
+// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public sealed class DebugModeSettings
@@ -157,7 +159,7 @@ namespace EasyVersionBackup
                         190));
 
             Label labelWarning =
-                new Label
+                new ThemeBackdropLabel
                 {
                     Text =
                         "Debug Mode can disable safety warnings and confirmations.",
@@ -176,7 +178,7 @@ namespace EasyVersionBackup
                 };
 
             Label labelPassword =
-                new Label
+                new ThemeBackdropLabel
                 {
                     Text =
                         "Password:",
@@ -287,7 +289,7 @@ namespace EasyVersionBackup
                         430));
 
             Label labelWarning =
-                new Label
+                new ThemeBackdropLabel
                 {
                     Text =
                         "WARNING: Debug Mode can bypass user-facing safety warnings and confirmations." +
@@ -538,7 +540,7 @@ namespace EasyVersionBackup
             Size clientSize)
         {
             Form form =
-                new Form
+                new ThemeBufferedForm
                 {
                     Text =
                         title,
@@ -563,9 +565,12 @@ namespace EasyVersionBackup
             ModernWindowFrame.Apply(
                 form);
 
+            // Semantic Anchor [Debug caption backdrop]: Use the already-buffered
+            // title renderer without changing debug authorization or settings.
             Panel panelTitleBar =
-                new Panel
+                new ThemeTitleBarPanel
                 {
+                    Name = "panelTitleBar",
                     Dock =
                         DockStyle.Top,
                     Height =
@@ -575,7 +580,7 @@ namespace EasyVersionBackup
                 };
 
             Label labelTitle =
-                new Label
+                new ThemeBackdropLabel
                 {
                     Text =
                         title,

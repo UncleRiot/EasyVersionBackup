@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 
 // Semantic Anchor [AboutForm.cs]: About and update display are presentation-only; application version text comes from ApplicationVersionHelper and shared visual styling from ModernTheme.
+// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
+// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public class AboutForm : Form
@@ -88,7 +90,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Label labelModernTitle = new Label
+            Label labelModernTitle = new ThemeBackdropLabel
             {
                 Name = "labelModernTitle",
                 Text = "About",
@@ -128,7 +130,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Label labelTitle = new Label
+            Label labelTitle = new ThemeBackdropLabel
             {
                 Text = "EasyVersionBackup",
                 Font = new Font(ModernTheme.FontFamilyName, 11F, FontStyle.Bold),
@@ -138,7 +140,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Label labelCopyright = new Label
+            Label labelCopyright = new ThemeBackdropLabel
             {
                 Text = "(c) Daniel Capilla",
                 AutoSize = true,
@@ -147,7 +149,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Label labelVersion = new Label
+            Label labelVersion = new ThemeBackdropLabel
             {
                 Text = "Version: " + ApplicationVersionHelper.GetApplicationVersionText(),
                 AutoSize = true,
@@ -213,7 +215,7 @@ namespace EasyVersionBackup
                 OpenUrl("https://github.com/UncleRiot/EasyVersionBackup/wiki");
             };
 
-            Label labelKoFiText = new Label
+            Label labelKoFiText = new ThemeBackdropLabel
             {
                 Text = "EasyVersionBackup is free to use." + Environment.NewLine +
                        "If this tool saves you time, you can support development here:",

@@ -15,6 +15,8 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 
 // Semantic Anchor [Form1.cs]: Main-form UI rows mirror AppSettings.BackupPathPairs; SettingsStorage owns persistence, BackupHelper/BackupFileService own execution rules, and ModernTheme owns common visual values. Drag placeholders are not persisted backup pairs.
+// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
+// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public partial class Form1 : Form
@@ -60,7 +62,7 @@ namespace EasyVersionBackup
         private Label? _debugModeWarningLabel;
         private readonly Panel _configuredPathsFilterPanel = new Panel();
         private readonly TextBox _configuredPathsFilterTextBox = new TextBox();
-        private readonly Label _configuredPathsFilterCountLabel = new Label();
+        private readonly Label _configuredPathsFilterCountLabel = new ThemeBackdropLabel();
         private readonly Button _configuredPathsFilterClearButton = new Button();
         private Panel? _configuredPathsFilterIcon;
         private Button? _addConfiguredPathButton;
@@ -751,7 +753,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            _modernTitleLabel = new Label
+            _modernTitleLabel = new ThemeBackdropLabel
             {
                 Name = "labelModernTitle",
                 Text = _baseWindowTitle,
@@ -2269,7 +2271,7 @@ namespace EasyVersionBackup
                 Anchor = dataGridViewConfiguredPaths.Anchor,
                 BackColor = ModernTheme.WindowBackColor
             };
-            Label label = new Label
+            Label label = new ThemeBackdropLabel
             {
                 Text = "Loading…",
                 Dock = DockStyle.Fill,
@@ -4937,7 +4939,7 @@ namespace EasyVersionBackup
             string deleteText,
             List<string> purgePreviewLines)
         {
-            using Form form = new Form();
+            using Form form = new ThemeBufferedForm();
 
             form.Text = title;
             form.StartPosition = FormStartPosition.CenterParent;
@@ -4967,7 +4969,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Label labelModernTitle = new Label
+            Label labelModernTitle = new ThemeBackdropLabel
             {
                 Name = "labelModernTitle",
                 Text = title,
@@ -5067,7 +5069,7 @@ namespace EasyVersionBackup
             panelModernTitleBar.Controls.Add(labelModernTitle);
             panelModernTitleBar.Controls.Add(buttonModernClose);
 
-            Label labelMessage = new Label
+            Label labelMessage = new ThemeBackdropLabel
             {
                 Text = warningText,
                 AutoSize = false,
@@ -5095,7 +5097,7 @@ namespace EasyVersionBackup
                 BackColor = ModernTheme.ControlBackColor
             };
 
-            Label labelPurgePreviewContent = new Label
+            Label labelPurgePreviewContent = new ThemeBackdropLabel
             {
                 Name = "labelPurgePreviewContent",
                 Text = string.Join(Environment.NewLine, purgePreviewLines),

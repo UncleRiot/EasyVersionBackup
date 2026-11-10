@@ -5,14 +5,16 @@ using System.Linq;
 using System.Windows.Forms;
 
 // Semantic Anchor [ModernBackupInfoDialog.cs]: Backup-information views display existing backup metadata and log content without mutating backup files; shared UI values belong to ModernTheme.
+// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
+// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public sealed class ModernBackupInfoDialog : Form
     {
         private readonly TextBox textBoxBackupInfo = new TextBox();
         private readonly ModernTheme.ModernScrollBar verticalScrollBarBackupInfo;
-        private readonly DataGridView dataGridViewBackupLog = new DataGridView();
-        private readonly Label labelLogFilePath = new Label();
+        private readonly DataGridView dataGridViewBackupLog = new ThemeBackdropDataGridView();
+        private readonly Label labelLogFilePath = new ThemeBackdropLabel();
         private readonly Button buttonOk = new Button();
         private readonly ModernTheme.ModernScrollBar verticalScrollBarBackupLog;
         private readonly ModernTheme.ModernScrollBar horizontalScrollBarBackupLog;
@@ -160,7 +162,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Label labelModernTitle = new Label
+            Label labelModernTitle = new ThemeBackdropLabel
             {
                 Name = "labelModernTitle",
                 Text = Text,

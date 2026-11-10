@@ -14,6 +14,8 @@ using System.Windows.Forms;
 // Semantic Anchor [VersionInputForm.cs]: Version/tag UI consumes BackupVersionItem and AppSettings tags;
 // preserve selection/result semantics. The preview reads BackupVersionItem target paths without altering
 // version inputs, configuration, or backups; name recognition is owned by BackupHelper, UI colors by ModernTheme.
+// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
+// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public partial class VersionInputForm : Form
@@ -257,7 +259,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Label labelModernTitle = new Label
+            Label labelModernTitle = new ThemeBackdropLabel
             {
                 Name = "labelModernTitle",
                 Text = Text,

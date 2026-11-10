@@ -7,6 +7,8 @@ using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 // Semantic Anchor [SourceCleanupSettingsDialog.cs]: Source-cleanup dialog collects settings without deleting files; validation and deletion semantics belong to SourceCleanupService.
+// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
+// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public sealed class SourceCleanupSettingsDialog : Form
@@ -22,14 +24,16 @@ namespace EasyVersionBackup
             int lParam);
 
         private readonly string sourceDirectory;
+        // Semantic Anchor [Cleanup display]: Themed controls affect paint only;
+        // SourceCleanupService remains the SSOT for rule evaluation and deletion.
         private readonly CheckBox checkBoxEnabled =
-            new CheckBox();
+            new ThemeBackdropCheckBox();
         private readonly DataGridView dataGridViewRules =
-            new DataGridView();
+            new ThemeBackdropDataGridView();
         private readonly Button buttonAddRule =
-            new Button();
+            new ThemeContrastButton();
         private readonly Button buttonRemoveRule =
-            new Button();
+            new ThemeContrastButton();
         private readonly ComboBox comboBoxKeepMode =
             new ComboBox();
         private readonly NumericUpDown numericUpDownKeepLast =
@@ -172,7 +176,7 @@ namespace EasyVersionBackup
                     BackColor = Color.Transparent
                 };
 
-            Label labelModernTitle = new Label
+            Label labelModernTitle = new ThemeBackdropLabel
             {
                 Name = "labelModernTitle",
                 Text = Text,
@@ -321,7 +325,7 @@ namespace EasyVersionBackup
 
         private void InitializeDescription()
         {
-            Label labelDescription = new Label
+            Label labelDescription = new ThemeBackdropLabel
             {
                 Name = "labelDescription",
                 Text =
@@ -331,7 +335,8 @@ namespace EasyVersionBackup
                 ForeColor =
                     ModernTheme.TextColor,
                 TextAlign =
-                    ContentAlignment.MiddleLeft
+                    ContentAlignment.MiddleLeft,
+                BackColor = Color.Transparent
             };
 
             Controls.Add(labelDescription);
@@ -546,7 +551,7 @@ namespace EasyVersionBackup
             dataGridViewRules.Columns.Add(
                 columnAffectedFiles);
 
-            Label labelExamples = new Label
+            Label labelExamples = new ThemeBackdropLabel
             {
                 Name = "labelExamples",
                 Text =
@@ -554,9 +559,12 @@ namespace EasyVersionBackup
                 Location = new Point(16, 332),
                 Size = new Size(588, 22),
                 ForeColor =
-                    ModernTheme.DisabledTextColor,
+                    VisualThemeRuntime.ActiveId == "Default"
+                        ? ModernTheme.DisabledTextColor
+                        : ModernTheme.TextColor,
                 TextAlign =
-                    ContentAlignment.MiddleLeft
+                    ContentAlignment.MiddleLeft,
+                BackColor = Color.Transparent
             };
 
             Controls.Add(labelExamples);
@@ -564,7 +572,7 @@ namespace EasyVersionBackup
 
         private void InitializeKeepControls()
         {
-            Label labelKeep = new Label
+            Label labelKeep = new ThemeBackdropLabel
             {
                 Name = "labelKeep",
                 Text = "Keep:",
@@ -573,7 +581,8 @@ namespace EasyVersionBackup
                 ForeColor =
                     ModernTheme.TextColor,
                 TextAlign =
-                    ContentAlignment.MiddleLeft
+                    ContentAlignment.MiddleLeft,
+                BackColor = Color.Transparent
             };
 
             comboBoxKeepMode.Name =

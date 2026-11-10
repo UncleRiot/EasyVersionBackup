@@ -149,11 +149,10 @@ namespace EasyVersionBackup
                         if (child is ThemeTitleBarButton && child.Visible)
                             child.Invalidate();
                 }
-                // Only controls with composited backdrops require animation repainting.
-                // Avoid Invalidate(true): that would force all editors, buttons and grids to repaint.
-                foreach (Control child in form.Controls)
-                    if (child is ThemeBackdropLabel || child is TabNavigationDataGridView)
-                        child.Invalidate();
+                // Semantic Anchor [Animated child repaint SSOT]: Repaint only buffered
+                // decorative descendants using this form's cached frame; never invalidate
+                // editors, native dropdowns or other unrelated input controls each tick.
+                InvalidateAnimatedChildren(form);
             };
             void UpdateAnimationState() => timer.Enabled = !form.IsDisposed && form.Visible &&
                 form.ContainsFocus && form.WindowState != FormWindowState.Minimized &&
@@ -179,6 +178,22 @@ namespace EasyVersionBackup
                 surface.Dispose();
                 ThemeSurfaces.Remove(form);
             };
+        }
+
+        // Semantic Anchor [Animated descendant invalidation]: Dialogs may contain nested
+        // content panels. Traversal changes no layout or focus; only opted-in themed controls
+        // are invalidated so all use the same cached background on the owning UI thread.
+        private static void InvalidateAnimatedChildren(Control parent)
+        {
+            foreach (Control child in parent.Controls)
+            {
+                if (child.IsDisposed || !child.Visible) continue;
+                if (child is ThemeBackdropLabel or ThemeBackdropCheckBox or
+                    ThemeBackdropPanel or ThemeBackdropDataGridView or
+                    TabNavigationDataGridView)
+                    child.Invalidate();
+                if (child.HasChildren) InvalidateAnimatedChildren(child);
+            }
         }
 
         private static void ModernWindowFrame_Paint(object? sender, PaintEventArgs e)
@@ -470,6 +485,142 @@ namespace EasyVersionBackup
         }
     }
 
+    // Semantic Anchor [Buffered modal form]: Plain Form dialogs animated by
+    // ModernWindowFrame must have a buffered paint path; using this type changes
+    // no modal results, hit testing, settings or confirmation semantics.
+    internal sealed class ThemeBufferedForm : Form
+    {
+        public ThemeBufferedForm()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            DoubleBuffered = true;
+        }
+    }
+
+    // Semantic Anchor [Shared decorative panel]: Paint a clipped slice of the owning
+    // form's cached animation in the panel buffer without affecting any child layout,
+    // focus, borders or event handling. Default uses the original WinForms background.
+    internal sealed class ThemeBackdropPanel : Panel
+    {
+        public ThemeBackdropPanel()
+        {
+            DoubleBuffered = true;
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            if (!ModernWindowFrame.PaintThemeSurface(this, e.Graphics, ClientRectangle,
+                    ModernTheme.WindowBackColor, ModernTheme.ThemeGridEmptyBackdropOpacity))
+                base.OnPaintBackground(e);
+        }
+    }
+
+    // Semantic Anchor [Themed checkbox]: Native check state and interaction remain the
+    // single source of truth; only its background is sampled from the cached form frame.
+    internal sealed class ThemeBackdropCheckBox : CheckBox
+    {
+        public ThemeBackdropCheckBox()
+        {
+            DoubleBuffered = true;
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            if (!ModernWindowFrame.PaintThemeSurface(this, e.Graphics, ClientRectangle,
+                    ModernTheme.WindowBackColor, ModernTheme.ThemeWarningBackdropOpacity))
+                base.OnPaintBackground(e);
+        }
+    }
+
+    // Semantic Anchor [Readable inactive button]: WinForms' system disabled glyph color
+    // can disappear on imported themes. Keep Enabled, click handlers and bounds unchanged;
+    // override only disabled paint for animated/non-Default themes.
+    internal sealed class ThemeContrastButton : Button
+    {
+        public ThemeContrastButton()
+        {
+            DoubleBuffered = true;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            if (Enabled || VisualThemeRuntime.ActiveId == "Default" ||
+                string.IsNullOrWhiteSpace(Text)) return;
+
+            Color surface = ModernTheme.ControlBackColor;
+            using SolidBrush fill = new(surface);
+            e.Graphics.FillRectangle(fill, ClientRectangle);
+            if (FlatStyle == FlatStyle.Flat && FlatAppearance.BorderSize > 0)
+            {
+                using Pen border = new(ModernTheme.WindowBorderColor);
+                e.Graphics.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
+            }
+            TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle,
+                ModernTheme.GetReadableButtonTextColor(surface),
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+                TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
+        }
+    }
+
+    // Semantic Anchor [Reusable themed grid]: The DataGridView remains authoritative for
+    // cells, selection, editing and rules. Only paint background pixels are composited;
+    // header, content, borders and the empty lower area use the same cached frame.
+    internal sealed class ThemeBackdropDataGridView : DataGridView
+    {
+        public ThemeBackdropDataGridView()
+        {
+            DoubleBuffered = true;
+        }
+
+        protected override void OnCellPainting(DataGridViewCellPaintingEventArgs e)
+        {
+            if (VisualThemeRuntime.ActiveId != "Default" &&
+                e.ColumnIndex >= 0 && e.RowIndex >= -1 &&
+                e.CellBounds.Width > 0 && e.CellBounds.Height > 0)
+            {
+                bool header = e.RowIndex == -1;
+                bool selected = !header && (e.State & DataGridViewElementStates.Selected) != 0;
+                Color tint = header ? ModernTheme.ControlBackColor :
+                    selected ? ModernTheme.AccentColor : ModernTheme.TitleBarBackColor;
+                int opacity = header ? ModernTheme.ThemeGridHeaderBackdropOpacity :
+                    selected ? ModernTheme.ThemeGridSelectionBackdropOpacity :
+                    ModernTheme.ThemeGridCellBackdropOpacity;
+                if (ModernWindowFrame.PaintThemeSurface(this, e.Graphics, e.CellBounds,
+                        tint, opacity))
+                {
+                    e.Paint(e.CellBounds, e.PaintParts &
+                        ~(DataGridViewPaintParts.Background | DataGridViewPaintParts.SelectionBackground));
+                    e.Handled = true;
+                }
+            }
+            base.OnCellPainting(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            if (VisualThemeRuntime.ActiveId == "Default") return;
+            int bottom = ColumnHeadersVisible ? ColumnHeadersHeight : 0;
+            // Semantic Anchor [Visible-row paint cost]: Only inspect the displayed
+            // viewport, not the entire backup-log or exclusion collection per frame.
+            int firstRow = Rows.Count == 0 ? 0 : Math.Max(0, FirstDisplayedScrollingRowIndex);
+            int displayedRows = DisplayedRowCount(false);
+            int lastRow = Math.Min(Rows.Count, firstRow + displayedRows + 2);
+            for (int index = firstRow; index < lastRow; index++)
+            {
+                if (!Rows[index].Visible) continue;
+                Rectangle rect = GetRowDisplayRectangle(index, false);
+                if (rect.Height > 0) bottom = Math.Max(bottom, rect.Bottom);
+                if (bottom >= ClientSize.Height) return;
+            }
+            Rectangle empty = new(0, bottom, ClientSize.Width, ClientSize.Height - bottom);
+            ModernWindowFrame.PaintThemeSurface(this, e.Graphics, empty,
+                ModernTheme.WindowBackColor, ModernTheme.ThemeGridEmptyBackdropOpacity);
+        }
+    }
+
     // Runtime-only label: preserves Label text, tooltips and mouse behavior.
     // The default theme continues to use the unmodified Label background rendering.
     internal sealed class ThemeBackdropLabel : Label
@@ -484,8 +635,15 @@ namespace EasyVersionBackup
 
         protected override void OnPaintBackground(PaintEventArgs e)
         {
-            if (!ModernWindowFrame.PaintThemeSurface(this, e.Graphics, ClientRectangle,
-                ModernTheme.WindowBackColor, ModernTheme.ThemeWarningBackdropOpacity))
+            // Semantic Anchor [Explicit status background]: Keep intentional warning/status
+            // fills opaque. Only inherited, transparent and standard theme surfaces sample
+            // the shared animation; native text and accessibility properties stay intact.
+            bool themeSurface = BackColor == Color.Transparent ||
+                BackColor.ToArgb() == ModernTheme.WindowBackColor.ToArgb() ||
+                BackColor.ToArgb() == ModernTheme.TitleBarBackColor.ToArgb() ||
+                BackColor.ToArgb() == ModernTheme.ControlBackColor.ToArgb();
+            if (!themeSurface || !ModernWindowFrame.PaintThemeSurface(this, e.Graphics, ClientRectangle,
+                    ModernTheme.WindowBackColor, ModernTheme.ThemeWarningBackdropOpacity))
                 base.OnPaintBackground(e);
         }
     }

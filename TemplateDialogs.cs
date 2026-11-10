@@ -7,13 +7,15 @@ using System.Linq;
 using System.Windows.Forms;
 
 // Semantic Anchor [TemplateDialogs.cs]: Template dialogs return names/selections; named templates remain in AppSettings and are persisted via SettingsStorage.
+// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
+// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     internal static class TemplateDialogs
     {
         private static Form CreateDialog(string title, Size size)
         {
-            Form dialog = new Form
+            Form dialog = new ThemeBufferedForm
             {
                 Text = title,
                 FormBorderStyle = FormBorderStyle.None,
@@ -25,13 +27,15 @@ namespace EasyVersionBackup
                 ShowInTaskbar = false
             };
             ModernWindowFrame.Apply(dialog);
-            Panel titleBar = new Panel
+            // Semantic Anchor [Template caption]: Same buffered frame as content.
+            Panel titleBar = new ThemeTitleBarPanel
             {
+                Name = "panelTitleBar",
                 Dock = DockStyle.Top,
                 Height = ModernTheme.TitleBarHeight,
                 BackColor = ModernTheme.TitleBarBackColor
             };
-            Label caption = new Label
+            Label caption = new ThemeBackdropLabel
             {
                 Text = title,
                 Dock = DockStyle.Fill,
@@ -78,7 +82,7 @@ namespace EasyVersionBackup
         internal static string? AskName(IWin32Window owner, System.Collections.Generic.IEnumerable<string> existing)
         {
             using Form dialog = CreateDialog("Save as Template", new Size(360, 166));
-            Label description = new Label
+            Label description = new ThemeBackdropLabel
             {
                 Text = "New name or select a template to overwrite:",
                 Location = new Point(12, ModernTheme.TitleBarHeight + 12),
@@ -117,7 +121,7 @@ namespace EasyVersionBackup
         internal static void Manage(IWin32Window owner, AppSettings settings)
         {
             using Form dialog = CreateDialog("Template Manager", new Size(500, 320));
-            Label typeLabel = new Label { Text = "Template type", Location = new Point(12, ModernTheme.TitleBarHeight + 14), AutoSize = true };
+            Label typeLabel = new ThemeBackdropLabel { Text = "Template type", Location = new Point(12, ModernTheme.TitleBarHeight + 14), AutoSize = true };
             ComboBox type = new ComboBox
             {
                 Location = new Point(12, ModernTheme.TitleBarHeight + 34),

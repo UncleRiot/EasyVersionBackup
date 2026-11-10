@@ -9,6 +9,8 @@ using System.Drawing;
 using System.Windows.Forms;
 
 // Semantic Anchor [ModernMessageDialog.cs]: Message dialog is presentation-only and uses ModernTheme for shared appearance; do not introduce alternate settings or action state.
+// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
+// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public sealed class ModernMessageDialog : Form
@@ -45,7 +47,7 @@ namespace EasyVersionBackup
 
             InitializeModernTitleBar();
 
-            labelMessage = new Label
+            labelMessage = new ThemeBackdropLabel
             {
                 Name = "labelMessage",
                 Text = message,
@@ -122,7 +124,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Label labelModernTitle = new Label
+            Label labelModernTitle = new ThemeBackdropLabel
             {
                 Name = "labelModernTitle",
                 Text = Text,

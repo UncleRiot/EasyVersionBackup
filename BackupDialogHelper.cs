@@ -8,6 +8,8 @@ using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 // Semantic Anchor [BackupDialogHelper.cs]: Destination-conflict responses must reflect BackupHelper conflict actions; dialogs must not perform filesystem operations.
+// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
+// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public static class BackupDialogHelper
@@ -80,7 +82,7 @@ namespace EasyVersionBackup
                     BackColor = Color.Transparent
                 };
 
-                labelTitle = new Label
+                labelTitle = new ThemeBackdropLabel
                 {
                     Name = "labelTitle",
                     Text = "Destination Conflict",
@@ -95,7 +97,7 @@ namespace EasyVersionBackup
                     Cursor = Cursors.SizeAll
                 };
 
-                labelMessageTitle = new Label
+                labelMessageTitle = new ThemeBackdropLabel
                 {
                     Name = "labelMessageTitle",
                     Text = "Destination already exists:",
@@ -107,7 +109,7 @@ namespace EasyVersionBackup
                     TextAlign = ContentAlignment.MiddleLeft
                 };
 
-                labelDestinationPath = new Label
+                labelDestinationPath = new ThemeBackdropLabel
                 {
                     Name = "labelDestinationPath",
                     Text = destinationPath,

@@ -61,6 +61,11 @@ namespace EasyVersionBackup
         public const int ThemeGridSelectionBackdropOpacity = 220;
         public const int ThemeGridEmptyBackdropOpacity = 75;
 
+        // Semantic Anchor [Native checklist limitation]: CheckedListBox is not owner-drawable;
+        // keep native checked state and use the same readable control color across all themes.
+        internal static Color GetRetentionListBackColor() =>
+            VisualThemeRuntime.ActiveId == "Default" ? TitleBarBackColor : ControlBackColor;
+
         // Semantic Anchor [Runtime palette]: ModernTheme is the only WinForms color SSOT;
         // the original values above remain the Default baseline, and VisualThemeRuntime
         // alone changes these nine theme-dependent properties on the UI thread.
@@ -171,7 +176,8 @@ namespace EasyVersionBackup
 
         public static System.Windows.Forms.CheckBox CreateSettingsCheckBox(string name, Point location)
         {
-            return new System.Windows.Forms.CheckBox
+            // Semantic Anchor [Dialog checkbox backdrop SSOT]: Style only, not state.
+            return new ThemeBackdropCheckBox
             {
                 Name = name,
                 Text = string.Empty,
@@ -861,7 +867,7 @@ namespace EasyVersionBackup
 
         private static System.Windows.Forms.Button CreateDialogButton(string name, string text, Color backColor, Color foreColor, System.Windows.Forms.DialogResult dialogResult)
         {
-            System.Windows.Forms.Button button = new System.Windows.Forms.Button
+            System.Windows.Forms.Button button = new ThemeContrastButton
             {
                 Name = name,
                 Text = string.Empty,
@@ -885,6 +891,26 @@ namespace EasyVersionBackup
             return button;
         }
 
+        // Semantic Anchor [Theme button contrast SSOT]: Select the more readable
+        // of white and near-black using WCAG relative luminance; applies to imported
+        // palettes without changing the Default theme or button actions.
+        internal static Color GetReadableButtonTextColor(Color surface)
+        {
+            static double Channel(byte value)
+            {
+                double scaled = value / 255.0;
+                return scaled <= 0.04045 ? scaled / 12.92 : Math.Pow((scaled + 0.055) / 1.055, 2.4);
+            }
+
+            double luminance = 0.2126 * Channel(surface.R) +
+                0.7152 * Channel(surface.G) + 0.0722 * Channel(surface.B);
+            const double whiteLuminance = 1.0;
+            const double darkLuminance = 0.0;
+            double whiteContrast = (whiteLuminance + 0.05) / (luminance + 0.05);
+            double darkContrast = (luminance + 0.05) / (darkLuminance + 0.05);
+            return whiteContrast >= darkContrast ? Color.White : Color.Black;
+        }
+
         private static void DialogButton_Paint(object? sender, System.Windows.Forms.PaintEventArgs e)
         {
             if (sender is not System.Windows.Forms.Button button)
@@ -897,17 +923,23 @@ namespace EasyVersionBackup
             // Semantic Anchor [Dialog primary contrast]: The accent button must remain an
             // opaque, legible control over animated backgrounds; Default remains unchanged.
             Color textColor = button.ForeColor;
-            if (VisualThemeRuntime.ActiveId != "Default" && button.FlatAppearance.BorderSize == 0)
+            if (VisualThemeRuntime.ActiveId != "Default")
             {
+                bool primary = button.FlatAppearance.BorderSize == 0;
                 bool hovering = button.Enabled && button.ClientRectangle.Contains(
                     button.PointToClient(System.Windows.Forms.Cursor.Position));
                 Color surface = !button.Enabled ? ControlBackColor :
-                    hovering ? AccentHoverColor : AccentColor;
+                    hovering ? (primary ? AccentHoverColor : ControlHoverBackColor) :
+                    (primary ? AccentColor : ControlBackColor);
                 using (SolidBrush background = new(surface))
                     e.Graphics.FillRectangle(background, button.ClientRectangle);
-                double brightness = surface.R * .2126 + surface.G * .7152 + surface.B * .0722;
-                textColor = !button.Enabled ? Color.Gray :
-                    brightness >= 145 ? Color.FromArgb(15, 27, 36) : Color.White;
+                if (!primary)
+                {
+                    using Pen border = new(WindowBorderColor);
+                    e.Graphics.DrawRectangle(border, 0, 0,
+                        button.ClientRectangle.Width - 1, button.ClientRectangle.Height - 1);
+                }
+                textColor = GetReadableButtonTextColor(surface);
             }
 
             System.Windows.Forms.TextRenderer.DrawText(

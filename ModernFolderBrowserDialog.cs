@@ -10,6 +10,8 @@ using System.Linq;
 using System.Windows.Forms;
 
 // Semantic Anchor [ModernFolderBrowserDialog.cs]: Folder/file browsing reports user selection only; path validation and backup execution remain with their existing consumers.
+// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
+// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public sealed class ModernFolderBrowserDialog : Form
@@ -90,7 +92,7 @@ namespace EasyVersionBackup
         }
         private void EnableFileNameSelection(string initialFileName)
         {
-            Label labelFileName = new Label
+            Label labelFileName = new ThemeBackdropLabel
             {
                 Name = "labelFileName",
                 Text = "File name:",
@@ -184,7 +186,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Label labelModernTitle = new Label
+            Label labelModernTitle = new ThemeBackdropLabel
             {
                 Name = "labelModernTitle",
                 Text = Text,

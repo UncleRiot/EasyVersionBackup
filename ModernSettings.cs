@@ -14,6 +14,8 @@ using System.IO;
 using EasyVersionBackup.VisualThemes;
 
 // Semantic Anchor [ModernSettings.cs]: Settings UI edits AppSettings through SettingsStorage; do not create separate persisted defaults or duplicate scheduling and cleanup normalization.
+// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
+// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public class ModernSettings : Form
@@ -107,7 +109,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            labelTitle = new Label
+            labelTitle = new ThemeBackdropLabel
             {
                 Name = "labelTitle",
                 Text = "Settings",
@@ -122,7 +124,9 @@ namespace EasyVersionBackup
                 Cursor = Cursors.SizeAll
             };
 
-            panelTabs = new Panel
+            // Semantic Anchor [Settings backdrop]: Parent panels share the form's
+            // cached animation; tab button behavior and content layout stay unchanged.
+            panelTabs = new ThemeBackdropPanel
             {
                 Name = "panelTabs",
                 Location = new Point(12, ModernTheme.TitleBarHeight + 12),
@@ -131,7 +135,7 @@ namespace EasyVersionBackup
                 BackColor = ModernTheme.WindowBackColor
             };
 
-            panelContent = new Panel
+            panelContent = new ThemeBackdropPanel
             {
                 Name = "panelContent",
                 Location = new Point(12, panelTabs.Bottom),
@@ -779,7 +783,7 @@ namespace EasyVersionBackup
 
         private Label CreateLabel(string name, string text, Point location, Size size)
         {
-            return new Label
+            return new ThemeBackdropLabel
             {
                 Name = name,
                 Text = text,
@@ -1088,7 +1092,7 @@ namespace EasyVersionBackup
                     BackColor = Color.Transparent
                 };
 
-                labelTitle = new Label
+                labelTitle = new ThemeBackdropLabel
                 {
                     Name = "labelTitle",
                     Text = "Experimental Retention/autopurge",
@@ -1103,7 +1107,7 @@ namespace EasyVersionBackup
                     Cursor = Cursors.SizeAll
                 };
 
-                labelWarningIcon = new Label
+                labelWarningIcon = new ThemeBackdropLabel
                 {
                     Name = "labelWarningIcon",
                     Text = "!",
@@ -1115,7 +1119,7 @@ namespace EasyVersionBackup
                     TextAlign = ContentAlignment.MiddleCenter
                 };
 
-                labelMessage = new Label
+                labelMessage = new ThemeBackdropLabel
                 {
                     Name = "labelMessage",
                     Text =

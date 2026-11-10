@@ -9,6 +9,8 @@ using System.Drawing;
 using System.Windows.Forms;
 
 // Semantic Anchor [ModernConfirmationDialog.cs]: Destructive-action confirmations must preserve explicit user choice; the dialog must not perform the underlying destructive operation.
+// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
+// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public static class ModernConfirmationDialog
@@ -25,7 +27,7 @@ namespace EasyVersionBackup
             string message,
             Size? clientSize = null)
         {
-            using Form form = new Form();
+            using Form form = new ThemeBufferedForm();
 
             form.Text = title;
             form.StartPosition = FormStartPosition.CenterParent;
@@ -57,7 +59,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Label labelModernTitle = new Label
+            Label labelModernTitle = new ThemeBackdropLabel
             {
                 Name = "labelModernTitle",
                 Text = title,
@@ -98,7 +100,7 @@ namespace EasyVersionBackup
                 ModernTheme.DialogButtonSize.Height -
                 21;
 
-            Label labelMessage = new Label
+            Label labelMessage = new ThemeBackdropLabel
             {
                 Text = message,
                 AutoSize = false,
@@ -111,7 +113,7 @@ namespace EasyVersionBackup
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
-            Button buttonYes = new Button
+            Button buttonYes = new ThemeContrastButton
             {
                 Text = "Yes",
                 Size = ModernTheme.DialogButtonSize,
@@ -133,7 +135,7 @@ namespace EasyVersionBackup
             buttonYes.FlatAppearance.MouseOverBackColor = ModernTheme.AccentHoverColor;
             buttonYes.FlatAppearance.MouseDownBackColor = ModernTheme.ControlBackColor;
 
-            Button buttonNo = new Button
+            Button buttonNo = new ThemeContrastButton
             {
                 Text = "No",
                 Size = ModernTheme.DialogButtonSize,
@@ -215,7 +217,7 @@ namespace EasyVersionBackup
                 "\r\n" +
                 "I ACCEPT";
 
-            using Form form = new Form();
+            using Form form = new ThemeBufferedForm();
 
             form.Text = "Important Information and Disclaimer";
             form.StartPosition = FormStartPosition.CenterParent;
@@ -245,7 +247,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Label labelModernTitle = new Label
+            Label labelModernTitle = new ThemeBackdropLabel
             {
                 Name = "labelModernTitle",
                 Text = "Important Information and Disclaimer",
@@ -297,7 +299,7 @@ namespace EasyVersionBackup
                 TabStop = false
             };
 
-            Label labelRequiredPrompt = new Label
+            Label labelRequiredPrompt = new ThemeBackdropLabel
             {
                 Text = "Type the following text in UPPERCASE to accept:",
                 AutoSize = false,
@@ -308,7 +310,7 @@ namespace EasyVersionBackup
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
-            Label labelRequiredText = new Label
+            Label labelRequiredText = new ThemeBackdropLabel
             {
                 Text = requiredText,
                 AutoSize = false,
@@ -333,7 +335,7 @@ namespace EasyVersionBackup
                 BorderStyle = BorderStyle.FixedSingle
             };
 
-            Button buttonAccept = new Button
+            Button buttonAccept = new ThemeContrastButton
             {
                 Text = "Accept",
                 Size = ModernTheme.DialogButtonSize,
@@ -354,7 +356,7 @@ namespace EasyVersionBackup
             buttonAccept.FlatAppearance.MouseOverBackColor = ModernTheme.AccentHoverColor;
             buttonAccept.FlatAppearance.MouseDownBackColor = ModernTheme.ControlBackColor;
 
-            Button buttonDecline = new Button
+            Button buttonDecline = new ThemeContrastButton
             {
                 Text = "Decline",
                 Size = ModernTheme.DialogButtonSize,
@@ -462,7 +464,7 @@ namespace EasyVersionBackup
                        "and accept responsibility for your configuration. The software is provided AS IS, without warranties, " +
                        "to the extent permitted by applicable law. Nothing excludes liability where exclusion is prohibited by law.";
 
-            using Form form = new Form
+            using Form form = new ThemeBufferedForm
             {
                 Text = "Enable " + featureName + "?",
                 StartPosition = FormStartPosition.CenterParent,
@@ -475,13 +477,16 @@ namespace EasyVersionBackup
             };
             ModernWindowFrame.Apply(form);
 
-            Panel titleBar = new Panel
+            // Semantic Anchor [Security dialog repaint]: Buffered caption shares the
+            // same form frame; confirmation text and acceptance requirements are unchanged.
+            Panel titleBar = new ThemeTitleBarPanel
             {
+                Name = "panelTitleBar",
                 Dock = DockStyle.Top,
                 Height = ModernTheme.TitleBarHeight,
                 BackColor = ModernTheme.TitleBarBackColor
             };
-            Label title = new Label
+            Label title = new ThemeBackdropLabel
             {
                 Text = form.Text,
                 ForeColor = ModernTheme.TextColor,
@@ -494,7 +499,7 @@ namespace EasyVersionBackup
             titleBar.Controls.Add(title);
             form.Controls.Add(titleBar);
 
-            Label description = new Label
+            Label description = new ThemeBackdropLabel
             {
                 Text = message,
                 ForeColor = ModernTheme.TextColor,
@@ -504,7 +509,7 @@ namespace EasyVersionBackup
                 TextAlign = ContentAlignment.TopLeft
             };
             const string requiredText = "I ACCEPT";
-            Label acknowledgmentPrompt = new Label
+            Label acknowledgmentPrompt = new ThemeBackdropLabel
             {
                 Text = "Type I ACCEPT (UPPERCASE) to enable this feature:",
                 ForeColor = ModernTheme.TextColor,
@@ -559,7 +564,7 @@ namespace EasyVersionBackup
             string requiredText,
             Size clientSize)
         {
-            using Form form = new Form();
+            using Form form = new ThemeBufferedForm();
 
             form.Text = title;
             form.StartPosition = FormStartPosition.CenterParent;
@@ -630,7 +635,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Label labelModernTitle = new Label
+            Label labelModernTitle = new ThemeBackdropLabel
             {
                 Name = "labelModernTitle",
                 Text = title,
@@ -666,7 +671,7 @@ namespace EasyVersionBackup
             panelModernTitleBar.Controls.Add(labelModernTitle);
             panelModernTitleBar.Controls.Add(buttonModernClose);
 
-            Label labelMessage = new Label
+            Label labelMessage = new ThemeBackdropLabel
             {
                 Text = message,
                 AutoSize = false,
@@ -677,7 +682,7 @@ namespace EasyVersionBackup
                 TextAlign = ContentAlignment.TopLeft
             };
 
-            Label labelRequiredPrompt = new Label
+            Label labelRequiredPrompt = new ThemeBackdropLabel
             {
                 Text = "Type the following text to continue:",
                 AutoSize = false,
@@ -688,7 +693,7 @@ namespace EasyVersionBackup
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
-            Label labelRequiredText = new Label
+            Label labelRequiredText = new ThemeBackdropLabel
             {
                 Text = requiredText,
                 AutoSize = false,
@@ -713,7 +718,7 @@ namespace EasyVersionBackup
                 BorderStyle = BorderStyle.FixedSingle
             };
 
-            Button buttonConfirm = new Button
+            Button buttonConfirm = new ThemeContrastButton
             {
                 Text = "Enable",
                 Size = ModernTheme.DialogButtonSize,
@@ -734,7 +739,7 @@ namespace EasyVersionBackup
             buttonConfirm.FlatAppearance.MouseOverBackColor = ModernTheme.AccentHoverColor;
             buttonConfirm.FlatAppearance.MouseDownBackColor = ModernTheme.ControlBackColor;
 
-            Button buttonCancel = new Button
+            Button buttonCancel = new ThemeContrastButton
             {
                 Text = "Cancel",
                 Size = ModernTheme.DialogButtonSize,

@@ -10,11 +10,13 @@ using System.Linq;
 using System.Windows.Forms;
 
 // Semantic Anchor [ExclusionsDialog.cs]: Exclusion editing must preserve input patterns and pair/template identity; central path exclusion interpretation belongs to BackupHelper.
+// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
+// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public class ExclusionsDialog : Form
     {
-        private readonly DataGridView dataGridViewExclusions = new DataGridView();
+        private readonly DataGridView dataGridViewExclusions = new ThemeBackdropDataGridView();
         private readonly ToolTip toolTipExclusions = new ToolTip();
         private readonly Button buttonAddExclusion = new Button();
         private readonly Button buttonRemoveExclusion = new Button();
@@ -84,7 +86,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Label labelModernTitle = new Label
+            Label labelModernTitle = new ThemeBackdropLabel
             {
                 Name = "labelModernTitle",
                 Text = Text,

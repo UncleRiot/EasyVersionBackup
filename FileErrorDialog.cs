@@ -8,6 +8,8 @@ using System.Drawing;
 using System.Windows.Forms;
 
 // Semantic Anchor [FileErrorDialog.cs]: File-error UI only returns a supported BackupFileErrorAction; backup I/O and retry behavior remain owned by BackupFileService.
+// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
+// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public class FileErrorDialog : Form
@@ -125,7 +127,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Label labelModernTitle = new Label
+            Label labelModernTitle = new ThemeBackdropLabel
             {
                 Name = "labelModernTitle",
                 Text = Text,

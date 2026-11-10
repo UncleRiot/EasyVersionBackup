@@ -4,6 +4,8 @@ using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 // Semantic Anchor [BackupPairSettingsDialog.cs]: This dialog edits a BackupPathPair, not a second settings model; preserve existing values, apply changes only through accepted dialog results, and use ModernTheme for common UI tokens.
+// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
+// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public sealed class BackupPairSettingsDialog : Form
@@ -137,7 +139,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            labelTitle = new Label
+            labelTitle = new ThemeBackdropLabel
             {
                 Name = "labelTitle",
                 Text = "Backup Pair Settings",
@@ -217,7 +219,7 @@ namespace EasyVersionBackup
                     textBoxAutoBackupTimer.Right + ModernTheme.SettingsHintSpacing,
                     GetDialogLabelTop(3) + 1));
 
-            labelRetentionHeader = new Label
+            labelRetentionHeader = new ThemeBackdropLabel
             {
                 Name = "labelRetentionHeader",
                 Text = "Retention:",
@@ -315,7 +317,7 @@ namespace EasyVersionBackup
             textBoxKeepDays.BackColor = retentionBackColor;
             textBoxKeepDays.ForeColor = retentionTextColor;
 
-            labelKeepDaysUnit = new Label
+            labelKeepDaysUnit = new ThemeBackdropLabel
             {
                 Name = "labelKeepDaysUnit",
                 Text = "days",
@@ -367,8 +369,17 @@ namespace EasyVersionBackup
                 Size = new Size(ModernTheme.SettingsComboBoxWidth, 74),
                 CheckOnClick = true,
                 BorderStyle = BorderStyle.FixedSingle,
-                BackColor = retentionBackColor,
-                ForeColor = retentionTextColor,
+                // Native CheckedListBox is intentionally opaque in WinForms. Use the
+                // shared theme control surface for readable exclusions; do not replace
+                // it with a duplicate checkbox model or alter CheckedItems behavior.
+                BackColor = zipRetentionAvailable
+                    ? ModernTheme.GetRetentionListBackColor()
+                    : ModernTheme.DisabledControlBackColor,
+                ForeColor = zipRetentionAvailable
+                    ? VisualThemeRuntime.ActiveId == "Default"
+                        ? retentionTextColor
+                        : ModernTheme.GetReadableButtonTextColor(ModernTheme.GetRetentionListBackColor())
+                    : ModernTheme.DisabledTextColor,
                 Enabled = zipRetentionAvailable
             };
 
@@ -614,11 +625,13 @@ namespace EasyVersionBackup
                 retentionEnabled;
             checkedListBoxRetentionExclusions.BackColor =
                 retentionEnabled
-                    ? ModernTheme.TitleBarBackColor
+                    ? ModernTheme.GetRetentionListBackColor()
                     : ModernTheme.DisabledControlBackColor;
             checkedListBoxRetentionExclusions.ForeColor =
                 retentionEnabled
-                    ? Color.Red
+                    ? VisualThemeRuntime.ActiveId == "Default"
+                        ? Color.Red
+                        : ModernTheme.GetReadableButtonTextColor(ModernTheme.GetRetentionListBackColor())
                     : ModernTheme.DisabledTextColor;
         }
 
@@ -634,7 +647,7 @@ namespace EasyVersionBackup
 
         private Label CreateLabel(string name, string text, int rowIndex)
         {
-            return new Label
+            return new ThemeBackdropLabel
             {
                 Name = name,
                 Text = text,
