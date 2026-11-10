@@ -297,10 +297,43 @@ namespace EasyVersionBackup
             return prefix + string.Join(".", numbers);
         }
 
+        // Semantic Anchor [Numeric version comparison / SSOT]: A numeric version uses the
+        // same optional letter prefix and dot-separated components as IncrementVersion.
+        // Compare every component numerically, even if the number of components changes.
+        // Candidate tokens may include a trailing _tag from backup filenames; return the
+        // numeric version without it so it can be incremented. Other custom patterns retain
+        // their existing last-number comparison behavior below.
         public static string GetHighestCompatibleVersion(
             string baseVersion,
             IEnumerable<string> versions)
         {
+            if (TryParseNumericVersion(baseVersion, false,
+                    out string basePrefix, out _, out _))
+            {
+                string highestNumeric = string.Empty;
+                string highestVersion = string.Empty;
+
+                foreach (string version in versions)
+                {
+                    if (string.IsNullOrWhiteSpace(version) ||
+                        !TryParseNumericVersion(version, true,
+                            out string prefix, out string components, out string normalized) ||
+                        !string.Equals(basePrefix, prefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    if (highestVersion.Length == 0 ||
+                        CompareNumericComponents(components, highestNumeric) > 0)
+                    {
+                        highestVersion = normalized;
+                        highestNumeric = components;
+                    }
+                }
+
+                return highestVersion;
+            }
+
             string highest = string.Empty;
 
             foreach (string version in versions)
@@ -319,6 +352,63 @@ namespace EasyVersionBackup
             }
 
             return highest;
+        }
+
+        private static bool TryParseNumericVersion(
+            string value,
+            bool allowTag,
+            out string prefix,
+            out string components,
+            out string normalized)
+        {
+            prefix = string.Empty;
+            components = string.Empty;
+            normalized = string.Empty;
+
+            Match match = Regex.Match(
+                value,
+                @"^(?<prefix>[A-Za-z]*)(?<numbers>\d+(?:\.\d+)*)(?:_(?<tag>.+))?$",
+                RegexOptions.CultureInvariant);
+
+            if (!match.Success || (!allowTag && match.Groups["tag"].Success))
+            {
+                return false;
+            }
+
+            prefix = match.Groups["prefix"].Value;
+            components = match.Groups["numbers"].Value;
+            normalized = prefix + components;
+            return true;
+        }
+
+        private static int CompareNumericComponents(string left, string right)
+        {
+            string[] leftParts = left.Split('.');
+            string[] rightParts = right.Split('.');
+            int length = Math.Max(leftParts.Length, rightParts.Length);
+
+            for (int index = 0; index < length; index++)
+            {
+                // Compare without integer overflow; omitted trailing components equal zero.
+                string leftPart = index < leftParts.Length
+                    ? leftParts[index].TrimStart('0') : string.Empty;
+                string rightPart = index < rightParts.Length
+                    ? rightParts[index].TrimStart('0') : string.Empty;
+
+                if (leftPart.Length != rightPart.Length)
+                {
+                    return leftPart.Length.CompareTo(rightPart.Length);
+                }
+
+                int difference = string.Compare(leftPart, rightPart, StringComparison.Ordinal);
+                if (difference != 0)
+                {
+                    return difference;
+                }
+            }
+
+            // For numerically identical versions, retain the more specific component count.
+            return leftParts.Length.CompareTo(rightParts.Length);
         }
 
         private static bool IsCompatibleVersion(

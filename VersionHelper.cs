@@ -40,7 +40,7 @@ namespace EasyVersionBackup
                         lastUsedVersion
                     });
 
-            string highestExistingVersion = GetHighestExistingVersion(pair, defaultVersion, settings.ZipDestinationFiles);
+            string highestExistingVersion = GetHighestExistingVersion(pair, defaultVersion);
 
             string highestKnownVersion =
                 VersionPatternHelper.GetHighestCompatibleVersion(
@@ -82,10 +82,13 @@ namespace EasyVersionBackup
             return $"{folderName}_{version}";
         }
 
+        // Semantic Anchor [Existing backup version scan / SSOT]: Examine both ZIP files and
+        // completed backup directories for this pair, regardless of today's output mode.
+        // VersionPatternHelper alone decides compatibility and strips optional backup tags.
+        // Never consider unpublished .evbtmp- work as a completed version.
         private static string GetHighestExistingVersion(
             BackupPathPair pair,
-            string defaultVersion,
-            bool zipDestinationFiles)
+            string defaultVersion)
         {
             if (string.IsNullOrWhiteSpace(pair.SourceDirectory) ||
                 string.IsNullOrWhiteSpace(pair.TargetDirectory) ||
@@ -112,41 +115,39 @@ namespace EasyVersionBackup
 
                 List<string> foundVersions = new List<string>();
 
-                if (zipDestinationFiles)
+                foreach (string filePath in Directory.GetFiles(
+                    pair.TargetDirectory,
+                    "*.zip",
+                    SearchOption.TopDirectoryOnly))
                 {
-                    foreach (string filePath in Directory.GetFiles(
-                        pair.TargetDirectory,
-                        "*.zip",
-                        SearchOption.TopDirectoryOnly))
+                    string fileName = Path.GetFileName(filePath);
+                    if (fileName.Contains(".evbtmp-", StringComparison.OrdinalIgnoreCase))
                     {
-                        string fileName = Path.GetFileName(filePath);
-                        Match match = zipRegex.Match(fileName);
+                        continue;
+                    }
 
-                        if (match.Success)
-                        {
-                            foundVersions.Add(
-                                match.Groups["version"].Value);
-                        }
+                    Match match = zipRegex.Match(fileName);
+                    if (match.Success)
+                    {
+                        foundVersions.Add(match.Groups["version"].Value);
                     }
                 }
-                else
+
+                foreach (string directoryPath in Directory.GetDirectories(
+                    pair.TargetDirectory,
+                    "*",
+                    SearchOption.TopDirectoryOnly))
                 {
-                    foreach (string directoryPath in Directory.GetDirectories(
-                        pair.TargetDirectory,
-                        "*",
-                        SearchOption.TopDirectoryOnly))
+                    string directoryName = Path.GetFileName(directoryPath);
+                    if (directoryName.Contains(".evbtmp-", StringComparison.OrdinalIgnoreCase))
                     {
-                        string directoryName =
-                            Path.GetFileName(directoryPath);
+                        continue;
+                    }
 
-                        Match match =
-                            directoryRegex.Match(directoryName);
-
-                        if (match.Success)
-                        {
-                            foundVersions.Add(
-                                match.Groups["version"].Value);
-                        }
+                    Match match = directoryRegex.Match(directoryName);
+                    if (match.Success)
+                    {
+                        foundVersions.Add(match.Groups["version"].Value);
                     }
                 }
 
