@@ -50,6 +50,9 @@ public static class DockThemeService
             if (validated.GlassEffects is null || validated.GlassStarLayers is null ||
                 validated.GlassFlameLayers is null || validated.GlassGradientAnimationKeyFrames is null)
                 throw new InvalidDataException("Invalid theme layers.");
+            if (EasyVersionBackup.VisualThemeRuntime.NeedsPortableRenderer(validated))
+                _ = PortableThemes.Core.ThemeDefinition.Parse(
+                    System.Text.Encoding.UTF8.GetBytes(root.GetRawText()), "ImportedEffect");
         });
         return new DockThemeOption(imported.Id, imported.DisplayName);
     }
@@ -1704,6 +1707,12 @@ public static class DockThemeService
     private static DockTheme? ReadTheme(string json)
     {
         DockTheme? theme = JsonSerializer.Deserialize<DockTheme>(json, JsonOptions);
+        // Semantic Anchor [Portable effect validation]: The existing catalog and JSON remain
+        // the only application theme SSOT. Validate new effects using the portable Core
+        // allowlist before making them selectable; do not migrate or rewrite imported JSON.
+        if (theme is not null && VisualThemeRuntime.NeedsPortableRenderer(theme))
+            _ = PortableThemes.Core.ThemeDefinition.Parse(
+                System.Text.Encoding.UTF8.GetBytes(json), "ValidatedEffect");
         PopulateGeneratedThemeLayers(theme);
         return theme;
     }

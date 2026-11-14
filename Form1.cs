@@ -15,8 +15,6 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 
 // Semantic Anchor [Form1.cs]: Main-form UI rows mirror AppSettings.BackupPathPairs; SettingsStorage owns persistence, BackupHelper/BackupFileService own execution rules, and ModernTheme owns common visual values. Drag placeholders are not persisted backup pairs.
-// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
-// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public partial class Form1 : Form
@@ -62,9 +60,19 @@ namespace EasyVersionBackup
         private Label? _debugModeWarningLabel;
         private readonly Panel _configuredPathsFilterPanel = new Panel();
         private readonly TextBox _configuredPathsFilterTextBox = new TextBox();
-        private readonly Label _configuredPathsFilterCountLabel = new ThemeBackdropLabel();
+        private readonly Label _configuredPathsFilterCountLabel = new Label();
         private readonly Button _configuredPathsFilterClearButton = new Button();
         private Panel? _configuredPathsFilterIcon;
+        private readonly ComboBox _profilesComboBox = new ComboBox();
+        private bool _isUpdatingProfilesComboBox;
+
+        private sealed class ProfileChoice
+        {
+            public string Id { get; }
+            private string Name { get; }
+            public ProfileChoice(string id, string name) { Id = id; Name = name; }
+            public override string ToString() => Name;
+        }
         private Button? _addConfiguredPathButton;
         private Button? _moveConfiguredPathUpButton;
         private Button? _moveConfiguredPathDownButton;
@@ -190,7 +198,10 @@ namespace EasyVersionBackup
             LoadSettings();
             // Semantic Anchor [Startup theme]: Load saved theme after settings, recolor only
             // existing UI, and keep all backup state and the display filter untouched.
+            VisualThemeRuntime.SetOptions(_settings.VisualThemeReducedMotion,
+                _settings.VisualThemeSpeed, _settings.VisualThemeIntensity);
             VisualThemeRuntime.Apply(_settings.VisualThemeId, this);
+            UpdateProfilesComboBox();
             _configuredPathsFilterTextBox.Text = _settings.ConfiguredPathsFilter;
             _configuredPathsFilterTextBox.TextChanged += configuredPathsFilterTextBox_TextChanged;
             UpdateConfiguredPathsFilterControlLayout();
@@ -753,7 +764,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            _modernTitleLabel = new ThemeBackdropLabel
+            _modernTitleLabel = new Label
             {
                 Name = "labelModernTitle",
                 Text = _baseWindowTitle,
@@ -801,10 +812,7 @@ namespace EasyVersionBackup
                 buttonModernClose.Location = new Point(_modernTitleBarPanel.ClientSize.Width - ModernTheme.TitleBarButtonSize.Width, 0);
                 buttonModernMinimize.Location = new Point(_modernTitleBarPanel.ClientSize.Width - (ModernTheme.TitleBarButtonSize.Width * 2), 0);
 
-                if (_modernTitleLabel != null)
-                {
-                    _modernTitleLabel.Size = new Size(_modernTitleBarPanel.ClientSize.Width - 102, ModernTheme.TitleBarHeight);
-                }
+                UpdateTitleBarWarningLayout();
 
                 buttonModernMinimize.Invalidate();
                 buttonModernClose.Invalidate();
@@ -1045,6 +1053,7 @@ namespace EasyVersionBackup
                 if (settingsResult == DialogResult.OK)
                 {
                     _settings = form.ResultSettings;
+                    UpdateProfilesComboBox();
                     _configuredPathsFilterTextBox.Text = _settings.ConfiguredPathsFilter;
                     SaveSettings();
                     RestartAutoBackupCountdown();
@@ -1058,6 +1067,25 @@ namespace EasyVersionBackup
             buttonAbout.Click += helpToolStripMenuItem_Click;
             left += buttonSize + buttonSpacing;
 
+            // Semantic Anchor [Profile selector]: Selection is a view/manual-backup filter,
+            // not a modification to IsEnabled and never an automatic-backup constraint.
+            _profilesComboBox.Name = "comboBoxProfiles";
+            _profilesComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            _profilesComboBox.FlatStyle = FlatStyle.Flat;
+            _profilesComboBox.BackColor = ModernTheme.TitleBarBackColor;
+            _profilesComboBox.ForeColor = ModernTheme.TextColor;
+            _profilesComboBox.Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
+            _profilesComboBox.SetBounds(left, toolbarTop, 172, buttonSize);
+            _profilesComboBox.Visible = false;
+            _profilesComboBox.SelectedIndexChanged += (_, _) =>
+            {
+                if (_isUpdatingProfilesComboBox || _profilesComboBox.SelectedItem is not ProfileChoice choice) return;
+                _settings.SelectedProfileId = choice.Id;
+                SaveSettings();
+                ApplyConfiguredPathsFilter();
+            };
+            _mainToolTip.SetToolTip(_profilesComboBox, "Show only backup pairs assigned to the selected profile. All Profiles shows every pair.");
+
             // Semantic Anchor [Retention warning backdrop]: Keep the warning a normal
             // interactive label; only its background is a themed window-surface sample.
             _activeDataLossWarningLabel = new ThemeBackdropLabel
@@ -1065,9 +1093,10 @@ namespace EasyVersionBackup
                 Name = "labelActiveDataLossWarning",
                 Text = "⚠  Retention / Source Cleanup active",
                 AutoSize = false,
-                Location = new Point(left, toolbarTop),
-                Size = new Size(286, buttonSize + 1),
-                BackColor = ModernTheme.WindowBackColor,
+                Location = new Point(0, 0),
+                Size = new Size(286, ModernTheme.TitleBarHeight),
+                BackColor = Color.Transparent,
+                ThemeTintOpacity = 0,
                 ForeColor = ModernTheme.TextColor,
                 BorderStyle = BorderStyle.None,
                 Font = new Font(
@@ -1094,16 +1123,15 @@ namespace EasyVersionBackup
             Controls.Add(buttonMoveConfiguredPathDown);
             Controls.Add(buttonModernSettings);
             Controls.Add(buttonAbout);
-            Controls.Add(_activeDataLossWarningLabel);
+            Controls.Add(_profilesComboBox);
+            _modernTitleBarPanel?.Controls.Add(_activeDataLossWarningLabel);
 
             _debugModeWarningLabel = new ThemeBackdropLabel
             {
                 Name = "labelDebugModeWarning",
                 Text = "Safety mode: Off",
                 AutoSize = true,
-                Location = new Point(
-                    _activeDataLossWarningLabel.Left,
-                    _activeDataLossWarningLabel.Top + 8),
+                Location = new Point(0, 0),
                 BackColor = Color.Transparent,
                 ForeColor = ModernTheme.DisabledTextColor,
                 BorderStyle = BorderStyle.None,
@@ -1123,7 +1151,7 @@ namespace EasyVersionBackup
                 Environment.NewLine +
                 "Technical deletion protections remain active.");
 
-            Controls.Add(_debugModeWarningLabel);
+            _modernTitleBarPanel?.Controls.Add(_debugModeWarningLabel);
             InitializeConfiguredPathsFilter();
 
             buttonExit.BringToFront();
@@ -1133,7 +1161,7 @@ namespace EasyVersionBackup
             buttonMoveConfiguredPathDown.BringToFront();
             buttonModernSettings.BringToFront();
             buttonAbout.BringToFront();
-            _activeDataLossWarningLabel.BringToFront();
+            _profilesComboBox.BringToFront();
             _configuredPathsFilterPanel.BringToFront();
             buttonBackup.BringToFront();
 
@@ -1142,6 +1170,78 @@ namespace EasyVersionBackup
                 _modernTitleBarPanel.BringToFront();
             }
         }
+        // Semantic Anchor [Profiles]: Membership is stored on original BackupPathPairs;
+        // selection changes only row visibility/manual backup eligibility.
+        private bool IsSelectedProfileActive =>
+            _settings.ShowProfilesButton &&
+            !string.IsNullOrWhiteSpace(_settings.SelectedProfileId) &&
+            _settings.Profiles.Any(profile =>
+                string.Equals(profile.Id, _settings.SelectedProfileId, StringComparison.OrdinalIgnoreCase));
+
+        private bool IsConfiguredPathsViewFiltered => IsConfiguredPathsFilterActive || IsSelectedProfileActive;
+
+        private bool MatchesSelectedProfile(BackupPathPair pair) =>
+            !IsSelectedProfileActive ||
+            (pair.ProfileIds != null && pair.ProfileIds.Contains(_settings.SelectedProfileId, StringComparer.OrdinalIgnoreCase));
+
+        private bool MatchesVisiblePair(BackupPathPair pair) =>
+            MatchesConfiguredPathsFilter(pair) && MatchesSelectedProfile(pair);
+
+        private void UpdateProfilesComboBox()
+        {
+            _isUpdatingProfilesComboBox = true;
+            try
+            {
+                _profilesComboBox.Items.Clear();
+                _profilesComboBox.Items.Add(new ProfileChoice(string.Empty, "All Profiles"));
+                foreach (BackupProfile profile in _settings.Profiles)
+                    _profilesComboBox.Items.Add(new ProfileChoice(profile.Id, profile.Name));
+                if (!_settings.ShowProfilesButton ||
+                    !_settings.Profiles.Any(profile => string.Equals(profile.Id, _settings.SelectedProfileId, StringComparison.OrdinalIgnoreCase)))
+                    _settings.SelectedProfileId = string.Empty;
+                int selected = 0;
+                for (int i = 1; i < _profilesComboBox.Items.Count; i++)
+                {
+                    if (_profilesComboBox.Items[i] is ProfileChoice choice &&
+                        string.Equals(choice.Id, _settings.SelectedProfileId, StringComparison.OrdinalIgnoreCase))
+                    { selected = i; break; }
+                }
+                _profilesComboBox.SelectedIndex = selected;
+                _profilesComboBox.Visible = _settings.ShowProfilesButton;
+                UpdateConfiguredPathsFilterBounds();
+            }
+            finally { _isUpdatingProfilesComboBox = false; }
+        }
+
+        private void UpdateTitleBarWarningLayout()
+        {
+            if (_modernTitleBarPanel == null || _modernTitleLabel == null) return;
+            int titleRight = _modernTitleBarPanel.ClientSize.Width - 2 * ModernTheme.TitleBarButtonSize.Width - 8;
+            Label? visibleWarning = _activeDataLossWarningLabel?.Visible == true
+                ? _activeDataLossWarningLabel
+                : _debugModeWarningLabel?.Visible == true ? _debugModeWarningLabel : null;
+            int desiredWidth = visibleWarning == _activeDataLossWarningLabel ? 286 : 145;
+            int maximumWidth = Math.Max(0, titleRight - ModernTheme.TitleBarTextLeft - 105);
+            int warningWidth = visibleWarning == null ? 0 : Math.Min(desiredWidth, maximumWidth);
+            int warningLeft = titleRight - warningWidth;
+            if (_activeDataLossWarningLabel != null)
+            {
+                _activeDataLossWarningLabel.SetBounds(warningLeft, 0, warningWidth, ModernTheme.TitleBarHeight);
+                _activeDataLossWarningLabel.AutoEllipsis = true;
+                _activeDataLossWarningLabel.Text = "⚠  Retention / Source Cleanup active";
+            }
+            if (_debugModeWarningLabel != null)
+            {
+                _debugModeWarningLabel.AutoSize = false;
+                _debugModeWarningLabel.SetBounds(warningLeft, 0, warningWidth, ModernTheme.TitleBarHeight);
+                _debugModeWarningLabel.Text = "Safety mode: Off";
+                _debugModeWarningLabel.TextAlign = ContentAlignment.MiddleLeft;
+                _debugModeWarningLabel.AutoEllipsis = true;
+            }
+            _modernTitleLabel.Width = Math.Max(0, warningLeft - _modernTitleLabel.Left - (visibleWarning == null ? 0 : 8));
+            _modernTitleLabel.AutoEllipsis = true;
+        }
+
         // Semantic Anchor [Configured paths display filter]: AppSettings.ConfiguredPathsFilter is the sole persisted filter.
         // Keep every row at its BackupPathPairs index; hiding affects execution eligibility, never IsEnabled or saved pair order.
         private bool IsConfiguredPathsFilterActive =>
@@ -1260,42 +1360,15 @@ namespace EasyVersionBackup
 
         private void UpdateConfiguredPathsFilterBounds()
         {
-            if (_activeDataLossWarningLabel == null || _debugModeWarningLabel == null)
-            {
-                return;
-            }
-
+            // The risk warning lives in the title bar. Reserve space on the toolbar
+            // for the profile selector only when the user enabled it.
             const int spacing = 6;
             int filterRight = buttonBackup.Left - spacing;
-            int warningLeft = _activeDataLossWarningLabel.Left;
-            int reservedWarningWidth = _activeDataLossWarningLabel.Visible
-                ? 286
-                : _debugModeWarningLabel.Visible ? 140 : 0;
-            int availableWidth = Math.Max(72, filterRight - warningLeft - spacing);
-            int filterWidth = Math.Min(220,
-                Math.Max(72, availableWidth - reservedWarningWidth - spacing));
-
+            int filterLeft = _profilesComboBox.Visible ? _profilesComboBox.Right + spacing : _profilesComboBox.Left;
+            int availableWidth = Math.Max(72, filterRight - filterLeft);
+            int filterWidth = Math.Min(220, availableWidth);
             _configuredPathsFilterPanel.SetBounds(
-                filterRight - filterWidth,
-                buttonBackup.Top,
-                filterWidth,
-                buttonBackup.Height);
-
-            int warningWidth = Math.Max(0,
-                _configuredPathsFilterPanel.Left - warningLeft - spacing);
-            _activeDataLossWarningLabel.Width = warningWidth;
-            _activeDataLossWarningLabel.AutoEllipsis = true;
-            _activeDataLossWarningLabel.Text = warningWidth < 40
-                ? "⚠"
-                : "⚠  Retention / Source Cleanup active";
-
-            _debugModeWarningLabel.AutoSize = false;
-            _debugModeWarningLabel.Size = new Size(warningWidth, buttonBackup.Height);
-            _debugModeWarningLabel.Text = warningWidth < 60
-                ? "!"
-                : "Safety mode: Off";
-            _debugModeWarningLabel.TextAlign = ContentAlignment.MiddleLeft;
-
+                filterRight - filterWidth, buttonBackup.Top, filterWidth, buttonBackup.Height);
             UpdateConfiguredPathsFilterControlLayout();
         }
 
@@ -1357,7 +1430,7 @@ namespace EasyVersionBackup
             int currentRowIndex = dataGridViewConfiguredPaths.CurrentCell?.RowIndex ?? -1;
             if (currentRowIndex >= 0 &&
                 currentRowIndex < _settings.BackupPathPairs.Count &&
-                !MatchesConfiguredPathsFilter(_settings.BackupPathPairs[currentRowIndex]))
+                !MatchesVisiblePair(_settings.BackupPathPairs[currentRowIndex]))
             {
                 dataGridViewConfiguredPaths.CurrentCell = null;
                 dataGridViewConfiguredPaths.ClearSelection();
@@ -1373,7 +1446,7 @@ namespace EasyVersionBackup
                      i < dataGridViewConfiguredPaths.Rows.Count;
                      i++)
                 {
-                    bool matches = MatchesConfiguredPathsFilter(_settings.BackupPathPairs[i]);
+                    bool matches = MatchesVisiblePair(_settings.BackupPathPairs[i]);
                     if (dataGridViewConfiguredPaths.Rows[i].Visible != matches)
                     {
                         dataGridViewConfiguredPaths.Rows[i].Visible = matches;
@@ -1397,25 +1470,27 @@ namespace EasyVersionBackup
             _mainToolTip.SetToolTip(_configuredPathsFilterCountLabel, matchInformation);
             _mainToolTip.SetToolTip(_configuredPathsFilterTextBox,
                 matchInformation + Environment.NewLine +
-                "Filter source and target paths by fragments (all words must match). Only visible active pairs are backed up.");
+                "Filter source and target paths by fragments (all words must match). Manual backups use visible active pairs.");
 
-            dataGridViewConfiguredPaths.AllowDrop = !IsConfiguredPathsFilterActive;
+            dataGridViewConfiguredPaths.AllowDrop = !IsConfiguredPathsViewFiltered;
             dataGridViewConfiguredPaths.Tag = null;
             if (_addConfiguredPathButton != null)
             {
+                // Semantic Anchor [Profile-aware add]: A profile filter must not block
+                // creating a pair; the text search still blocks invisible empty rows.
                 _addConfiguredPathButton.Enabled = !IsConfiguredPathsFilterActive;
                 _mainToolTip.SetToolTip(_addConfiguredPathButton,
                     IsConfiguredPathsFilterActive
-                        ? "Clear the filter to add a backup path"
+                        ? "Clear search to add a backup path"
                         : "Add backup path");
             }
             if (_moveConfiguredPathUpButton != null)
             {
-                _moveConfiguredPathUpButton.Enabled = !IsConfiguredPathsFilterActive;
+                _moveConfiguredPathUpButton.Enabled = !IsConfiguredPathsViewFiltered;
             }
             if (_moveConfiguredPathDownButton != null)
             {
-                _moveConfiguredPathDownButton.Enabled = !IsConfiguredPathsFilterActive;
+                _moveConfiguredPathDownButton.Enabled = !IsConfiguredPathsViewFiltered;
             }
 
             UpdateConfiguredPathsFilterControlLayout();
@@ -1429,12 +1504,12 @@ namespace EasyVersionBackup
         {
             buttonBackup.Enabled = !_isBackupRunning &&
                 _settings.BackupPathPairs.Any(pair =>
-                    pair.IsEnabled && MatchesConfiguredPathsFilter(pair));
+                    pair.IsEnabled && MatchesVisiblePair(pair));
         }
 
         private void MoveConfiguredPathRow(int sourceRowIndex, int targetRowIndex)
         {
-            if (IsConfiguredPathsFilterActive || sourceRowIndex == targetRowIndex)
+            if (IsConfiguredPathsViewFiltered || sourceRowIndex == targetRowIndex)
             {
                 return;
             }
@@ -1469,7 +1544,7 @@ namespace EasyVersionBackup
         }
         private void dataGridViewConfiguredPaths_MouseMove(object? sender, MouseEventArgs e)
         {
-            if (IsConfiguredPathsFilterActive)
+            if (IsConfiguredPathsViewFiltered)
             {
                 dataGridViewConfiguredPaths.Tag = null;
                 return;
@@ -1612,7 +1687,7 @@ namespace EasyVersionBackup
         }
         private void dataGridViewConfiguredPaths_DragOver(object? sender, DragEventArgs e)
         {
-            if (IsConfiguredPathsFilterActive)
+            if (IsConfiguredPathsViewFiltered)
             {
                 e.Effect = DragDropEffects.None;
                 return;
@@ -1705,7 +1780,7 @@ namespace EasyVersionBackup
 
         private void dataGridViewConfiguredPaths_MouseDown(object? sender, MouseEventArgs e)
         {
-            if (IsConfiguredPathsFilterActive)
+            if (IsConfiguredPathsViewFiltered)
             {
                 dataGridViewConfiguredPaths.Tag = null;
                 return;
@@ -1863,7 +1938,9 @@ namespace EasyVersionBackup
         }
         private void buttonAddConfiguredPath_Click(object? sender, EventArgs e)
         {
-            // A newly added empty pair would be invisible with a search active.
+            // A newly added empty pair would be invisible with a text search active.
+            // Semantic Anchor [Profile-aware add]: Profile membership is assigned
+            // before refreshing, so the new row remains visible in the selected profile.
             if (IsConfiguredPathsFilterActive)
             {
                 return;
@@ -1889,6 +1966,9 @@ namespace EasyVersionBackup
             };
 
             // A new pair receives a target only after its source has been entered.
+            // Assign the selected profile without changing any other pair or profile.
+            if (IsSelectedProfileActive)
+                pair.ProfileIds.Add(_settings.SelectedProfileId);
             _settings.BackupPathPairs.Add(pair);
 
             SaveSettings();
@@ -2147,6 +2227,7 @@ namespace EasyVersionBackup
                 _activeDataLossWarningLabel.BringToFront();
             }
 
+            UpdateTitleBarWarningLayout();
             UpdateConfiguredPathsFilterBounds();
         }
 
@@ -2271,7 +2352,7 @@ namespace EasyVersionBackup
                 Anchor = dataGridViewConfiguredPaths.Anchor,
                 BackColor = ModernTheme.WindowBackColor
             };
-            Label label = new ThemeBackdropLabel
+            Label label = new Label
             {
                 Text = "Loading…",
                 Dock = DockStyle.Fill,
@@ -2453,6 +2534,7 @@ namespace EasyVersionBackup
             if (form.ShowDialog(this) == DialogResult.OK)
             {
                 _settings = form.ResultSettings;
+                UpdateProfilesComboBox();
                 _configuredPathsFilterTextBox.Text = _settings.ConfiguredPathsFilter;
                 SaveSettings();
                 RefreshConfiguredPaths();
@@ -2472,6 +2554,7 @@ namespace EasyVersionBackup
             _isBackupRunning = true;
             buttonBackup.Enabled = false;
             _configuredPathsFilterPanel.Enabled = false;
+            _profilesComboBox.Enabled = false;
 
             try
             {
@@ -2481,7 +2564,7 @@ namespace EasyVersionBackup
                     _settings.BackupPathPairs
                         .Where(pair =>
                             pair.IsEnabled &&
-                            MatchesConfiguredPathsFilter(pair) &&
+                            MatchesVisiblePair(pair) &&
                             !string.IsNullOrWhiteSpace(
                                 pair.SourceDirectory) &&
                             !string.IsNullOrWhiteSpace(
@@ -2839,6 +2922,7 @@ namespace EasyVersionBackup
             {
                 _isBackupRunning = false;
                 _configuredPathsFilterPanel.Enabled = true;
+                _profilesComboBox.Enabled = true;
                 UpdateBackupButtonAvailability();
 
                 RefreshAutoBackupTimerColumn();
@@ -3574,6 +3658,7 @@ namespace EasyVersionBackup
             _isBackupRunning = true;
             buttonBackup.Enabled = false;
             _configuredPathsFilterPanel.Enabled = false;
+            _profilesComboBox.Enabled = false;
 
             try
             {
@@ -3599,6 +3684,7 @@ namespace EasyVersionBackup
 
                 _isBackupRunning = false;
                 _configuredPathsFilterPanel.Enabled = true;
+                _profilesComboBox.Enabled = true;
                 UpdateBackupButtonAvailability();
 
                 RefreshAutoBackupTimerColumn();
@@ -4203,6 +4289,7 @@ namespace EasyVersionBackup
             {
                 menu.Items.Add("Duplicate Row", null, (_, _) => DuplicateConfiguredPath(row));
                 menu.Items.Add("Remove Row", null, (_, _) => RemoveConfiguredPathAt(row));
+                AddProfileContextSubmenu(menu, row);
                 menu.Show(dataGridViewConfiguredPaths, dataGridViewConfiguredPaths.PointToClient(Cursor.Position));
                 return;
             }
@@ -4260,7 +4347,43 @@ namespace EasyVersionBackup
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Duplicate Row", null, (_, _) => DuplicateConfiguredPath(row));
             menu.Items.Add("Remove Row", null, (_, _) => RemoveConfiguredPathAt(row));
+            AddProfileContextSubmenu(menu, row);
             menu.Show(dataGridViewConfiguredPaths, dataGridViewConfiguredPaths.PointToClient(Cursor.Position));
+        }
+
+        private void AddProfileContextSubmenu(ContextMenuStrip menu, int row)
+        {
+            // The submenu is always the last row action. Checked state reflects
+            // the saved pair membership; selecting it toggles only this membership.
+            ToolStripMenuItem addToProfile = new ToolStripMenuItem("Add to profile")
+            {
+                BackColor = ModernTheme.ControlBackColor,
+                ForeColor = ModernTheme.TextColor
+            };
+            foreach (BackupProfile profile in _settings.Profiles)
+            {
+                string profileId = profile.Id;
+                ToolStripMenuItem item = new ToolStripMenuItem(profile.Name)
+                {
+                    Checked = _settings.BackupPathPairs[row].ProfileIds.Contains(profileId, StringComparer.OrdinalIgnoreCase),
+                    CheckOnClick = false,
+                    BackColor = ModernTheme.ControlBackColor,
+                    ForeColor = ModernTheme.TextColor
+                };
+                item.Click += (_, _) =>
+                {
+                    if (row < 0 || row >= _settings.BackupPathPairs.Count) return;
+                    BackupPathPair pair = _settings.BackupPathPairs[row];
+                    if (pair.ProfileIds.Contains(profileId, StringComparer.OrdinalIgnoreCase))
+                        pair.ProfileIds.RemoveAll(id => string.Equals(id, profileId, StringComparison.OrdinalIgnoreCase));
+                    else pair.ProfileIds.Add(profileId);
+                    SaveSettings();
+                    ApplyConfiguredPathsFilter();
+                };
+                addToProfile.DropDownItems.Add(item);
+            }
+            addToProfile.Enabled = addToProfile.DropDownItems.Count > 0;
+            menu.Items.Add(addToProfile);
         }
 
         // Semantic Anchor: Duplicated pairs are independent and retain their full configuration.
@@ -4939,7 +5062,7 @@ namespace EasyVersionBackup
             string deleteText,
             List<string> purgePreviewLines)
         {
-            using Form form = new ThemeBufferedForm();
+            using Form form = new Form();
 
             form.Text = title;
             form.StartPosition = FormStartPosition.CenterParent;
@@ -4969,7 +5092,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            Label labelModernTitle = new ThemeBackdropLabel
+            Label labelModernTitle = new Label
             {
                 Name = "labelModernTitle",
                 Text = title,
@@ -5069,7 +5192,7 @@ namespace EasyVersionBackup
             panelModernTitleBar.Controls.Add(labelModernTitle);
             panelModernTitleBar.Controls.Add(buttonModernClose);
 
-            Label labelMessage = new ThemeBackdropLabel
+            Label labelMessage = new Label
             {
                 Text = warningText,
                 AutoSize = false,
@@ -5097,7 +5220,7 @@ namespace EasyVersionBackup
                 BackColor = ModernTheme.ControlBackColor
             };
 
-            Label labelPurgePreviewContent = new ThemeBackdropLabel
+            Label labelPurgePreviewContent = new Label
             {
                 Name = "labelPurgePreviewContent",
                 Text = string.Join(Environment.NewLine, purgePreviewLines),

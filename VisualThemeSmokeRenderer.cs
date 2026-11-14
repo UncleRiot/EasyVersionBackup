@@ -53,7 +53,12 @@ namespace EasyVersionBackup
                 _pixels = new byte[TextureWidth * TextureHeight * 4];
             }
 
-            long frame = Environment.TickCount64 / FrameMilliseconds;
+            // Semantic Anchor [Motion controls across renderers]: Existing Smoke themes
+            // honor the same global motion preferences as portable effects. Reduced Motion
+            // freezes at frame zero; changing preferences resets the shared texture cache.
+            long frame = VisualThemeRuntime.ActiveOptions.ReducedMotion ? 0 :
+                (long)Math.Floor(Environment.TickCount64 *
+                    VisualThemeRuntime.ActiveOptions.Speed / FrameMilliseconds);
             if (!ReferenceEquals(_cachedTheme, theme) || frame != _cachedFrame)
             {
                 Render(effect, theme, frame * FrameMilliseconds / 1000.0);

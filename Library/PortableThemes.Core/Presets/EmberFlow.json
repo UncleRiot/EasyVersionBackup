@@ -1,0 +1,40 @@
+{
+  "DockBackgroundColor": "#FF130806",
+  "ItemBackgroundColor": "#B22D1310",
+  "ItemBorderColor": "#994F2E20",
+  "TextColor": "#FFF3FBFF",
+  "SubmenuIndicatorColor": "#FFC1F7FF",
+  "DragGhostBackgroundColor": "#B64F210C",
+  "DragGhostBorderColor": "#FFE0A659",
+  "GlassSurfaceEnabled": true,
+  "GlassTopColor": "#080D0401",
+  "GlassBottomColor": "#221A0703",
+  "GlassHighlightColor": "#FFFFD27A",
+  "GlassShadowColor": "#FF02060E",
+  "GlassGradientAnimationEnabled": false,
+  "GlassFlameEffectEnabled": false,
+  "GlassStarEffectEnabled": false,
+  "GlassFlameBaseGlowEnabled": false,
+  "GlassEffectSchemaVersion": 1,
+  "Name": "Ember Flow (animated)",
+  "GlassFlameBaseGlowColor": "#FFFF4B0E",
+  "GlassEffects": [
+    {
+      "Type": "Background",
+      "Renderer": "Ember",
+      "Enabled": true,
+      "Seed": 8324,
+      "Parameters": {
+        "Opacity": 0.8,
+        "Speed": 0.41,
+        "Scale": 4.2,
+        "CenterX": 0.5,
+        "SpreadX": 0.4,
+        "BaseHeightRatio": 0.98,
+        "RiseHeightRatio": 0.84,
+        "Taper": 0.43,
+        "BaseGlow": 0.22
+      }
+    }
+  ]
+}

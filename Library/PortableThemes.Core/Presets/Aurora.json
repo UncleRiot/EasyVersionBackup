@@ -1,0 +1,33 @@
+{
+  "DockBackgroundColor": "#FF040915",
+  "ItemBackgroundColor": "#AA15263B",
+  "ItemBorderColor": "#AA356A86",
+  "TextColor": "#FFF3FBFF",
+  "SubmenuIndicatorColor": "#FFC1F7FF",
+  "DragGhostBackgroundColor": "#B33C638C",
+  "DragGhostBorderColor": "#FF87ECDE",
+  "GlassSurfaceEnabled": true,
+  "GlassTopColor": "#08132A48",
+  "GlassBottomColor": "#19030914",
+  "GlassHighlightColor": "#FF68EBDD",
+  "GlassShadowColor": "#FF02060E",
+  "GlassGradientAnimationEnabled": false,
+  "GlassFlameEffectEnabled": false,
+  "GlassStarEffectEnabled": false,
+  "GlassFlameBaseGlowEnabled": false,
+  "GlassEffectSchemaVersion": 1,
+  "Name": "Aurora (animated)",
+  "GlassEffects": [
+    {
+      "Type": "Background",
+      "Renderer": "Aurora",
+      "Enabled": true,
+      "Seed": 5191,
+      "Parameters": {
+        "Opacity": 0.64,
+        "Speed": 0.32,
+        "Scale": 4.0
+      }
+    }
+  ]
+}

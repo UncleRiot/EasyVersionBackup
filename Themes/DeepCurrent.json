@@ -1,0 +1,33 @@
+{
+  "DockBackgroundColor": "#FF020C13",
+  "ItemBackgroundColor": "#A90A2735",
+  "ItemBorderColor": "#8A266077",
+  "TextColor": "#FFF3FBFF",
+  "SubmenuIndicatorColor": "#FFC1F7FF",
+  "DragGhostBackgroundColor": "#B33C638C",
+  "DragGhostBorderColor": "#FF54B7D2",
+  "GlassSurfaceEnabled": true,
+  "GlassTopColor": "#08040C17",
+  "GlassBottomColor": "#18021824",
+  "GlassHighlightColor": "#FF4CCFE8",
+  "GlassShadowColor": "#FF02060E",
+  "GlassGradientAnimationEnabled": false,
+  "GlassFlameEffectEnabled": false,
+  "GlassStarEffectEnabled": false,
+  "GlassFlameBaseGlowEnabled": false,
+  "GlassEffectSchemaVersion": 1,
+  "Name": "Deep Current (animated)",
+  "GlassEffects": [
+    {
+      "Type": "Background",
+      "Renderer": "DeepCurrent",
+      "Enabled": true,
+      "Seed": 9206,
+      "Parameters": {
+        "Opacity": 0.48,
+        "Speed": 0.22,
+        "Scale": 5.2
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "Name": "Fire",
+  "DockBackgroundColor": "#55201A",
+  "ItemBackgroundColor": "#DE592D24",
+  "ItemBorderColor": "#C29F6445",
+  "TextColor": "#FFFFF6EB",
+  "SubmenuIndicatorColor": "#FFFFDCB5",
+  "DragGhostBackgroundColor": "#D06C3728",
+  "DragGhostBorderColor": "#FFFFB85C",
+  "GlassSurfaceEnabled": true,
+  "GlassTopColor": "#44D45F29",
+  "GlassBottomColor": "#300F090C",
+  "GlassHighlightColor": "#74FFD19B",
+  "GlassShadowColor": "#880F0505",
+  "GlassCornerRadius": 18,
+  "GlassExtraThickness": 14
+}

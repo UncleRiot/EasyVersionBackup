@@ -1,0 +1,10 @@
+{
+  "Name": "Default",
+  "DockBackgroundColor": "#12161C",
+  "ItemBackgroundColor": "#22FFFFFF",
+  "ItemBorderColor": "#22FFFFFF",
+  "TextColor": "#FFFFFF",
+  "SubmenuIndicatorColor": "#FFFFFF",
+  "DragGhostBackgroundColor": "#22FFFFFF",
+  "DragGhostBorderColor": "#66FFFFFF"
+}

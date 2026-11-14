@@ -265,12 +265,56 @@ namespace EasyVersionBackup
             textBoxSelectedPath.Location = new Point(12, 44);
             textBoxSelectedPath.Size = new Size(ClientSize.Width - 24, 23);
             textBoxSelectedPath.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            textBoxSelectedPath.ReadOnly = true;
+            // Semantic Anchor [Editable folder address]: Enter navigates to an existing
+            // absolute directory; folder-tree selection remains the source of displayed paths.
+            textBoxSelectedPath.ReadOnly = false;
             textBoxSelectedPath.BorderStyle = BorderStyle.FixedSingle;
             textBoxSelectedPath.BackColor = ModernTheme.TitleBarBackColor;
             textBoxSelectedPath.ForeColor = ModernTheme.TextColor;
 
             Controls.Add(textBoxSelectedPath);
+        }
+
+        // Semantic Anchor [Folder address navigation]: The dialog's AcceptButton
+        // normally consumes Enter before the address TextBox receives KeyDown.
+        // Intercept it only while the address field has focus: navigate the tree,
+        // never accept or close the dialog. Enter elsewhere keeps its existing behavior.
+        protected override bool ProcessDialogKey(Keys keyData)
+        {
+            if (keyData == Keys.Enter && textBoxSelectedPath.Focused)
+            {
+                TryNavigateToEnteredPath();
+                return true;
+            }
+
+            return base.ProcessDialogKey(keyData);
+        }
+
+        private bool TryNavigateToEnteredPath()
+        {
+            string enteredPath = textBoxSelectedPath.Text.Trim().Trim('"');
+            string fullPath;
+            try
+            {
+                if (!Path.IsPathFullyQualified(enteredPath))
+                    throw new ArgumentException("Enter an absolute folder path.");
+                fullPath = Path.GetFullPath(enteredPath);
+                if (!Directory.Exists(fullPath))
+                    throw new DirectoryNotFoundException("The folder does not exist or is not accessible.");
+            }
+            catch (Exception exception) when (exception is ArgumentException or NotSupportedException or
+                                            PathTooLongException or DirectoryNotFoundException or IOException)
+            {
+                ModernMessageDialog.Show(this, "Folder not found", "Invalid folder path or folder not accessible.");
+                return false;
+            }
+
+            // Reuse the existing tree navigation; do not change file-name handling.
+            SelectInitialPath(fullPath);
+            SelectedPath = fullPath;
+            textBoxSelectedPath.Text = fullPath;
+            buttonOk.Enabled = true;
+            return true;
         }
 
         private void InitializeFolderTree()
@@ -629,6 +673,15 @@ namespace EasyVersionBackup
             object? sender,
             EventArgs e)
         {
+            // Semantic Anchor [Typed address confirmation]: OK honors an edited address
+            // even when Enter was not pressed; invalid text never confirms the old path.
+            if (!string.Equals(textBoxSelectedPath.Text.Trim().Trim('"'), SelectedPath,
+                    StringComparison.OrdinalIgnoreCase) && !TryNavigateToEnteredPath())
+            {
+                DialogResult = DialogResult.None;
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(SelectedPath) ||
                 !Directory.Exists(SelectedPath))
             {

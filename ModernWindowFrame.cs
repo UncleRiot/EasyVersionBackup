@@ -26,8 +26,12 @@ namespace EasyVersionBackup
             private Bitmap? _bitmap;
             private string _themeId = string.Empty;
             private bool _dirty = true;
+            private VisualThemePortableCanvas? _portableCanvas;
+            private PortableThemes.Core.ThemeDefinition? _portableDefinition;
 
             internal void MarkDirty() => _dirty = true;
+
+            internal void SetRunning(bool running) => _portableCanvas?.SetRunning(running);
 
             internal Bitmap? GetBitmap(Form form)
             {
@@ -41,17 +45,35 @@ namespace EasyVersionBackup
                     _dirty = true;
                 }
 
-                if (_themeId != VisualThemeRuntime.ActiveId)
+                if (_themeId != VisualThemeRuntime.ActiveId ||
+                    !ReferenceEquals(_portableDefinition, VisualThemeRuntime.ActivePortableDefinition))
                 {
                     _themeId = VisualThemeRuntime.ActiveId;
+                    _portableDefinition = VisualThemeRuntime.ActivePortableDefinition;
+                    _portableCanvas?.Dispose();
+                    _portableCanvas = _portableDefinition is null ? null :
+                        new VisualThemePortableCanvas(_portableDefinition, VisualThemeRuntime.ActiveOptions);
                     _dirty = true;
                 }
 
                 if (_dirty)
                 {
                     using Graphics graphics = Graphics.FromImage(_bitmap);
-                    VisualThemeRenderer.Draw(graphics, new Rectangle(Point.Empty, size),
-                        VisualThemeRuntime.ActiveDefinition, Environment.TickCount64 / 1000.0);
+                    if (_portableCanvas is not null)
+                    {
+                        _portableCanvas.SetOptions(VisualThemeRuntime.ActiveOptions);
+                        _portableCanvas.SetRunning(form.Visible && form.ContainsFocus &&
+                            form.WindowState != FormWindowState.Minimized &&
+                            VisualThemeRuntime.HasActiveAnimation);
+                        _portableCanvas.Draw(graphics, new Rectangle(Point.Empty, size));
+                    }
+                    else
+                    {
+                        double seconds = VisualThemeRuntime.ActiveOptions.ReducedMotion ? 0 :
+                            Environment.TickCount64 / 1000.0 * VisualThemeRuntime.ActiveOptions.Speed;
+                        VisualThemeRenderer.Draw(graphics, new Rectangle(Point.Empty, size),
+                            VisualThemeRuntime.ActiveDefinition, seconds);
+                    }
                     _dirty = false;
                 }
 
@@ -62,6 +84,9 @@ namespace EasyVersionBackup
             {
                 _bitmap?.Dispose();
                 _bitmap = null;
+                _portableCanvas?.Dispose();
+                _portableCanvas = null;
+                _portableDefinition = null;
             }
         }
 
@@ -149,17 +174,24 @@ namespace EasyVersionBackup
                         if (child is ThemeTitleBarButton && child.Visible)
                             child.Invalidate();
                 }
-                // Semantic Anchor [Animated child repaint SSOT]: Repaint only buffered
-                // decorative descendants using this form's cached frame; never invalidate
-                // editors, native dropdowns or other unrelated input controls each tick.
+                // Semantic Anchor [Animated child repaint SSOT]: Invalidate only buffered
+                // themed descendants against this form's shared cached frame. Do not repaint
+                // native editors, dropdowns or unrelated input controls each animation tick.
                 InvalidateAnimatedChildren(form);
             };
-            void UpdateAnimationState() => timer.Enabled = !form.IsDisposed && form.Visible &&
-                form.ContainsFocus && form.WindowState != FormWindowState.Minimized &&
-                VisualThemeRuntime.HasActiveAnimation;
+            // Semantic Anchor [Single window animation clock]: Core frames share this
+            // existing timer; only its cadence changes for interpolated effects.
+            void UpdateAnimationState()
+            {
+                timer.Interval = VisualThemeRuntime.ActivePortableDefinition is null ? 75 : 33;
+                bool running = !form.IsDisposed && form.Visible && form.ContainsFocus &&
+                    form.WindowState != FormWindowState.Minimized && VisualThemeRuntime.HasActiveAnimation;
+                timer.Enabled = running;
+                surface.SetRunning(running);
+            }
             form.Shown += (_, _) => UpdateAnimationState();
             form.Activated += (_, _) => UpdateAnimationState();
-            form.Deactivate += (_, _) => timer.Stop();
+            form.Deactivate += (_, _) => { timer.Stop(); surface.SetRunning(false); };
             form.VisibleChanged += (_, _) => UpdateAnimationState();
             form.Resize += (_, _) => { surface.MarkDirty(); UpdateAnimationState(); };
             System.EventHandler themeChangedHandler = (_, _) =>
@@ -538,6 +570,12 @@ namespace EasyVersionBackup
     // override only disabled paint for animated/non-Default themes.
     internal sealed class ThemeContrastButton : Button
     {
+        // Semantic Anchor [Profile disabled button contrast]: Only opted-in controls
+        // override the Default theme's native disabled text. All colors still come
+        // from ModernTheme; existing dialog buttons retain their prior rendering.
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public bool AlwaysReadableWhenDisabled { get; set; }
+
         public ThemeContrastButton()
         {
             DoubleBuffered = true;
@@ -546,7 +584,7 @@ namespace EasyVersionBackup
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            if (Enabled || VisualThemeRuntime.ActiveId == "Default" ||
+            if (Enabled || (VisualThemeRuntime.ActiveId == "Default" && !AlwaysReadableWhenDisabled) ||
                 string.IsNullOrWhiteSpace(Text)) return;
 
             Color surface = ModernTheme.ControlBackColor;
@@ -554,7 +592,8 @@ namespace EasyVersionBackup
             e.Graphics.FillRectangle(fill, ClientRectangle);
             if (FlatStyle == FlatStyle.Flat && FlatAppearance.BorderSize > 0)
             {
-                using Pen border = new(ModernTheme.WindowBorderColor);
+                using Pen border = new(AlwaysReadableWhenDisabled
+                    ? FlatAppearance.BorderColor : ModernTheme.WindowBorderColor);
                 e.Graphics.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
             }
             TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle,
@@ -576,7 +615,10 @@ namespace EasyVersionBackup
 
         protected override void OnCellPainting(DataGridViewCellPaintingEventArgs e)
         {
+            // Semantic Anchor [Nullable paint context]: Custom backdrop painting requires
+            // a valid Graphics instance; otherwise preserve DataGridView's default painting.
             if (VisualThemeRuntime.ActiveId != "Default" &&
+                e.Graphics is Graphics graphics &&
                 e.ColumnIndex >= 0 && e.RowIndex >= -1 &&
                 e.CellBounds.Width > 0 && e.CellBounds.Height > 0)
             {
@@ -587,7 +629,7 @@ namespace EasyVersionBackup
                 int opacity = header ? ModernTheme.ThemeGridHeaderBackdropOpacity :
                     selected ? ModernTheme.ThemeGridSelectionBackdropOpacity :
                     ModernTheme.ThemeGridCellBackdropOpacity;
-                if (ModernWindowFrame.PaintThemeSurface(this, e.Graphics, e.CellBounds,
+                if (ModernWindowFrame.PaintThemeSurface(this, graphics, e.CellBounds,
                         tint, opacity))
                 {
                     e.Paint(e.CellBounds, e.PaintParts &
@@ -633,17 +675,24 @@ namespace EasyVersionBackup
             DoubleBuffered = true;
         }
 
+        // Semantic Anchor [Per-label backdrop opacity]: Individual status labels may
+        // request a fully transparent sampled theme surface while existing dialogs keep
+        // the current tinted readability backdrop.
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public int ThemeTintOpacity { get; set; } = ModernTheme.ThemeWarningBackdropOpacity;
+
         protected override void OnPaintBackground(PaintEventArgs e)
         {
-            // Semantic Anchor [Explicit status background]: Keep intentional warning/status
-            // fills opaque. Only inherited, transparent and standard theme surfaces sample
-            // the shared animation; native text and accessibility properties stay intact.
+            // Semantic Anchor [Explicit status background]: Warning/status fills remain
+            // opaque unless a caller explicitly requests a transparent sampled backdrop;
+            // only surfaces deriving from the central theme colors sample the shared
+            // animation. Text rendering and accessibility are unchanged.
             bool themeSurface = BackColor == Color.Transparent ||
                 BackColor.ToArgb() == ModernTheme.WindowBackColor.ToArgb() ||
                 BackColor.ToArgb() == ModernTheme.TitleBarBackColor.ToArgb() ||
                 BackColor.ToArgb() == ModernTheme.ControlBackColor.ToArgb();
             if (!themeSurface || !ModernWindowFrame.PaintThemeSurface(this, e.Graphics, ClientRectangle,
-                    ModernTheme.WindowBackColor, ModernTheme.ThemeWarningBackdropOpacity))
+                    ModernTheme.WindowBackColor, ThemeTintOpacity))
                 base.OnPaintBackground(e);
         }
     }

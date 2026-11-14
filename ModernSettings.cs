@@ -14,8 +14,6 @@ using System.IO;
 using EasyVersionBackup.VisualThemes;
 
 // Semantic Anchor [ModernSettings.cs]: Settings UI edits AppSettings through SettingsStorage; do not create separate persisted defaults or duplicate scheduling and cleanup normalization.
-// Semantic Anchor [Dialog animation consistency]: ThemeBackdropLabel renders text over
-// ModernWindowFrame's cached effect frame; no dialog state, handlers, or layout change.
 namespace EasyVersionBackup
 {
     public class ModernSettings : Form
@@ -54,6 +52,14 @@ namespace EasyVersionBackup
         private readonly ModernTheme.ModernScrollBar scrollBarTags;
         private readonly Button buttonAddTag;
         private readonly Button buttonRemoveTag;
+        private readonly CheckBox checkBoxShowProfilesButton;
+        private readonly Panel panelProfilesList;
+        private readonly ModernTheme.ModernScrollBar scrollBarProfiles;
+        private readonly Button buttonAddProfile;
+        private readonly Button buttonRemoveProfile;
+        private readonly Button buttonEditProfile;
+        private int selectedProfileIndex = -1;
+        private int profileListFirstVisibleIndex;
         private readonly List<string> tags = new List<string>();
         private int selectedTagIndex = -1;
         private int tagListFirstVisibleIndex;
@@ -63,9 +69,15 @@ namespace EasyVersionBackup
         // The chosen stable ID is persisted exclusively through ResultSettings on OK;
         // Cancel restores the theme active before opening this dialog.
         private readonly string initialVisualThemeId;
+        private readonly PortableThemes.Core.ThemeOptions initialVisualThemeOptions;
         private readonly ComboBox comboBoxVisualTheme;
         private readonly VisualThemePreviewPanel themePreview;
         private readonly Button buttonImportVisualTheme;
+        private readonly CheckBox checkBoxVisualThemeReducedMotion;
+        private readonly ComboBox comboBoxVisualThemeSpeed;
+        private readonly ComboBox comboBoxVisualThemeIntensity;
+        private static readonly double[] VisualSpeedChoices = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+        private static readonly double[] VisualIntensityChoices = [0.25, 0.5, 0.75, 1.0];
         private bool isPopulatingVisualThemes;
 
         private readonly List<Button> tabButtons = new List<Button>();
@@ -77,6 +89,7 @@ namespace EasyVersionBackup
         {
             ResultSettings = CloneSettings(settings);
             initialVisualThemeId = VisualThemeRuntime.ActiveId;
+            initialVisualThemeOptions = VisualThemeRuntime.ActiveOptions;
 
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             Text = "Settings";
@@ -109,7 +122,7 @@ namespace EasyVersionBackup
                 BackColor = Color.Transparent
             };
 
-            labelTitle = new ThemeBackdropLabel
+            labelTitle = new Label
             {
                 Name = "labelTitle",
                 Text = "Settings",
@@ -124,9 +137,7 @@ namespace EasyVersionBackup
                 Cursor = Cursors.SizeAll
             };
 
-            // Semantic Anchor [Settings backdrop]: Parent panels share the form's
-            // cached animation; tab button behavior and content layout stay unchanged.
-            panelTabs = new ThemeBackdropPanel
+            panelTabs = new Panel
             {
                 Name = "panelTabs",
                 Location = new Point(12, ModernTheme.TitleBarHeight + 12),
@@ -135,7 +146,7 @@ namespace EasyVersionBackup
                 BackColor = ModernTheme.WindowBackColor
             };
 
-            panelContent = new ThemeBackdropPanel
+            panelContent = new Panel
             {
                 Name = "panelContent",
                 Location = new Point(12, panelTabs.Bottom),
@@ -199,6 +210,60 @@ namespace EasyVersionBackup
                 BackColor = ModernTheme.TitleBarBackColor,
                 ForeColor = ModernTheme.TextColor
             };
+
+            checkBoxShowProfilesButton = CreateCheckBox("checkBoxShowProfilesButton", 0);
+            // Semantic Anchor [Profiles action spacing]: Keep one full settings row
+            // of additional vertical separation below the caption and checkbox.
+            // The remove/edit buttons and list follow the add button position.
+            buttonAddProfile = CreateSmallToolButton("buttonAddProfile", "+",
+                new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsRowTop(2)));
+            // Semantic Anchor [Profile action contrast / SSOT]: Keep the original
+            // toolbar appearance; only the disabled Profile actions opt in to the
+            // shared readable text painter using ModernTheme's current palette.
+            buttonRemoveProfile = CreateSmallToolButton("buttonRemoveProfile", "-",
+                new Point(buttonAddProfile.Right + ModernTheme.ToolbarButtonSpacing, buttonAddProfile.Top), true);
+            buttonEditProfile = CreateToolButton("buttonEditProfile", "Edit",
+                new Point(buttonRemoveProfile.Right + ModernTheme.ToolbarButtonSpacing, buttonAddProfile.Top), true);
+            buttonEditProfile.Size = new Size(72, buttonAddProfile.Height);
+            panelProfilesList = new Panel
+            {
+                Name = "panelProfilesList",
+                Location = new Point(ModernTheme.SettingsLabelLeft, buttonAddProfile.Bottom + 10),
+                Size = new Size(360, 170),
+                BackColor = ModernTheme.TitleBarBackColor,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+            scrollBarProfiles = new ModernTheme.ModernScrollBar
+            {
+                Name = "scrollBarProfiles",
+                Orientation = Orientation.Vertical,
+                Location = new Point(panelProfilesList.Right, panelProfilesList.Top),
+                Size = new Size(ModernTheme.DataGridViewScrollBarSize, panelProfilesList.Height)
+            };
+            buttonAddProfile.Click += (_, _) => EditProfile(null);
+            buttonEditProfile.Click += (_, _) =>
+            {
+                if (selectedProfileIndex >= 0 && selectedProfileIndex < ResultSettings.Profiles.Count)
+                    EditProfile(ResultSettings.Profiles[selectedProfileIndex]);
+            };
+            buttonRemoveProfile.Click += buttonRemoveProfile_Click;
+            panelProfilesList.Paint += panelProfilesList_Paint;
+            panelProfilesList.MouseDown += panelProfilesList_MouseDown;
+            panelProfilesList.MouseDoubleClick += (_, _) => buttonEditProfile.PerformClick();
+            panelProfilesList.MouseWheel += (_, e) =>
+            {
+                if (scrollBarProfiles.Visible) scrollBarProfiles.Value += e.Delta > 0 ? -1 : 1;
+            };
+            panelProfilesList.Resize += (_, _) => UpdateProfilesListUi();
+            scrollBarProfiles.ScrollValueChanged += (_, _) =>
+            {
+                profileListFirstVisibleIndex = scrollBarProfiles.Value;
+                panelProfilesList.Invalidate();
+            };
+            settingsToolTip.SetToolTip(checkBoxShowProfilesButton, "Show the profile selector in the main window.");
+            settingsToolTip.SetToolTip(buttonAddProfile, "Add profile");
+            settingsToolTip.SetToolTip(buttonRemoveProfile, "Remove selected profile (not its backup pairs)");
+            settingsToolTip.SetToolTip(buttonEditProfile, "Rename profile and assign backup pairs");
 
             buttonAddTag = CreateSmallToolButton("buttonAddTag", "+", new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsRowTop(0)));
             buttonRemoveTag = CreateSmallToolButton("buttonRemoveTag", "-", new Point(buttonAddTag.Right + ModernTheme.ToolbarButtonSpacing, buttonAddTag.Top));
@@ -371,9 +436,44 @@ namespace EasyVersionBackup
                 Size = new Size(590, 160),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
+            // Semantic Anchor [Theme options UI / layout]: Controls occupy unused rows
+            // without moving the original selector or preview. Preview is never persistence.
+            checkBoxVisualThemeReducedMotion = new CheckBox
+            {
+                Name = "checkBoxVisualThemeReducedMotion", Text = "Reduced motion",
+                AutoSize = false, Location = new Point(320, ModernTheme.SettingsRowTop(1)),
+                Size = new Size(170, ModernTheme.SettingsControlHeight),
+                BackColor = ModernTheme.WindowBackColor,
+                ForeColor = ModernTheme.TextColor,
+                UseVisualStyleBackColor = false
+            };
+            comboBoxVisualThemeSpeed = new ComboBox
+            {
+                Name = "comboBoxVisualThemeSpeed",
+                Location = new Point(ModernTheme.SettingsControlLeft, ModernTheme.SettingsRowTop(2)),
+                Size = new Size(110, ModernTheme.SettingsControlHeight),
+                DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat,
+                BackColor = ModernTheme.TitleBarBackColor, ForeColor = ModernTheme.TextColor
+            };
+            comboBoxVisualThemeSpeed.Items.AddRange(["0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x"]);
+            comboBoxVisualThemeIntensity = new ComboBox
+            {
+                Name = "comboBoxVisualThemeIntensity",
+                Location = new Point(460, ModernTheme.SettingsRowTop(2)),
+                Size = new Size(100, ModernTheme.SettingsControlHeight),
+                DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat,
+                BackColor = ModernTheme.TitleBarBackColor, ForeColor = ModernTheme.TextColor
+            };
+            comboBoxVisualThemeIntensity.Items.AddRange(["25%", "50%", "75%", "100%"]);
             comboBoxVisualTheme.SelectedIndexChanged += (_, _) => PreviewSelectedVisualTheme();
+            checkBoxVisualThemeReducedMotion.CheckedChanged += (_, _) => PreviewSelectedVisualTheme();
+            comboBoxVisualThemeSpeed.SelectedIndexChanged += (_, _) => PreviewSelectedVisualTheme();
+            comboBoxVisualThemeIntensity.SelectedIndexChanged += (_, _) => PreviewSelectedVisualTheme();
             buttonImportVisualTheme.Click += buttonImportVisualTheme_Click;
             settingsToolTip.SetToolTip(buttonImportVisualTheme, "Import a GlueDock theme JSON file");
+            settingsToolTip.SetToolTip(checkBoxVisualThemeReducedMotion, "Freeze animated themes for reduced motion");
+            settingsToolTip.SetToolTip(comboBoxVisualThemeSpeed, "Animation speed (all animated themes)");
+            settingsToolTip.SetToolTip(comboBoxVisualThemeIntensity, "Effect intensity (portable effects)");
 
             Panel tabPageGeneral = CreateTabPage("tabPageGeneral");
             tabPageGeneral.Controls.Add(labelDefaultVersioning);
@@ -397,6 +497,26 @@ namespace EasyVersionBackup
             tabPageGeneral.Controls.Add(labelSourceCleanupEnabled);
             tabPageGeneral.Controls.Add(checkBoxSourceCleanupEnabled);
             tabPageGeneral.Controls.Add(pictureBoxSourceCleanupHint);
+
+            Panel tabPageProfiles = CreateTabPage("tabPageProfiles");
+            // Semantic Anchor [Profiles caption ink alignment]: Only this caption
+            // compensates for the Label text renderer's 3px leading inset, so its
+            // visible text aligns with the left edge of the profile action buttons.
+            Label labelShowProfilesButton = CreateLabel("labelShowProfilesButton", "Show Profiles Button",
+                new Point(ModernTheme.SettingsLabelLeft - 3, ModernTheme.SettingsLabelTop(0)),
+                new Size(ModernTheme.SettingsLabelWidth, 20));
+            // Semantic Anchor [Profiles checkbox layout exception]: Place this one
+            // checkbox immediately after its measured caption instead of the shared
+            // settings control column; use the central spacing value.
+            labelShowProfilesButton.Width = TextRenderer.MeasureText(labelShowProfilesButton.Text, labelShowProfilesButton.Font).Width;
+            checkBoxShowProfilesButton.Left = labelShowProfilesButton.Right + ModernTheme.SettingsHintSpacing;
+            tabPageProfiles.Controls.Add(labelShowProfilesButton);
+            tabPageProfiles.Controls.Add(checkBoxShowProfilesButton);
+            tabPageProfiles.Controls.Add(buttonAddProfile);
+            tabPageProfiles.Controls.Add(buttonRemoveProfile);
+            tabPageProfiles.Controls.Add(buttonEditProfile);
+            tabPageProfiles.Controls.Add(panelProfilesList);
+            tabPageProfiles.Controls.Add(scrollBarProfiles);
 
             Panel tabPageBackup = CreateTabPage("tabPageBackup");
             tabPageBackup.Controls.Add(labelIgnoreCopyErrors);
@@ -427,6 +547,14 @@ namespace EasyVersionBackup
                 new Size(ModernTheme.SettingsLabelWidth, 20)));
             tabPageThemes.Controls.Add(comboBoxVisualTheme);
             tabPageThemes.Controls.Add(buttonImportVisualTheme);
+            tabPageThemes.Controls.Add(checkBoxVisualThemeReducedMotion);
+            tabPageThemes.Controls.Add(CreateLabel("labelVisualThemeSpeed", "Speed",
+                new Point(ModernTheme.SettingsLabelLeft, ModernTheme.SettingsLabelTop(2)),
+                new Size(ModernTheme.SettingsLabelWidth, 20)));
+            tabPageThemes.Controls.Add(comboBoxVisualThemeSpeed);
+            tabPageThemes.Controls.Add(CreateLabel("labelVisualThemeIntensity", "Intensity",
+                new Point(332, ModernTheme.SettingsLabelTop(2)), new Size(110, 20)));
+            tabPageThemes.Controls.Add(comboBoxVisualThemeIntensity);
             tabPageThemes.Controls.Add(themePreview);
 
             Panel tabPageTools = CreateTabPage("tabPageTools");
@@ -440,6 +568,7 @@ namespace EasyVersionBackup
             ApplyDynamicSettingsLayout(tabPageLog);
 
             AddSettingsTab("General", tabPageGeneral);
+            AddSettingsTab("Profiles", tabPageProfiles);
             AddSettingsTab("Backup", tabPageBackup);
             AddSettingsTab("Tags", tabPageTags);
             AddSettingsTab("Log", tabPageLog);
@@ -454,7 +583,11 @@ namespace EasyVersionBackup
             FormClosed += (_, _) =>
             {
                 if (DialogResult != DialogResult.OK)
+                {
+                    VisualThemeRuntime.SetOptions(initialVisualThemeOptions.ReducedMotion,
+                        initialVisualThemeOptions.Speed, initialVisualThemeOptions.Intensity);
                     VisualThemeRuntime.Apply(initialVisualThemeId);
+                }
             };
 
             panelTitleBar.MouseDown += titleBar_MouseDown;
@@ -476,6 +609,18 @@ namespace EasyVersionBackup
 
             AcceptButton = buttonOk;
             CancelButton = buttonCancel;
+        }
+
+        // Semantic Anchor [Theme option choice]: This single chooser determines the
+        // nearest valid UI setting; the runtime Core normalizes values independently.
+        private static int ClosestThemeOption(double[] choices, double value)
+        {
+            if (!double.IsFinite(value)) value = 1;
+            int closest = 0;
+            for (int i = 1; i < choices.Length; i++)
+                if (Math.Abs(choices[i] - value) < Math.Abs(choices[closest] - value))
+                    closest = i;
+            return closest;
         }
 
         private void PopulateVisualThemes(string? preferredId)
@@ -501,7 +646,11 @@ namespace EasyVersionBackup
             if (isPopulatingVisualThemes || comboBoxVisualTheme.SelectedItem is not DockThemeOption selected)
                 return;
             // Runtime visuals only; saved settings remain unchanged until OK.
-            VisualThemeRuntime.Apply(selected.Id, this);
+            double speed = VisualSpeedChoices[Math.Max(0, comboBoxVisualThemeSpeed.SelectedIndex)];
+            double intensity = VisualIntensityChoices[Math.Max(0, comboBoxVisualThemeIntensity.SelectedIndex)];
+            VisualThemeRuntime.SetOptions(checkBoxVisualThemeReducedMotion.Checked, speed, intensity);
+            if (!string.Equals(VisualThemeRuntime.ActiveId, selected.Id, StringComparison.OrdinalIgnoreCase))
+                VisualThemeRuntime.Apply(selected.Id, this);
             themePreview.ShowTheme(selected.Id, selected.DisplayName);
         }
 
@@ -588,22 +737,22 @@ namespace EasyVersionBackup
             hintIcon.Top = ownerControl.Top + (ownerControl.Height - hintIcon.Height) / 2;
         }
 
-        private Button CreateToolButton(string name, string text, Point location)
+        private Button CreateToolButton(string name, string text, Point location, bool readableDisabledText = false)
         {
-            Button button = new Button
-            {
-                Name = name,
-                Text = text,
-                Location = location,
-                Size = new Size(ModernTheme.SettingsComboBoxWidth, ModernTheme.DialogButtonSize.Height),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = ModernTheme.ControlBackColor,
-                ForeColor = ModernTheme.TextColor,
-                Cursor = Cursors.Hand,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Padding = ModernTheme.DefaultButtonTextPadding,
-                UseVisualStyleBackColor = false
-            };
+            Button button = readableDisabledText
+                ? new ThemeContrastButton { AlwaysReadableWhenDisabled = true }
+                : new Button();
+            button.Name = name;
+            button.Text = text;
+            button.Location = location;
+            button.Size = new Size(ModernTheme.SettingsComboBoxWidth, ModernTheme.DialogButtonSize.Height);
+            button.FlatStyle = FlatStyle.Flat;
+            button.BackColor = ModernTheme.ControlBackColor;
+            button.ForeColor = ModernTheme.TextColor;
+            button.Cursor = Cursors.Hand;
+            button.TextAlign = ContentAlignment.MiddleCenter;
+            button.Padding = ModernTheme.DefaultButtonTextPadding;
+            button.UseVisualStyleBackColor = false;
 
             button.FlatAppearance.BorderColor = ModernTheme.AccentColor;
             button.FlatAppearance.BorderSize = 1;
@@ -614,24 +763,24 @@ namespace EasyVersionBackup
         }
 
 
-        private Button CreateSmallToolButton(string name, string text, Point location)
+        private Button CreateSmallToolButton(string name, string text, Point location, bool readableDisabledText = false)
         {
-            Button button = new Button
-            {
-                Name = name,
-                Text = text,
-                Location = location,
-                Size = ModernTheme.ToolbarButtonSize,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = ModernTheme.ControlBackColor,
-                ForeColor = ModernTheme.TextColor,
-                Cursor = Cursors.Hand,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Padding = text == "+"
-                    ? ModernTheme.ToolbarPlusButtonTextPadding
-                    : ModernTheme.ToolbarMinusButtonTextPadding,
-                UseVisualStyleBackColor = false
-            };
+            Button button = readableDisabledText
+                ? new ThemeContrastButton { AlwaysReadableWhenDisabled = true }
+                : new Button();
+            button.Name = name;
+            button.Text = text;
+            button.Location = location;
+            button.Size = ModernTheme.ToolbarButtonSize;
+            button.FlatStyle = FlatStyle.Flat;
+            button.BackColor = ModernTheme.ControlBackColor;
+            button.ForeColor = ModernTheme.TextColor;
+            button.Cursor = Cursors.Hand;
+            button.TextAlign = ContentAlignment.MiddleCenter;
+            button.Padding = text == "+"
+                ? ModernTheme.ToolbarPlusButtonTextPadding
+                : ModernTheme.ToolbarMinusButtonTextPadding;
+            button.UseVisualStyleBackColor = false;
 
             button.FlatAppearance.BorderColor = ModernTheme.AccentColor;
             button.FlatAppearance.BorderSize = 1;
@@ -727,6 +876,112 @@ namespace EasyVersionBackup
                 "Click OK to apply them.");
         }
 
+        // Semantic Anchor [Profile editor transaction]: All changes remain on the
+        // settings clone until OK; no pair is removed or reordered by the profile UI.
+        private void EditProfile(BackupProfile? existing)
+        {
+            using ProfileEditorDialog editor = new ProfileEditorDialog(
+                existing?.Name ?? string.Empty, existing?.Id,
+                ResultSettings.BackupPathPairs);
+            if (editor.ShowDialog(this) != DialogResult.OK) return;
+
+            string name = editor.ProfileName.Trim();
+            if (string.IsNullOrWhiteSpace(name)) return;
+            if (ResultSettings.Profiles.Any(profile =>
+                !string.Equals(profile.Id, existing?.Id, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(profile.Name, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                ModernMessageDialog.Show(this, "Profiles", "A profile with this name already exists.");
+                return;
+            }
+
+            BackupProfile profile = existing ?? new BackupProfile();
+            profile.Name = name;
+            if (existing == null) ResultSettings.Profiles.Add(profile);
+            for (int i = 0; i < ResultSettings.BackupPathPairs.Count; i++)
+            {
+                List<string> membership = ResultSettings.BackupPathPairs[i].ProfileIds;
+                membership.RemoveAll(id => string.Equals(id, profile.Id, StringComparison.OrdinalIgnoreCase));
+                if (editor.IsPairSelected(i)) membership.Add(profile.Id);
+            }
+            selectedProfileIndex = ResultSettings.Profiles.IndexOf(profile);
+            EnsureSelectedProfileVisible();
+            UpdateProfilesListUi();
+        }
+
+        private void buttonRemoveProfile_Click(object? sender, EventArgs e)
+        {
+            if (selectedProfileIndex < 0 || selectedProfileIndex >= ResultSettings.Profiles.Count) return;
+            BackupProfile profile = ResultSettings.Profiles[selectedProfileIndex];
+            if (ModernConfirmationDialog.Show(this, "Remove Profile",
+                $"Remove profile '{profile.Name}'? Backup pairs are not deleted.") != DialogResult.Yes) return;
+            ResultSettings.Profiles.RemoveAt(selectedProfileIndex);
+            foreach (BackupPathPair pair in ResultSettings.BackupPathPairs)
+                pair.ProfileIds.RemoveAll(id => string.Equals(id, profile.Id, StringComparison.OrdinalIgnoreCase));
+            if (string.Equals(ResultSettings.SelectedProfileId, profile.Id, StringComparison.OrdinalIgnoreCase))
+                ResultSettings.SelectedProfileId = string.Empty;
+            selectedProfileIndex = Math.Min(selectedProfileIndex, ResultSettings.Profiles.Count - 1);
+            UpdateProfilesListUi();
+        }
+
+        private void panelProfilesList_Paint(object? sender, PaintEventArgs e)
+        {
+            using Pen borderPen = new Pen(ModernTheme.WindowBorderColor);
+            e.Graphics.DrawRectangle(borderPen, 0, 0, panelProfilesList.Width - 1, panelProfilesList.Height - 1);
+            int visibleCount = Math.Max(1, (panelProfilesList.ClientSize.Height - 2) / ModernTheme.SettingsControlHeight);
+            for (int i = 0; i < visibleCount; i++)
+            {
+                int index = profileListFirstVisibleIndex + i;
+                if (index >= ResultSettings.Profiles.Count) break;
+                Rectangle row = new Rectangle(1, 1 + i * ModernTheme.SettingsControlHeight,
+                    Math.Max(0, panelProfilesList.ClientSize.Width - 2), ModernTheme.SettingsControlHeight);
+                bool selected = index == selectedProfileIndex;
+                using SolidBrush brush = new SolidBrush(selected ? ModernTheme.AccentColor : ModernTheme.TitleBarBackColor);
+                e.Graphics.FillRectangle(brush, row);
+                TextRenderer.DrawText(e.Graphics, ResultSettings.Profiles[index].Name, Font,
+                    new Rectangle(row.Left + 4, row.Top, row.Width - 8, row.Height),
+                    selected ? ModernTheme.DarkTextColor : ModernTheme.TextColor,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            }
+        }
+
+        private void panelProfilesList_MouseDown(object? sender, MouseEventArgs e)
+        {
+            panelProfilesList.Focus();
+            if (e.Button != MouseButtons.Left) return;
+            int index = profileListFirstVisibleIndex + Math.Max(0, (e.Y - 1) / ModernTheme.SettingsControlHeight);
+            if (index >= ResultSettings.Profiles.Count) return;
+            selectedProfileIndex = index;
+            UpdateProfilesListUi();
+        }
+
+        private void EnsureSelectedProfileVisible()
+        {
+            if (selectedProfileIndex < 0) return;
+            int visible = Math.Max(1, (panelProfilesList.ClientSize.Height - 2) / ModernTheme.SettingsControlHeight);
+            if (selectedProfileIndex < profileListFirstVisibleIndex)
+                profileListFirstVisibleIndex = selectedProfileIndex;
+            else if (selectedProfileIndex >= profileListFirstVisibleIndex + visible)
+                profileListFirstVisibleIndex = selectedProfileIndex - visible + 1;
+        }
+
+        private void UpdateProfilesListUi()
+        {
+            int visible = Math.Max(1, (panelProfilesList.ClientSize.Height - 2) / ModernTheme.SettingsControlHeight);
+            int max = Math.Max(0, ResultSettings.Profiles.Count - visible);
+            profileListFirstVisibleIndex = Math.Clamp(profileListFirstVisibleIndex, 0, max);
+            scrollBarProfiles.Minimum = 0;
+            scrollBarProfiles.Maximum = max;
+            scrollBarProfiles.LargeChange = visible;
+            scrollBarProfiles.Visible = max > 0;
+            if (scrollBarProfiles.Value != profileListFirstVisibleIndex)
+                scrollBarProfiles.Value = profileListFirstVisibleIndex;
+            else scrollBarProfiles.Invalidate();
+            buttonEditProfile.Enabled = selectedProfileIndex >= 0;
+            buttonRemoveProfile.Enabled = selectedProfileIndex >= 0;
+            panelProfilesList.Invalidate();
+        }
+
         private void AddSettingsTab(string text, Panel tabPage)
         {
             int left = tabButtons.Count == 0
@@ -763,7 +1018,7 @@ namespace EasyVersionBackup
                 Name = name,
                 Text = text,
                 Location = location,
-                Size = new Size(90, 30),
+                Size = new Size(78, 30),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = ModernTheme.ControlBackColor,
                 ForeColor = ModernTheme.TextColor,
@@ -783,7 +1038,7 @@ namespace EasyVersionBackup
 
         private Label CreateLabel(string name, string text, Point location, Size size)
         {
-            return new ThemeBackdropLabel
+            return new Label
             {
                 Name = name,
                 Text = text,
@@ -900,6 +1155,10 @@ namespace EasyVersionBackup
             comboBoxLogLevel.Items.Add(BackupLogger.LogLevelVerbose);
             comboBoxLogLevel.Text = BackupLogger.NormalizeLogLevel(settings.LogLevel);
 
+            checkBoxShowProfilesButton.Checked = settings.ShowProfilesButton;
+            selectedProfileIndex = -1;
+            profileListFirstVisibleIndex = 0;
+            UpdateProfilesListUi();
             checkBoxAutoIncrementVersion.Checked = settings.AutoIncrementVersion;
             checkBoxMinimizeToSystray.Checked = settings.MinimizeToSystray;
             checkBoxCloseToSystray.Checked = settings.CloseToSystray;
@@ -930,6 +1189,12 @@ namespace EasyVersionBackup
 
             UpdateAutoBackupControls();
             UpdateRetentionWarningDialogueControls();
+            // Prevent change events from previewing partially populated preferences.
+            isPopulatingVisualThemes = true;
+            checkBoxVisualThemeReducedMotion.Checked = settings.VisualThemeReducedMotion;
+            comboBoxVisualThemeSpeed.SelectedIndex = ClosestThemeOption(VisualSpeedChoices, settings.VisualThemeSpeed);
+            comboBoxVisualThemeIntensity.SelectedIndex = ClosestThemeOption(VisualIntensityChoices, settings.VisualThemeIntensity);
+            isPopulatingVisualThemes = false;
             PopulateVisualThemes(settings.VisualThemeId);
         }
 
@@ -938,6 +1203,18 @@ namespace EasyVersionBackup
             AppSettings settings = CloneSettings(ResultSettings);
             int autoBackupIntervalSeconds = AutoBackupIntervalHelper.ParseSecondsOrDefault(textBoxAutoBackupInterval.Text.Trim(), ResultSettings.AutoBackupIntervalSeconds);
 
+            settings.ShowProfilesButton = checkBoxShowProfilesButton.Checked;
+            settings.Profiles = ResultSettings.Profiles
+                .Select(profile => new BackupProfile { Id = profile.Id, Name = profile.Name })
+                .ToList();
+            // Editor updates membership on ResultSettings pairs. Preserve the cloned rows.
+            for (int i = 0; i < settings.BackupPathPairs.Count && i < ResultSettings.BackupPathPairs.Count; i++)
+            {
+                settings.BackupPathPairs[i].ProfileIds =
+                    new List<string>(ResultSettings.BackupPathPairs[i].ProfileIds);
+            }
+            if (!settings.ShowProfilesButton || !settings.Profiles.Any(profile => profile.Id == settings.SelectedProfileId))
+                settings.SelectedProfileId = string.Empty;
             settings.DefaultVersioning = comboBoxDefaultVersioning.Text.Trim();
             settings.AutoIncrementVersion = checkBoxAutoIncrementVersion.Checked;
             settings.MinimizeToSystray = checkBoxMinimizeToSystray.Checked;
@@ -963,6 +1240,9 @@ namespace EasyVersionBackup
             settings.AutoBackupEnabled = checkBoxAutoBackupEnabled.Checked;
             settings.AutoBackupIntervalSeconds = autoBackupIntervalSeconds;
             settings.VisualThemeId = (comboBoxVisualTheme.SelectedItem as DockThemeOption)?.Id ?? "Default";
+            settings.VisualThemeReducedMotion = checkBoxVisualThemeReducedMotion.Checked;
+            settings.VisualThemeSpeed = VisualSpeedChoices[Math.Max(0, comboBoxVisualThemeSpeed.SelectedIndex)];
+            settings.VisualThemeIntensity = VisualIntensityChoices[Math.Max(0, comboBoxVisualThemeIntensity.SelectedIndex)];
                         settings.Tags = tags
                 .Where(tag => !string.IsNullOrWhiteSpace(tag))
                 .Select(tag => tag.Trim())
@@ -1092,7 +1372,7 @@ namespace EasyVersionBackup
                     BackColor = Color.Transparent
                 };
 
-                labelTitle = new ThemeBackdropLabel
+                labelTitle = new Label
                 {
                     Name = "labelTitle",
                     Text = "Experimental Retention/autopurge",
@@ -1107,7 +1387,7 @@ namespace EasyVersionBackup
                     Cursor = Cursors.SizeAll
                 };
 
-                labelWarningIcon = new ThemeBackdropLabel
+                labelWarningIcon = new Label
                 {
                     Name = "labelWarningIcon",
                     Text = "!",
@@ -1119,7 +1399,7 @@ namespace EasyVersionBackup
                     TextAlign = ContentAlignment.MiddleCenter
                 };
 
-                labelMessage = new ThemeBackdropLabel
+                labelMessage = new Label
                 {
                     Name = "labelMessage",
                     Text =
@@ -1495,8 +1775,15 @@ namespace EasyVersionBackup
                 BackupDestinationConflictHandling = settings.BackupDestinationConflictHandling,
                 LogLevel = BackupLogger.NormalizeLogLevel(settings.LogLevel),
                 VisualThemeId = settings.VisualThemeId,
+                VisualThemeReducedMotion = settings.VisualThemeReducedMotion,
+                VisualThemeSpeed = settings.VisualThemeSpeed,
+                VisualThemeIntensity = settings.VisualThemeIntensity,
                 AutoBackupEnabled = settings.AutoBackupEnabled,
                 AutoBackupIntervalSeconds = settings.AutoBackupIntervalSeconds,
+                ShowProfilesButton = settings.ShowProfilesButton,
+                SelectedProfileId = settings.SelectedProfileId,
+                Profiles = (settings.Profiles ?? new List<BackupProfile>())
+                    .Select(profile => new BackupProfile { Id = profile.Id, Name = profile.Name }).ToList(),
                 BackupPathPairs = new List<BackupPathPair>(),
                 ExclusionTemplates = settings.ExclusionTemplates != null
                     ? settings.ExclusionTemplates.ToDictionary(entry => entry.Key, entry => new List<string>(entry.Value), StringComparer.OrdinalIgnoreCase)
@@ -1529,6 +1816,8 @@ namespace EasyVersionBackup
             {
                 clone.BackupPathPairs.Add(new BackupPathPair
                 {
+                    ProfileIds = pair.ProfileIds != null
+                        ? new List<string>(pair.ProfileIds) : new List<string>(),
                     IsEnabled = pair.IsEnabled,
                     SourceDirectory = pair.SourceDirectory,
                     TargetDirectory = pair.TargetDirectory,
@@ -1585,4 +1874,92 @@ namespace EasyVersionBackup
         [DllImport("user32.dll")]
         private static extern int SendMessage(nint hWnd, int msg, int wParam, int lParam);
     }
+    // Semantic Anchor [ProfileEdit UI]: Editor controls are local to the modal;
+    // only accepted indices and a name return to ModernSettings.
+    internal sealed class ProfileEditorDialog : Form
+    {
+        private readonly TextBox nameTextBox;
+        private readonly CheckedListBox pairList;
+        public string ProfileName => nameTextBox.Text;
+        public bool IsPairSelected(int index) => index >= 0 && index < pairList.Items.Count && pairList.GetItemChecked(index);
+
+        public ProfileEditorDialog(string name, string? profileId, List<BackupPathPair> pairs)
+        {
+            Text = string.IsNullOrEmpty(profileId) ? "Add Profile" : "Edit Profile";
+            StartPosition = FormStartPosition.CenterParent;
+            ClientSize = new Size(680, 455);
+            MinimumSize = new Size(530, 350);
+            BackColor = ModernTheme.WindowBackColor;
+            ForeColor = ModernTheme.TextColor;
+            Font = new Font(ModernTheme.FontFamilyName, ModernTheme.DefaultFontSize);
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+
+            Label nameLabel = new Label
+            {
+                Text = "Profile name", Location = new Point(18, 18), Size = new Size(180, 24),
+                ForeColor = ModernTheme.TextColor
+            };
+            nameTextBox = new TextBox
+            {
+                Name = "textBoxProfileName", Text = name, Location = new Point(18, 45),
+                Width = 620, Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right,
+                BackColor = ModernTheme.TitleBarBackColor, ForeColor = ModernTheme.TextColor,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+            Label pairsLabel = new Label
+            {
+                Text = "Backup pairs in this profile", Location = new Point(18, 83),
+                Size = new Size(350, 24), ForeColor = ModernTheme.TextColor
+            };
+            pairList = new CheckedListBox
+            {
+                Name = "checkedListBackupPairs", Location = new Point(18, 110),
+                Size = new Size(620, 286), Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                BackColor = ModernTheme.TitleBarBackColor, ForeColor = ModernTheme.TextColor,
+                BorderStyle = BorderStyle.FixedSingle, CheckOnClick = true,
+                HorizontalScrollbar = true, IntegralHeight = false
+            };
+            foreach (BackupPathPair pair in pairs)
+            {
+                string source = string.IsNullOrWhiteSpace(pair.SourceDirectory) ? "(no source)" : pair.SourceDirectory;
+                string target = string.IsNullOrWhiteSpace(pair.TargetDirectory) ? "(no target)" : pair.TargetDirectory;
+                pairList.Items.Add(source + "  →  " + target,
+                    profileId != null && pair.ProfileIds.Contains(profileId, StringComparer.OrdinalIgnoreCase));
+            }
+            Button ok = ModernTheme.CreateDialogPrimaryButton("buttonProfileOk", "OK");
+            Button cancel = ModernTheme.CreateDialogSecondaryButton("buttonProfileCancel", "Cancel", DialogResult.Cancel);
+            ok.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            cancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            void PositionButtons()
+            {
+                cancel.Location = new Point(ClientSize.Width - cancel.Width - 18, ClientSize.Height - cancel.Height - 12);
+                ok.Location = new Point(cancel.Left - ok.Width - 8, cancel.Top);
+            }
+            PositionButtons();
+            Resize += (_, _) => PositionButtons();
+            ok.Click += (_, _) =>
+            {
+                if (string.IsNullOrWhiteSpace(nameTextBox.Text))
+                {
+                    ModernMessageDialog.Show(this, "Profiles", "Enter a profile name.");
+                    nameTextBox.Focus();
+                    return;
+                }
+                DialogResult = DialogResult.OK;
+                Close();
+            };
+            cancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
+            Controls.Add(nameLabel);
+            Controls.Add(nameTextBox);
+            Controls.Add(pairsLabel);
+            Controls.Add(pairList);
+            Controls.Add(ok);
+            Controls.Add(cancel);
+            AcceptButton = ok;
+            CancelButton = cancel;
+        }
+    }
+
 }

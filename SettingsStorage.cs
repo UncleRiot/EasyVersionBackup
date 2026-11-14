@@ -124,6 +124,28 @@ namespace EasyVersionBackup
 
             // Semantic Anchor: Missing or null filters in older settings mean "show all"; pair enabled states are never migrated by filtering.
             settings.ConfiguredPathsFilter ??= string.Empty;
+            // Semantic Anchor [Theme option validation]: One persisted settings object owns
+            // these bounded rendering-only values, including older JSON without these keys.
+            settings.VisualThemeSpeed = double.IsFinite(settings.VisualThemeSpeed)
+                ? Math.Clamp(settings.VisualThemeSpeed, 0.1, 3.0) : 1.0;
+            settings.VisualThemeIntensity = double.IsFinite(settings.VisualThemeIntensity)
+                ? Math.Clamp(settings.VisualThemeIntensity, 0.0, 1.0) : 1.0;
+            // Semantic Anchor [Profile migration]: Older settings have no profiles and
+            // must continue to display all pairs without changing their enabled state.
+            settings.Profiles ??= new List<BackupProfile>();
+            settings.Profiles = settings.Profiles
+                .Where(profile => profile != null &&
+                    !string.IsNullOrWhiteSpace(profile.Id) &&
+                    !string.IsNullOrWhiteSpace(profile.Name))
+                .GroupBy(profile => profile.Id, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .ToList();
+            settings.SelectedProfileId ??= string.Empty;
+            if (!settings.Profiles.Any(profile =>
+                    string.Equals(profile.Id, settings.SelectedProfileId, StringComparison.OrdinalIgnoreCase)))
+            {
+                settings.SelectedProfileId = string.Empty;
+            }
             settings.BackupPathPairs ??= new List<BackupPathPair>();
             settings.BackupPathPairs = settings.BackupPathPairs
                 .Where(pair => pair != null)
@@ -131,6 +153,13 @@ namespace EasyVersionBackup
 
             foreach (BackupPathPair pair in settings.BackupPathPairs)
             {
+                pair.ProfileIds ??= new List<string>();
+                pair.ProfileIds = pair.ProfileIds
+                    .Where(id => !string.IsNullOrWhiteSpace(id) &&
+                        settings.Profiles.Any(profile =>
+                            string.Equals(profile.Id, id, StringComparison.OrdinalIgnoreCase)))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
                 pair.SourceDirectory ??= string.Empty;
                 pair.TargetDirectory ??= string.Empty;
                 pair.Versioning ??= string.Empty;

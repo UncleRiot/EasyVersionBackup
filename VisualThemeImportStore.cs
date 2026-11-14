@@ -180,17 +180,22 @@ public sealed class ThemeImportStore
                     throw new InvalidDataException("Effect count exceeds the supported limit (1024).");
                 if (effect.TryGetProperty("Enabled", out var enabled) && enabled.ValueKind == JsonValueKind.False)
                     continue;
-                // Semantic Anchor [Effect allowlist]: New decorative backdrops must be explicit,
-                // bounded and free of code or file references; legacy particle effects remain valid.
+                // Semantic Anchor [Effect allowlist / import SSOT]: Renderer names are strictly
+                // allowlisted data, never native code, file paths or executable plugins. Mirror
+                // Core's Background effect names; preserve existing legacy particle imports.
                 if (!effect.TryGetProperty("Type", out var type) || type.ValueKind != JsonValueKind.String ||
                     !effect.TryGetProperty("Renderer", out var renderer) || renderer.ValueKind != JsonValueKind.String)
                     throw new InvalidDataException("Invalid effect renderer.");
                 bool particle = string.Equals(type.GetString(), "Particles", StringComparison.OrdinalIgnoreCase) &&
                     (string.Equals(renderer.GetString(), "Flame", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(renderer.GetString(), "GlowDot", StringComparison.OrdinalIgnoreCase));
-                bool smoke = string.Equals(type.GetString(), "Background", StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(renderer.GetString(), "Smoke", StringComparison.OrdinalIgnoreCase);
-                if (!particle && !smoke)
+                bool backdrop = string.Equals(type.GetString(), "Background", StringComparison.OrdinalIgnoreCase) &&
+                    (string.Equals(renderer.GetString(), "Smoke", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(renderer.GetString(), "Aurora", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(renderer.GetString(), "Ember", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(renderer.GetString(), "DeepCurrent", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(renderer.GetString(), "Gradient", StringComparison.OrdinalIgnoreCase));
+                if (!particle && !backdrop)
                     throw new InvalidDataException("Unsupported active effect renderer.");
             }
         }

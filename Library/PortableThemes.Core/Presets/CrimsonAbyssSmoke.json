@@ -1,0 +1,34 @@
+{
+  "Name": "Crimson Abyss - Smoke",
+  "DockBackgroundColor": "#FF11040A",
+  "ItemBackgroundColor": "#B01F0911",
+  "ItemBorderColor": "#AA6C2A3B",
+  "TextColor": "#FFFFF6F8",
+  "SubmenuIndicatorColor": "#FFFFC0CC",
+  "DragGhostBackgroundColor": "#C9451422",
+  "DragGhostBorderColor": "#FFF0586F",
+  "GlassSurfaceEnabled": true,
+  "GlassTopColor": "#0C14030A",
+  "GlassBottomColor": "#220A0206",
+  "GlassHighlightColor": "#FFF04F68",
+  "GlassShadowColor": "#FF090104",
+  "GlassGradientAnimationEnabled": false,
+  "GlassFlameEffectEnabled": false,
+  "GlassFlameBaseGlowEnabled": false,
+  "GlassStarEffectEnabled": false,
+  "GlassEffectSchemaVersion": 1,
+  "GlassEffects": [
+    {
+      "Type": "Background",
+      "Renderer": "Smoke",
+      "Enabled": true,
+      "Seed": 31415,
+      "Parameters": {
+        "Opacity": 0.92,
+        "Speed": 0.31,
+        "Scale": 4.45,
+        "EdgeStrength": 1.16
+      }
+    }
+  ]
+}

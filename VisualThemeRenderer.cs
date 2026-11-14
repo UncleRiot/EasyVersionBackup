@@ -206,6 +206,7 @@ namespace EasyVersionBackup
         private string _themeId = "Default";
         private string _displayName = "Default";
         private readonly System.Diagnostics.Stopwatch _clock = new();
+        private VisualThemePortableCanvas? _portableCanvas;
 
         internal VisualThemePreviewPanel()
         {
@@ -214,20 +215,30 @@ namespace EasyVersionBackup
             BorderStyle = BorderStyle.FixedSingle;
             _timer = new System.Windows.Forms.Timer { Interval = 75 };
             _timer.Tick += (_, _) => { if (Visible && HasAnimation) Invalidate(); };
-            VisibleChanged += (_, _) => { _timer.Enabled = Visible && HasAnimation; };
+            VisibleChanged += (_, _) =>
+            {
+                _timer.Enabled = Visible && HasAnimation;
+                _portableCanvas?.SetRunning(_timer.Enabled);
+            };
         }
 
-        private bool HasAnimation => _themeId != "Default" &&
-            (_theme.GlassGradientAnimationEnabled || _theme.GlassFlameEffectEnabled ||
-             _theme.GlassStarEffectEnabled || VisualThemeSmokeRenderer.IsEnabled(_theme));
+        private bool HasAnimation => _themeId != "Default" && !VisualThemeRuntime.ActiveOptions.ReducedMotion &&
+            (_portableCanvas is not null || _theme.GlassGradientAnimationEnabled ||
+             _theme.GlassFlameEffectEnabled || _theme.GlassStarEffectEnabled ||
+             VisualThemeSmokeRenderer.IsEnabled(_theme));
 
         internal void ShowTheme(string id, string name)
         {
             _themeId = id;
             _displayName = name;
             _theme = VisualThemeRuntime.ActiveDefinition;
+            _portableCanvas?.Dispose();
+            _portableCanvas = VisualThemeRuntime.ActivePortableDefinition is { } definition
+                ? new VisualThemePortableCanvas(definition, VisualThemeRuntime.ActiveOptions) : null;
             _clock.Restart();
+            _timer.Interval = _portableCanvas is null ? 75 : 33;
             _timer.Enabled = Visible && HasAnimation;
+            _portableCanvas?.SetRunning(_timer.Enabled);
             Invalidate();
         }
 
@@ -240,8 +251,12 @@ namespace EasyVersionBackup
                 using var background = new SolidBrush(Color.FromArgb(27, 40, 56));
                 e.Graphics.FillRectangle(background, ClientRectangle);
             }
+            else if (_portableCanvas is not null)
+                _portableCanvas.Draw(e.Graphics, ClientRectangle);
             else
-                VisualThemeRenderer.Draw(e.Graphics, ClientRectangle, _theme, _clock.Elapsed.TotalSeconds);
+                VisualThemeRenderer.Draw(e.Graphics, ClientRectangle, _theme,
+                    VisualThemeRuntime.ActiveOptions.ReducedMotion ? 0 :
+                    _clock.Elapsed.TotalSeconds * VisualThemeRuntime.ActiveOptions.Speed);
             Color foreground = isDefault ? Color.FromArgb(199, 213, 224) :
                 VisualThemeRenderer.ThemeColor(_theme.TextColor, Color.White);
             using var titleFont = new Font(ModernTheme.FontFamilyName, 12F, FontStyle.Bold);
@@ -262,7 +277,11 @@ namespace EasyVersionBackup
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _timer.Dispose();
+            if (disposing)
+            {
+                _timer.Dispose();
+                _portableCanvas?.Dispose();
+            }
             base.Dispose(disposing);
         }
     }

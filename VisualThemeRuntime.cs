@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using System.Text.Json;
+using PortableThemes.Core;
 using EasyVersionBackup.VisualThemes;
 
 namespace EasyVersionBackup
@@ -25,9 +27,36 @@ namespace EasyVersionBackup
         internal static event EventHandler? ThemeChanged;
         internal static string ActiveId { get; private set; } = "Default";
         internal static DockTheme ActiveDefinition { get; private set; } = new();
-        internal static bool HasActiveAnimation => ActiveDefinition.GlassGradientAnimationEnabled ||
-            ActiveDefinition.GlassFlameEffectEnabled || ActiveDefinition.GlassStarEffectEnabled ||
-            VisualThemeSmokeRenderer.IsEnabled(ActiveDefinition);
+        // Semantic Anchor [Portable effect options / SSOT]: AppSettings persists these
+        // visual-only values. Only the selected JSON preset owns colors and effect parameters;
+        // legacy themes retain their established renderer and palette.
+        internal static ThemeOptions ActiveOptions { get; private set; } = new();
+        internal static ThemeDefinition? ActivePortableDefinition { get; private set; }
+        internal static bool HasActiveAnimation => !ActiveOptions.ReducedMotion &&
+            (ActivePortableDefinition?.HasAnimation == true ||
+             ActiveDefinition.GlassGradientAnimationEnabled ||
+             ActiveDefinition.GlassFlameEffectEnabled || ActiveDefinition.GlassStarEffectEnabled ||
+             VisualThemeSmokeRenderer.IsEnabled(ActiveDefinition));
+
+        internal static bool NeedsPortableRenderer(DockTheme? definition) =>
+            definition?.GlassEffects?.Any(effect => effect.Enabled &&
+                string.Equals(effect.Type, "Background", StringComparison.OrdinalIgnoreCase) &&
+                (string.Equals(effect.Renderer, "Aurora", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(effect.Renderer, "Ember", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(effect.Renderer, "DeepCurrent", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(effect.Renderer, "Gradient", StringComparison.OrdinalIgnoreCase))) == true;
+
+        internal static void SetOptions(bool reducedMotion, double speed, double intensity)
+        {
+            ThemeOptions next = new ThemeOptions(
+                Speed: speed, Intensity: intensity, ReducedMotion: reducedMotion).Normalize();
+            if (next == ActiveOptions) return;
+            ActiveOptions = next;
+            VisualThemeSmokeRenderer.Reset();
+            ThemeChanged?.Invoke(null, EventArgs.Empty);
+            foreach (Form form in Application.OpenForms)
+                if (!form.IsDisposed) form.Invalidate(true);
+        }
 
         internal static void Apply(string? requestedThemeId, Form? constructingForm = null)
         {
@@ -37,9 +66,15 @@ namespace EasyVersionBackup
             string selectedId = option?.Id ?? "Default";
             Color[] old = _palette;
             DockTheme definition = DockThemeService.Load(selectedId);
-            Color[] next = selectedId == "Default" ? (Color[])DefaultPalette.Clone() : BuildPalette(definition);
+            // Core renders only new, explicitly opted-in effect types. Existing animated
+            // Smoke/Flame/GlowDot themes continue through the verified legacy pipeline.
+            ThemeDefinition? portable = NeedsPortableRenderer(definition)
+                ? ThemeDefinition.Parse(JsonSerializer.SerializeToUtf8Bytes(definition), selectedId)
+                : null;
+            Color[] next = selectedId == "Default" ? (Color[])DefaultPalette.Clone() : BuildPalette(definition, portable);
             ActiveId = selectedId;
             ActiveDefinition = definition;
+            ActivePortableDefinition = portable;
             VisualThemeSmokeRenderer.Reset();
             _palette = next;
             ModernTheme.SetVisualThemeColors(next);
@@ -64,7 +99,7 @@ namespace EasyVersionBackup
             form.Invalidate(true);
         }
 
-        private static Color[] BuildPalette(DockTheme definition)
+        private static Color[] BuildPalette(DockTheme definition, ThemeDefinition? portable)
         {
             Color background = VisualThemeRenderer.Composite(
                 VisualThemeRenderer.ThemeColor(definition.DockBackgroundColor, DefaultPalette[0]),
@@ -88,6 +123,13 @@ namespace EasyVersionBackup
             Color border = VisualThemeRenderer.Composite(
                 VisualThemeRenderer.ThemeColor(definition.ItemBorderColor, DefaultPalette[8]),
                 background);
+            if (portable is not null)
+            {
+                // Core's contrast policy operates on composited colors, not raw ARGB.
+                ThemeContrastPalette legible = ThemeContrastPalette.From(portable);
+                text = Color.FromArgb(legible.Text.R, legible.Text.G, legible.Text.B);
+                darkText = Color.FromArgb(legible.OnAccent.R, legible.OnAccent.G, legible.OnAccent.B);
+            }
             return [background, title, control, hover, accent,
                 VisualThemeRenderer.Composite(Color.FromArgb(50, Color.White), accent),
                 text, darkText, border];

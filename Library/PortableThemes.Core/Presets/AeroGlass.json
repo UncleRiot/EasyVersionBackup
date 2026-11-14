@@ -1,0 +1,17 @@
+{
+  "Name": "Aero Glass",
+  "DockBackgroundColor": "#132B3F",
+  "ItemBackgroundColor": "#E027435C",
+  "ItemBorderColor": "#BD6394B7",
+  "TextColor": "#FFF7FCFF",
+  "SubmenuIndicatorColor": "#FFCDEEFF",
+  "DragGhostBackgroundColor": "#D1376985",
+  "DragGhostBorderColor": "#FF74D6FF",
+  "GlassSurfaceEnabled": true,
+  "GlassTopColor": "#3284B5D7",
+  "GlassBottomColor": "#1C081A2B",
+  "GlassHighlightColor": "#8AC1EEFF",
+  "GlassShadowColor": "#80071324",
+  "GlassCornerRadius": 18,
+  "GlassExtraThickness": 14
+}

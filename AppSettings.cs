@@ -26,6 +26,11 @@ namespace EasyVersionBackup
         public int AutoBackupIntervalSeconds { get; set; } = 900;
         // Semantic Anchor: Persist only the display filter; never serialize filtered pair subsets or temporary checkbox overrides.
         public string ConfiguredPathsFilter { get; set; } = string.Empty;
+        // Semantic Anchor [Profiles / SSOT]: Profile IDs are stable across renames;
+        // pair membership lives on each original BackupPathPair, never on filtered grid rows.
+        public bool ShowProfilesButton { get; set; } = false;
+        public string SelectedProfileId { get; set; } = string.Empty;
+        public List<BackupProfile> Profiles { get; set; } = new List<BackupProfile>();
         public List<BackupPathPair> BackupPathPairs { get; set; } = new List<BackupPathPair>();
         public Dictionary<string, List<string>> ExclusionTemplates { get; set; } = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, BackupPathPair> PairSettingsTemplates { get; set; } = new Dictionary<string, BackupPathPair>(StringComparer.OrdinalIgnoreCase);
@@ -43,7 +48,18 @@ namespace EasyVersionBackup
         // Semantic Anchor [Theme selection]: Only the stable theme ID is persisted;
         // visual previews, generated effect layers and runtime colors are never serialized.
         public string VisualThemeId { get; set; } = "Default";
+        // Semantic Anchor [Visual motion settings]: Additive, visual-only user preferences;
+        // never affect backup selection, retention or source cleanup. Old settings use defaults.
+        public bool VisualThemeReducedMotion { get; set; } = false;
+        public double VisualThemeSpeed { get; set; } = 1.0;
+        public double VisualThemeIntensity { get; set; } = 1.0;
         public string LogLevel { get; set; } = "Normal";
+    }
+
+    public class BackupProfile
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public string Name { get; set; } = string.Empty;
     }
 
     public class BackupPathStatus
@@ -60,6 +76,8 @@ namespace EasyVersionBackup
 
     public class BackupPathPair
     {
+        // A pair may be assigned to multiple profiles; this never affects IsEnabled.
+        public List<string> ProfileIds { get; set; } = new List<string>();
         public bool IsEnabled { get; set; } = true;
         public string SourceDirectory { get; set; } = string.Empty;
         public string TargetDirectory { get; set; } = string.Empty;

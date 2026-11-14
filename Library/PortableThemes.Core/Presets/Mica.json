@@ -1,0 +1,10 @@
+{
+  "Name": "Mica",
+  "DockBackgroundColor": "#26282C",
+  "ItemBackgroundColor": "#18FFFFFF",
+  "ItemBorderColor": "#22FFFFFF",
+  "TextColor": "#F5F5F5",
+  "SubmenuIndicatorColor": "#F5F5F5",
+  "DragGhostBackgroundColor": "#24FFFFFF",
+  "DragGhostBorderColor": "#48FFFFFF"
+}

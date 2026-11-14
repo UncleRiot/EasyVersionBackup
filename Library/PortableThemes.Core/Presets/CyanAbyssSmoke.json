@@ -1,0 +1,34 @@
+{
+  "Name": "Cyan Abyss - Smoke",
+  "DockBackgroundColor": "#FF010813",
+  "ItemBackgroundColor": "#AF0A2333",
+  "ItemBorderColor": "#AA2A7190",
+  "TextColor": "#FFF0FBFF",
+  "SubmenuIndicatorColor": "#FF92E8FF",
+  "DragGhostBackgroundColor": "#CB125675",
+  "DragGhostBorderColor": "#FF1BBDEB",
+  "GlassSurfaceEnabled": true,
+  "GlassTopColor": "#0A041224",
+  "GlassBottomColor": "#17051C2E",
+  "GlassHighlightColor": "#FF19DAFF",
+  "GlassShadowColor": "#FF000810",
+  "GlassGradientAnimationEnabled": false,
+  "GlassFlameEffectEnabled": false,
+  "GlassFlameBaseGlowEnabled": false,
+  "GlassStarEffectEnabled": false,
+  "GlassEffectSchemaVersion": 1,
+  "GlassEffects": [
+    {
+      "Type": "Background",
+      "Renderer": "Smoke",
+      "Enabled": true,
+      "Seed": 27181,
+      "Parameters": {
+        "Opacity": 0.93,
+        "Speed": 0.34,
+        "Scale": 4.7,
+        "EdgeStrength": 1.24
+      }
+    }
+  ]
+}

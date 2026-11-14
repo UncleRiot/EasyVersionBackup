@@ -4,6 +4,7 @@
 		<OutputType>WinExe</OutputType>
 		<!-- SEMANTIC ANCHOR: FRAMEWORK_TARGET (SSOT). The project owns the Windows Forms target framework; publish profiles inherit it. -->
 		<TargetFramework>net10.0-windows</TargetFramework>
+		
 		<UseWindowsForms>true</UseWindowsForms>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
@@ -19,10 +20,10 @@
 		<Product>EasyVersionBackup</Product>
 		<Copyright>Copyright © Daniel Capilla</Copyright>
 
-		<Version>1.4.3</Version>
-		<AssemblyVersion>1.4.3.5</AssemblyVersion>
-		<FileVersion>1.4.3.5</FileVersion>
-		<InformationalVersion>1.4.3</InformationalVersion>
+		<Version>1.4.5</Version>
+		<AssemblyVersion>1.4.5.0</AssemblyVersion>
+		<FileVersion>1.4.5.0</FileVersion>
+		<InformationalVersion>1.4.5</InformationalVersion>
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 	</PropertyGroup>
 
@@ -38,5 +39,15 @@
              the selected ID is persisted in AppSettings, never in this project file. -->
         <EmbeddedResource Include="Themes\*.json" LogicalName="EasyVersionBackup.Themes.%(Filename)%(Extension)" />
 	</ItemGroup>
+    <!-- Semantic Anchor [Optional portable rendering library]: The host keeps its existing
+         ThemeSurface, timer, UI state and settings. Reference Core for new procedural
+         effects only; do not instantiate a competing WinForms animation host. -->
+    <!-- Semantic Anchor [Portable library compilation / SSOT]: Each referenced subproject
+         exclusively compiles its own source and generated obj files. The WinForms host must
+         exclude all nested Library C# sources, including future library/test projects. -->
+    <ItemGroup>
+        <Compile Remove="Library\**\*.cs" />
+        <ProjectReference Include="Library\PortableThemes.Core\PortableThemes.Core.csproj" />
+    </ItemGroup>
 
-</Project>	
+</Project>
