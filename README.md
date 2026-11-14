@@ -43,7 +43,7 @@ If this tool saves you time, you can support development here:
 ---
 
 
-Main-Window
+Main-Window (now with theme-support!)
 
 <br>
 <img width="927" height="391" alt="grafik" src="https://github.com/user-attachments/assets/764297e6-79f5-4a0f-95c9-3a46ee3f6596" />
